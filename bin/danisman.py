@@ -52,6 +52,7 @@ import re
 from datetime import datetime
 
 import ayarlar
+import dil
 import jobs
 import karne
 import launch
@@ -80,11 +81,12 @@ FIELDS = ("danisman", "danisman_pilotu", "danisman_kolu", "danisman_cagri", "dan
 # tier gets `--advisor <model>` (hard_reason()); off when the key is missing.
 HARD_KEY = "zor_is_danismani"
 HARD_DEFAULTS = {"acik": False, "model": "fable", "katman": "kod"}
-HARD_REASONS = {"gelistir": "zor iş: geliştirme akışının kod adımı",
-                "yukseltme": "zor iş: bir üst katmana taşınan iş",
-                "risk": "zor iş: kod incelemesi değişikliği yüksek riskli buldu",
-                "inceleme": "zor iş: kod incelemesi düzeltme istedi",
-                "kontrol": "zor iş: Kontrol geçmedi, yeniden çalışıyor"}
+# the reasons stay Turkish on the record; bin/state.py translates them for the page (dil.N_ marks them, bin/dil.py EN)
+HARD_REASONS = {"gelistir": dil.N_("zor iş: geliştirme akışının kod adımı"),
+                "yukseltme": dil.N_("zor iş: bir üst katmana taşınan iş"),
+                "risk": dil.N_("zor iş: kod incelemesi değişikliği yüksek riskli buldu"),
+                "inceleme": dil.N_("zor iş: kod incelemesi düzeltme istedi"),
+                "kontrol": dil.N_("zor iş: Kontrol geçmedi, yeniden çalışıyor")}
 
 
 class Refused(ValueError):
@@ -201,11 +203,11 @@ def advisor_decision(cfg, durum_dir, job_name, tier):
         if not settings(cfg)["acik"]:
             return "", ""
         value = str(rec.get("danisman") or "")
-        return (value, "danışman denemesi (B kolu)") if ADVISOR.fullmatch(value) else ("", "")
+        return (value, dil.N_("danışman denemesi (B kolu)")) if ADVISOR.fullmatch(value) else ("", "")
     job_tier = rec.get("katman") or tier
     value = mapped(cfg, job_tier)
     if value:
-        return value, "kalıcı eşleme"
+        return value, dil.N_("kalıcı eşleme")
     hard = hard_settings(cfg)
     if not hard["acik"] or not durum_dir or job_tier != hard["katman"]:
         return "", ""

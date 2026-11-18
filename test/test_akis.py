@@ -173,6 +173,13 @@ class VerdictTest(unittest.TestCase):
         for text in ("Onaylıyorum ama testleri de ekle", "hayır", "commit et", "evet ama bekle"):
             self.assertFalse(akis.is_approval(text), text)
 
+    def test_approval_phrases_in_english(self):
+        # the page's English option sends "I approve" / "No" (web/app.js kararKarti); both languages are accepted
+        for text in ("I approve", "i approve.", "Yes, I approve!", "APPROVE", "ok", "Approved"):
+            self.assertTrue(akis.is_approval(text), text)
+        for text in ("No", "I approve but add tests", "yes but wait", "approve after the fix"):
+            self.assertFalse(akis.is_approval(text), text)
+
     def test_budget_split(self):
         self.assertEqual(akis.split_budget(8, ["plan", "plan-inceleme", "kod", "kod-inceleme", "onay"]),
                          ["2", "1", "4", "1", ""])

@@ -546,6 +546,7 @@ dilDinle(() => {
   ceviriUygula(document); // the static HTML and the once-built DOM marked by sabitMetin
   if ($('ayar-dil')) $('ayar-dil').value = aktifDil();
   ofisAdi = null; // the title and the sign are drawn again
+  if (office) office.dilDegisti(); // the scene's room labels, door plates and hall screen: the floor is built again
   // the parts redrawn only when their key changes are drawn again by the renderAll that follows
   schedKey = null; modelKey = null; kadroKey = null; calisanlarIds = null; semaKey = null; suAnKey = ''; chatRozetKey = '';
   if ($('calisanlar-headrow')) $('calisanlar-headrow').replaceChildren();
@@ -1233,12 +1234,13 @@ function renderCalisanlar() {
   if (!calisanlarOpen()) return;
   if (state) renderCalisanlarKadro(modelSatirlari(state.modeller, Date.now(), state.sahne));
   const rows = calisanlarTablosu(state, Date.now());
-  if (!$('calisanlar-headrow').childElementCount) {
-    $('calisanlar-headrow').replaceChildren(...CALISANLAR_BASLIK.map((c) => h('th', null, c)));
+  const basliklar = CALISANLAR_BASLIK.map((c) => T(c));
+  if ($('calisanlar-headrow').textContent !== basliklar.join('')) {
+    $('calisanlar-headrow').replaceChildren(...basliklar.map((c) => h('th', null, c)));
   }
   const empty = $('calisanlar-empty');
   empty.hidden = rows.length > 0;
-  empty.textContent = online ? CALISANLAR_BOS : T('Sunucu kapalı; çalışanlar okunamıyor.');
+  empty.textContent = online ? T(CALISANLAR_BOS) : T('Sunucu kapalı; çalışanlar okunamıyor.');
   if (!online) empty.hidden = false;
   const shown = online ? rows : [];
   calisanlarRows.clear();
@@ -1263,7 +1265,7 @@ function renderCalisanlar() {
     const r = row;
     calisanHucreleri(r).forEach((text, i) => {
       const td = h('td', cls[i]);
-      td.setAttribute('data-k', CALISANLAR_BASLIK[i]);
+      td.setAttribute('data-k', T(CALISANLAR_BASLIK[i]));
       td.append(h('span', null, text));
       if (i === 2) td.title = calisanIpucu(r.unvan, r.model); // the model only in the tooltip
       if (i === 1) calisanYolu(td, r.yolNot);
@@ -1423,8 +1425,8 @@ function buildAsk(d) {
   const secenekler = h('div', 'ask-secenekler');  // the CEO's own question (ceo-sorusu): one button per option
   secenekler.hidden = true;
   const actions = h('div', 'ask-actions');
-  // the button texts follow the language (data-t); the answers they send ('Onaylıyorum', 'Hayır') stay Turkish:
-  // the CEO's `cevapla` reads a plain approval from them
+  // the button texts follow the language (data-t); the answers they send follow it too ('Onaylıyorum' / 'Hayır', in
+  // English 'I approve' / 'No'): bin/akis.py is_approval accepts a plain approval in both languages
   const yes = sabitMetin(h('button', 'btn btn-soft btn-sm'), N_('Onayla')); yes.type = 'button';
   const no = sabitMetin(h('button', 'btn btn-soft btn-sm'), N_('Reddet')); no.type = 'button';
   const send = sabitMetin(h('button', 'btn btn-primary btn-sm'), N_('Cevapla')); send.type = 'button';
@@ -1440,8 +1442,8 @@ function buildAsk(d) {
     all.forEach((b) => { b.disabled = false; });
     if (ok) { sentLocal.add(d.note); ta.value = ''; renderAsks(); }
   };
-  yes.addEventListener('click', () => submit('Onaylıyorum'));
-  no.addEventListener('click', () => submit('Hayır'));
+  yes.addEventListener('click', () => submit(T('Onaylıyorum')));
+  no.addEventListener('click', () => submit(T('Hayır')));
   send.addEventListener('click', () => submit(ta.value));
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(ta.value); });
   card.parts = { ta, actions, sent, title, q, evidence, quiz, risk, warn, yes, no, mnot, secenekler, submit };

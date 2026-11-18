@@ -19,6 +19,7 @@ import {
   sonrakiZoom, yuruyusYolu, yuzAcisi, yatakAcisi, FARE_DUGMELERI, DOKUNMA, hedefiSinirla, kaydirmaAdimi, hedefFps,
   tekerlekTuru, pinchZoom, tekerZoom, imlecZoomHedefi, tekerKaydirma, kameraDerinligi, donusAcisi, sifirlamaAcisi,
 } from './ofis-sahne.js';
+import { t as T } from './i18n.js'; // phase 2: the door plates, the hall screen's heading, the "Evde" sign
 
 export const ROOM_COLORS = ODA_RENKLERI; // a team's colour: projeRengi (ofis-davranis.js), shared with the page's chat dots
 export const CEO_COLOR = '#F9D9C4';
@@ -205,7 +206,7 @@ function ekranCiz(c, metin, ad) {
   if (!metin) { adYaz(g, ad, w, h, 56, '#F5F7FA', 72); return; }
   g.fillStyle = '#22D3EE'; g.fillRect(0, 0, w, 10);
   g.fillStyle = '#9FB3D9'; g.font = '600 26px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
-  g.fillText('DUYURU', w / 2, 24);
+  g.fillText(T('DUYURU'), w / 2, 24);
   g.fillStyle = '#F5F7FA'; g.font = '700 36px Inter, system-ui, sans-serif';
   const words = String(metin).split(/\s+/);
   const lines = [];
@@ -1834,7 +1835,7 @@ export class Office {
     const lid = mesh(rbox(+(b.w + 0.3).toFixed(2), 0.16, +(b.d + 0.3).toFixed(2), 1, 0.04), mat('#9FAAB3'));
     lid.position.set(b.x + b.w / 2, 0.3 + H + 0.08, b.z + b.d / 2); g.add(lid);
     const dus = r.tur === 'dus';
-    const signs = dus ? ['Duş 1', 'Duş 2'] : ['Erkek WC', 'Kadın WC'];
+    const signs = dus ? [T('Duş {no}', { no: 1 }), T('Duş {no}', { no: 2 })] : [T('Erkek WC'), T('Kadın WC')];
     for (let i = 0; i < 2; i++) {
       const n = plan.dugumler[`${dus ? 'dus' : 'wc'}-kapi-${i}`];
       if (!n) continue;
@@ -2040,6 +2041,11 @@ export class Office {
 
   // The office's name (app.js from /api/state.ofis.adi): the lobby sign and the hall's idle screen. Redrawn only when
   // it changes; a plan built later draws it at once (buildRoom, buildHall).
+  dilDegisti() {
+    this.planKey = null; // the room labels, door plates and the hall screen are drawn once per plan: the next
+    this.kirli = true; // setActors builds the floor again in the new language (the same meshes, the same draw calls)
+  }
+
   setOfisAdi(ad) {
     const t = typeof ad === 'string' && ad.trim() ? ad.trim() : 'Ofis';
     if (this.ofisAdi === t) return;
@@ -2363,7 +2369,7 @@ export class Office {
     } else v.lh = 1.3;
     // the "Evde · …" sign stands on the empty chair
     if (home) {
-      const text = a.durum_metni || 'Evde';
+      const text = a.durum_metni || T('Evde');
       if (!v.sign || v.signText !== text) {
         if (v.sign) { v.root.remove(v.sign); v.sign.material.map.dispose(); v.sign.material.dispose(); }
         const tex = canvasTexture(textCanvas(text, 384, 96, { fg: '#5D6478', bg: '#FFF8EE', border: '#D9CDBD', size: 0.36 }));

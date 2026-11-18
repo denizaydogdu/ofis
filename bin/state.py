@@ -577,8 +577,9 @@ def recent_tasks(vault_ofis, limit=MAX_TASKS, cfg=None, durum_dir=None, extras=N
                     # the advisor (bin/danisman.py): arm B of the advisor pilot or the mapped advisor's model, from the
                     # server record only; "" for none (the card shows "Danışman: Fable")
                     "danisman": str(rec.get("danisman") or ""),
-                    # why it gets the advisor ("zor iş: …", bin/danisman.py advisor_decision), server record only
-                    "danisman_nedeni": str(rec.get("danisman_nedeni") or "")})
+                    # why it gets the advisor ("zor iş: …", bin/danisman.py advisor_decision), server record only;
+                    # display text in the page's language (the record keeps the Turkish reason)
+                    "danisman_nedeni": dil.t(str(rec.get("danisman_nedeni") or ""), dil.kod(cfg or {}))})
         info = queue.get(job.name) if meta.get("durum") == "sirada" else None
         out[-1].update({"queue_position": info["position"] if info else None, "held": bool(info and info["held"]),
                         "depends": info["depends"] if info else [], "blocked": info["blocked"] if info else "",

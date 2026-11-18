@@ -58,7 +58,7 @@
   auditor's room, then the Hakem (Sonnet) weighing their findings at an Uzmanlar odası desk, an escalation (the Stajyer carries the file to the
   Kıdemli's desk, then leaves), lunch (idle ones in the canteen), Sonnet's quota (its idle agent goes home, the
   Çalışanlar list says "kota doldu · HH:MM'de döner"; DeepSeek's "Evde" sign too) and its return. A small caption under the scene names the current scene in
-  plain Turkish ("Demo · Yeni iş geliyor …"). `?demo_t=<s>` starts the loop at second s (screenshots). Lunch is
+  plain words of the page's language ("Demo · Yeni iş geliyor …"; English: see sayfa.md "Language"). `?demo_t=<s>` starts the loop at second s (screenshots). Lunch is
   shown by moving the demo's own `sahne.ogle` window onto the current time with `sahne.ogle_hepsi` (everyone idle eats at
   once in that scene; the server never sends it); the real lunch rule is unchanged.
   `?demo=1&hafif=1` works (no tea server, simpler walk). Its four projects fill the free cells of the compact

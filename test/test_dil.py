@@ -29,11 +29,12 @@ import sahip  # noqa: E402
 
 NODE = shutil.which("node")
 
-# Phase 1: the page's files translated in full (ofis-sahne.js: only its NPC chat strings are marked so far).
-JS_DOSYALARI = ("app.js", "ofis-text.js", "komuta.js", "ayarlar.js", "is-akisi.js", "limitler.js", "ofis-sahne.js")
+# Phase 1 (the page) and phase 2 (the scene, its cards, the demo): the page's files translated in full.
+JS_DOSYALARI = ("app.js", "ofis-text.js", "komuta.js", "ayarlar.js", "is-akisi.js", "limitler.js", "ofis-sahne.js",
+                "ofis-davranis.js", "scene.js", "demo.js")
 HTML = "index.html"
 # The server's display texts: bin/dil.py t("…") / Metin("…") / N_("…") (and ayarlar.py's M = dil.Metin).
-PY_DOSYALARI = ("dil.py", "ayarlar.py", "sahip.py", "npc_sohbet.py", "server.py", "state.py", "kullanim.py",
+PY_DOSYALARI = ("dil.py", "ayarlar.py", "sahip.py", "npc_sohbet.py", "server.py", "state.py", "kullanim.py", "danisman.py",
                 "limitler.py", "sistem.py")
 
 _JS_LIT = r"""('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\$]|\\.|\$(?!\{))*`)"""
@@ -350,6 +351,28 @@ class SayfaTest(unittest.TestCase):
         self.assertEqual(run_js("[ofis_davranis.sahipEk('Ayşe', 'in'), ofis_davranis.sahipEk('Ayşe', 'e')]", "en", files),
                          ["Ayşe's", "Ayşe"])
         self.assertEqual(run_js("ofis_davranis.sahipEk('Ayşe', 'in')", "tr", files), "Ayşe'nin")
+
+    def test_the_scene_in_english_and_unchanged_in_turkish(self):
+        # phase 2: the org chart's root, a staff card, an NPC's desk line and an actor's label
+        files = ("ofis-sahne.js", "ofis-davranis.js")
+        expr = ("(() => { const g = ofis_sahne.orgSemasi({tasks: [], sessions: []}, '2026-11-18T10:30:00'); "
+                "const kart = ofis_sahne.doktorKarti({tasks: []}, Date.parse('2026-11-18T10:00:00Z')); "
+                "return [g.alt, kart.satirlar[0].ad, kart.satirlar[0].metin, ofis_davranis.masaSozu('ik', {tasks: []}, 0), "
+                "ofis_davranis.etiketCevir('blog · Kıdemli Backend', 'blog'), ofis_davranis.etiketCevir('Yazılım Müdürü')]; })()")
+        self.assertEqual(run_js(expr, "en", files),
+                         ["founder", "Status", "The office is healthy", "at the desk · no jobs at work right now",
+                          "blog · Senior Backend", "Software Manager"])
+        self.assertEqual(run_js(expr, "tr", files),
+                         ["kurucu", "Durum", "Ofis sağlıklı", "masasında · şu an çalışan iş yok",
+                          "blog · Kıdemli Backend", "Yazılım Müdürü"])
+
+    def test_the_approval_buttons_send_what_the_parser_accepts(self):
+        import akis  # noqa: E402
+        sent = run_js("[i18n.t('Onaylıyorum'), i18n.t('Hayır')]", "en", ("i18n.js",))
+        self.assertEqual(sent, ["I approve", "No"])
+        self.assertTrue(akis.is_approval(sent[0]))
+        self.assertFalse(akis.is_approval(sent[1]))
+        self.assertIn("submit(T('Onaylıyorum'))", (WEB / "app.js").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

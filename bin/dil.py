@@ -321,4 +321,12 @@ EN = {
     "sertifikası bitiyor": "certificate expiring",
     "DNS değişti": "DNS changed",
     "Domain listesi henüz yok — Ar-Ge ilk çalışmasında soracak": "No domain list yet — R&D will ask on its first run",
+    # bin/danisman.py: why a job gets the advisor (the job card's "Danışman: … — <reason>", via bin/state.py)
+    "zor iş: geliştirme akışının kod adımı": "hard job: the code step of a development workflow",
+    "zor iş: bir üst katmana taşınan iş": "hard job: moved up a tier",
+    "zor iş: kod incelemesi değişikliği yüksek riskli buldu": "hard job: the code review rated the change high risk",
+    "zor iş: kod incelemesi düzeltme istedi": "hard job: the code review asked for fixes",
+    "zor iş: Kontrol geçmedi, yeniden çalışıyor": "hard job: the check failed, working on it again",
+    "danışman denemesi (B kolu)": "advisor trial (arm B)",
+    "kalıcı eşleme": "permanent mapping",
 }

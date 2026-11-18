@@ -31,10 +31,24 @@
   prefixes, notice titles the page matches, vault notes, CEO notices and `ofis.py` output stay Turkish. A language
   change asks for a fresh CEO session (the `ofis.py ceo-yenile` flag; bin/ceo.py `yenile_iste`): its system text
   (`ceo_system_prompt(name, dil)`) and the reminder line (`(Reply to <Name> in plain English.)`, bin/sahip.py
-  `hatirlatma`; `hatirlatmayi_sil` strips both forms) follow `dil`. Phase 2 (not yet): the scene and its cards
-  (web/ofis-sahne.js except the NPC chat box, ofis-davranis.js role titles, scene.js, demo.js). test/test_dil.py checks
-  that every `T('…')` / `N_('…')` / `data-t` literal has an English entry, no entry is unused and placeholders match
-  (the same for bin/dil.py); test/webkopya.py copies the i18n modules next to the web modules the node tests load.
+  `hatirlatma`; `hatirlatmayi_sil` strips both forms) follow `dil`. **Phase 2** (2026-11-18): the scene and its cards
+  — web/ofis-davranis.js (role and room names, NPC speech and idle lines, status words, holidays, the org chart's
+  departments), web/ofis-sahne.js (labels, every staff card, the workers' board, the org chart, shift rows, day and
+  month words; decimal point and bare names in English), web/scene.js (door plates, the hall screen's "DUYURU", the
+  "Evde" sign; a language change calls `Office.dilDegisti`, which builds the floor again at the next frame — same
+  meshes, same draw calls) and web/demo.js (captions, chat lines, and the usage popup / limit pill / Sunucu odası texts
+  the real server translates; its job titles, decision cards, notices and reports stay Turkish like the vault notes
+  they stand for). The texts are translated where they are made, at call time (module constants are `N_` and
+  translated where drawn); a comparison of a display text compares against `T(<the same key>)`. The advisor's reason
+  on a job card (`danisman_nedeni`) is translated at its API field (bin/state.py, keys marked `dil.N_` in
+  bin/danisman.py). The approval card's buttons send `T('Onaylıyorum')` / `T('Hayır')` ("I approve" / "No" in
+  English); bin/akis.py `is_approval` accepts a plain approval in both languages. **Stays Turkish**: vault notes (job
+  titles, decision cards and their section headings, reports), `ofis.py` output, the session contracts and role
+  texts, every notice to the CEO and what code parses (`[Sahip · …]`, `[Ofis · sistem]`, devir markers, `KARAR: …`,
+  status codes, vault folder names, `bildir --tur`, "Öğrendiklerim"). test/test_dil.py checks that every `T('…')` /
+  `N_('…')` / `data-t` literal of the translated files (phase 1 and 2) has an English entry, no entry is unused and
+  placeholders match (the same for bin/dil.py), plus a few scene renderers under English; test/webkopya.py copies the
+  i18n modules next to the web modules the node tests load.
 - **Decision bell** (the owner, 2026-11-12): next to the live pill a warning-tone button "N karar bekliyor" with an inline
   SVG bell (the count alone on a bar below 1100 px) while decisions wait for the owner — `state.decisions` minus the cards
   already answered from the page (`answer_sent`, or sent in this tab); `kararBildirimi` in `web/ofis-text.js`. A click

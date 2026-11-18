@@ -31,7 +31,7 @@
 
 // --- the owner's name and its Turkish case suffixes ---
 export const SAHIP_VARSAYILAN = 'Sahip';
-import { aktifDil } from './i18n.js';
+import { aktifDil, t as T, N_ } from './i18n.js';
 
 export const SAHIP_HALLERI = ['e', 'in', 'den', 'i', 'de']; // dative, genitive, ablative, accusative, locative
 const SESLI = 'aeıioöuü';
@@ -78,14 +78,14 @@ export const sahipAdi = () => sahipSu;
 export const sahip = (hal) => (hal ? sahipEk(sahipSu, hal) : sahipSu);
 
 export const UNVAN = {
-  haiku: { unvan: 'Stajyer', rank: 1 },
-  sonnet: { unvan: 'Uzman', rank: 2 },
-  opus: { unvan: 'Kıdemli', rank: 3 },
-  fable: { unvan: 'Genel Müdür', rank: 4 }, // plan "Sonraki iş (9)": the former Müdür
-  codex: { unvan: 'Dış denetçi', rank: 5 },
+  haiku: { unvan: N_('Stajyer'), rank: 1 },
+  sonnet: { unvan: N_('Uzman'), rank: 2 },
+  opus: { unvan: N_('Kıdemli'), rank: 3 },
+  fable: { unvan: N_('Genel Müdür'), rank: 4 }, // plan "Sonraki iş (9)": the former Müdür
+  codex: { unvan: N_('Dış denetçi'), rank: 5 },
   ceo: { unvan: 'CEO', rank: 6 },
 };
-const BILINMEYEN = { unvan: 'Ajan', rank: 0 };
+const BILINMEYEN = { unvan: N_('Ajan'), rank: 0 };
 const AILELER = ['haiku', 'sonnet', 'opus', 'fable', 'codex'];
 
 // The resident staff (kadro): one character per Claude model, idle in the shared lounge while no job of that model
@@ -193,8 +193,8 @@ export function unvanOf(model, fallback = BILINMEYEN) {
 // a test keeps this map equal to the profiles). The seniority stays with the model; the role a job shows is
 // "<kıdem> <uzmanlık>" — "Kıdemli Backend", "Stajyer Mobil", "Kıdemli Tester". genel, an unknown key and the Genel
 // Müdür (fable) add no word.
-export const UZMANLIK_BASLIK = { backend: 'Backend', ui: 'UI', mobil: 'Mobil', test: 'Tester', analiz: 'Analist',
-  guvenlik: 'Güvenlik', genel: 'Genel' };
+export const UZMANLIK_BASLIK = { backend: 'Backend', ui: 'UI', mobil: N_('Mobil'), test: 'Tester', analiz: N_('Analist'),
+  guvenlik: N_('Güvenlik'), genel: N_('Genel') };
 export const UZMANLIK_SIRA = Object.keys(UZMANLIK_BASLIK);
 const UZMANLIK_EKLI = new Set(['haiku', 'sonnet', 'opus']);
 export function uzmanlikEki(model, uzmanlik) {
@@ -208,23 +208,59 @@ export function rolMetni(model, uzmanlik, fallback = BILINMEYEN) {
   const ek = uzmanlikEki(model, uzmanlik);
   return ek ? `${u} ${ek}` : u;
 }
+// A role text (rolMetni, an UNVAN title, "Kıdemli Backend") in the page's language. The role itself stays Turkish in the
+// data (code compares it, e.g. scene.js with UNVAN.codex.unvan); translate it only where it is shown.
+export function rolCevir(text) {
+  const s = String(text ?? '');
+  if (aktifDil() !== 'en' || !s) return s;
+  const tam = T(s);
+  if (tam !== s) return tam;
+  const i = s.lastIndexOf(' ');
+  const bas = s.slice(0, i), son = s.slice(i + 1);
+  const unvanlar = [...Object.values(UNVAN), BILINMEYEN].map((u) => u.unvan);
+  return i > 0 && unvanlar.includes(bas) && Object.values(UZMANLIK_BASLIK).includes(son) ? `${T(bas)} ${T(son)}` : s;
+}
+// A floor label (etiket, kisa_etiket, ipucu) in the page's language. Labels are built in Turkish from the marked
+// constants of this file; niyetler translates them once per tick (etiketleriCevir): an exact entry, else
+// "<a> · <b>" and "<a> (<b>)" by their parts, else a role (rolCevir). Anything else stays as it is; `proje` (the actor's
+// project) is never translated, even when its name happens to be a Turkish word of the dictionary.
+export function etiketCevir(text, proje = '') {
+  const s = String(text ?? '');
+  if (aktifDil() !== 'en' || !s || (proje && s === proje)) return s;
+  const tam = T(s);
+  if (tam !== s) return tam;
+  if (s.includes(' · ')) return s.split(' · ').map((x) => etiketCevir(x, proje)).join(' · ');
+  const p = s.match(/^(.*\S) \(([^()]*)\)$/);
+  if (p) return `${etiketCevir(p[1], proje)} (${etiketCevir(p[2], proje)})`;
+  return rolCevir(s);
+}
+function etiketleriCevir(actors) {
+  if (aktifDil() !== 'en') return actors;
+  for (const a of actors) {
+    if (!a) continue;
+    for (const k of ['etiket', 'kisa_etiket', 'ipucu']) if (typeof a[k] === 'string' && a[k]) a[k] = etiketCevir(a[k], a.proje);
+    if (Array.isArray(a.gizliler)) for (const g of a.gizliler) g.etiket = etiketCevir(g.etiket);
+  }
+  return actors;
+}
 // A job's (or its session's) specialisation for display.
 export const isUzmanligi = (t, s = null) => String((t && t.uzmanlik) || (s && s.uzmanlik) || '');
 
 // --- the external auditors (dış denetçi heyeti, bin/denetci.py): Codex and the free reviewers ---
 
 // Display names of the reviewers (state.modeller model = the reviewer's name in ofis.json); others are capitalised.
-export const DENETCI_ADI = { codex: 'Codex', glm: 'GLM', deepseek: 'DeepSeek', antigravity: 'Antigravity', guvenlik: 'Güvenlik' };
+export const DENETCI_ADI = { codex: 'Codex', glm: 'GLM', deepseek: 'DeepSeek', antigravity: 'Antigravity', guvenlik: N_('Güvenlik') };
 // The security reviewer (bin/denetci.py SECURITY): a Claude call, so not a "Dış denetçi" and never free.
 export const GUVENLIK = 'guvenlik';
-export const GUVENLIK_UNVAN = 'Güvenlik denetçisi';
+export const GUVENLIK_UNVAN = N_('Güvenlik denetçisi'); // compared with the server's unvan: T() it where shown
 // its floor label (the owner, 2026-11-12: short labels; plan "Sonraki iş (9)": the IT güvenlik uzmanı of the Sunucu odası
 // stands for the security reviewer's runs)
-export const GUVENLIK_KISA = 'IT güvenlik uzmanı';
+export const GUVENLIK_KISA = N_('IT güvenlik uzmanı');
 const DENETCI_AD = /^[a-z]{2,12}$/; // bin/denetci.py NAME
 
 export function denetciAdi(ad) {
   const s = String(ad || '');
+  if (s === GUVENLIK) return T(DENETCI_ADI[s]);
   return DENETCI_ADI[s] || (s ? s[0].toUpperCase() + s.slice(1) : '');
 }
 
@@ -362,11 +398,11 @@ export function teslimRolu(teslim, id, ms) {
   if (k < 0) return null;
   if (ms < teslim.t[k]) {
     const sirada = k === 0 || ms >= teslim.t[k - 1];
-    return { bekle: true, metin: sirada ? 'yeni işi teslim alıyor' : 'yeni işi bekliyor', gorevde: true };
+    return { bekle: true, metin: sirada ? T('yeni işi teslim alıyor') : T('yeni işi bekliyor'), gorevde: true };
   }
   const sonraki = teslim.zincir[k + 1] || null;
   if (sonraki && ms >= teslim.t[k + 1]) return null;
-  return { yer: sonraki ? sonraki.ara : teslim.hedef, metin: sonraki ? 'işi teslim ediyor' : 'işi masaya götürüyor', dosya: true };
+  return { yer: sonraki ? sonraki.ara : teslim.hedef, metin: sonraki ? T('işi teslim ediyor') : T('işi masaya götürüyor'), dosya: true };
 }
 
 // The secretary's trips: prevSek = her actor of the previous tick ({karar_notlari, tasima: {bas, adet, ilk, gidis,
@@ -572,7 +608,7 @@ export const KAHVALTI_DK = [15, 20]; // a breakfast lasts this long (seeded per 
 export const TATIL_KAHVALTI = [540, 600];
 export const TATIL_OGLE = [750, 810];
 export const AKSAM_YEMEGI = [1140, 1200];
-export const OGUN_METNI = { kahvalti: 'kahvaltı ediyor', ogle: 'öğle yemeğinde', aksam: 'akşam yemeğinde' };
+export const OGUN_METNI = { kahvalti: N_('kahvaltı ediyor'), ogle: N_('öğle yemeğinde'), aksam: N_('akşam yemeğinde') }; // T() where shown
 // the shift teams on duty eat one after another, never two at once (their posts are never all empty): the order and
 // the length of each one's turn (minutes) at breakfast (from the day shift's start on a work day — the morning
 // handover —, 09:00 on a day off) and at dinner (19:00)
@@ -638,7 +674,8 @@ export function ogun(id, now, sahne, { kim = 'ajan', gel = null, ekip = '' } = {
   return null;
 }
 
-const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const AYLAR = [N_('Oca'), N_('Şub'), N_('Mar'), N_('Nis'), N_('May'), N_('Haz'), N_('Tem'), N_('Ağu'), N_('Eyl'), N_('Eki'),
+  N_('Kas'), N_('Ara')];
 // Turkish locative after a clock time, by its last spoken word: 16:30 -> 'da', 12:00 -> 'de', 13:00 -> 'te'.
 const BIRLER = ['da', 'de', 'de', 'te', 'te', 'te', 'da', 'de', 'de', 'da'];
 const ONLAR = ['da', 'da', 'de', 'da', 'ta', 'de'];
@@ -663,7 +700,7 @@ export function iyelikEki(n) {
   return 'aıoueiöü'.includes(kelime[kelime.length - 1]) ? `s${ek}` : ek;
 }
 // "%90'ı", "%100'ü": a percentage with its possessive suffix.
-export const yuzdeMetni = (n) => `%${Math.round(Number(n))}'${iyelikEki(n)}`;
+export const yuzdeMetni = (n) => (aktifDil() === 'en' ? `${Math.round(Number(n))}%` : `%${Math.round(Number(n))}'${iyelikEki(n)}`);
 
 // "16:30'da döner" (same office day) or "12 Kas 09:00'da döner"; '' when unknown.
 export function donusMetni(donus, now, tz = DEFAULT_SAHNE.saat_dilimi) {
@@ -671,9 +708,9 @@ export function donusMetni(donus, now, tz = DEFAULT_SAHNE.saat_dilimi) {
   if (t === null) return '';
   const a = parts(t, tz);
   const b = parts(nowMs(now), tz);
-  const clock = `${p2(a.h)}:${p2(a.mi)}'${saatEki(a.h, a.mi)}`;
-  const day = a.y === b.y && a.mo === b.mo && a.d === b.d ? '' : `${a.d} ${AYLAR[a.mo - 1]} `;
-  return `${day}${clock} döner`;
+  const clock = aktifDil() === 'en' ? `${p2(a.h)}:${p2(a.mi)}` : `${p2(a.h)}:${p2(a.mi)}'${saatEki(a.h, a.mi)}`;
+  const day = a.y === b.y && a.mo === b.mo && a.d === b.d ? '' : `${a.d} ${T(AYLAR[a.mo - 1])} `;
+  return T('{gun}{saat} döner', { gun: day, saat: clock });
 }
 
 // --- the floor plan ---
@@ -740,31 +777,31 @@ export const SIGARA_HUCRESI = ['alt', 0, 3];
 // The agents' places on the terrace, in the order they are taken: the smoking corner first, then the benches, then
 // the railing (sigara-yer-3 is the guard's, 4 the roaming staff's).
 export const SIGARA_AJAN_YERLERI = [
-  ...[0, 1, 2].map((i) => [`sigara-yer-${i}`, 'sigara', 'sigara molası']),
-  ...[5, 6, 7, 8].map((i) => [`sigara-yer-${i}`, 'bekliyor', 'terasta oturuyor']),
-  ['sigara-yer-9', 'bekliyor', 'terasta hava alıyor']];
+  ...[0, 1, 2].map((i) => [`sigara-yer-${i}`, 'sigara', N_('sigara molası')]),
+  ...[5, 6, 7, 8].map((i) => [`sigara-yer-${i}`, 'bekliyor', N_('terasta oturuyor')]),
+  ['sigara-yer-9', 'bekliyor', N_('terasta hava alıyor')]];
 // the office-type facilities: a desk for their staff NPC (sus:<key>) and the room's name
-export const TESIS_ODALARI = { muhasebe: 'Muhasebe', idari: 'İdari işler', ik: 'İnsan kaynakları', revir: 'Revir',
-  psikolog: 'Psikolog', masaj: 'Masaj odası', sunucu: 'Sunucu odası', arge: 'Ar-Ge odası' };
+export const TESIS_ODALARI = { muhasebe: N_('Muhasebe'), idari: N_('İdari işler'), ik: N_('İnsan kaynakları'), revir: N_('Revir'),
+  psikolog: N_('Psikolog'), masaj: N_('Masaj odası'), sunucu: N_('Sunucu odası'), arge: N_('Ar-Ge odası') };
 export const MUHASEBE_MASASI = 'muhasebe-masa';
 // The company structure (plan "Sonraki iş (9)", owner decision 2026-11-13): the owner → CEO → Genel Müdür (the fable kadro) → four
 // managers. The managers are staff NPCs (tur 'sus', gorevli 'mudur', informational, with office hours and a card), never a
 // model session: the real work still runs through the tiers and the workflow steps, and each manager's card shows the
 // real work in its area. hucre = the cell of its office (two offices per cell), oda = the office's name.
-export const GENEL_MUDUR = 'Genel Müdür';
+export const GENEL_MUDUR = N_('Genel Müdür'); // T() where shown
 export const MUDURLUKLER = [
-  { key: 'yazilim', ad: 'Yazılım Müdürü', departman: 'Yazılım', hucre: 'mudurluk-1', oda: 'Yazılım Müdürü odası',
-    gorev: 'kod işlerini ve planlamayı yönetir; proje ekiplerinin (Stajyer · Uzman · Kıdemli) müdürüdür',
-    ekip: ['Proje ekipleri: Stajyer · Uzman · Kıdemli', 'Uzmanlıklar: Backend · UI · Mobil', 'Proje sorumluları'] },
-  { key: 'it', ad: 'IT Müdürü', departman: 'IT', hucre: 'mudurluk-1', oda: 'IT Müdürü odası',
-    gorev: 'Sunucu odasını ve güvenliği yönetir; IT ekibi ile IT güvenlik uzmanı ona bağlıdır',
-    ekip: ['IT ekibi: IT sorumlusu · 2 IT uzmanı (nöbetli)', 'IT güvenlik uzmanı (güvenlik denetçisi)'] },
-  { key: 'qa', ad: 'QA Müdürü', departman: 'QA (Test)', hucre: 'mudurluk-2', oda: 'QA Müdürü odası',
-    gorev: 'kod incelemelerini ve Kontrol çalıştırmalarını yönetir; QA odasının müdürüdür',
-    ekip: ['QA odası: Stajyer Tester · Kıdemli Tester'] },
-  { key: 'analist', ad: 'Analist Müdürü', departman: 'Analiz', hucre: 'mudurluk-2', oda: 'Analist Müdürü odası',
-    gorev: 'plan incelemelerini yönetir; iş analistleri her projeye bakabilir',
-    ekip: ['Analist odası: iş analistleri', 'Değerlendirme ekibi: gün sonu, 2 kişi (akşam penceresinde)'] },
+  { key: 'yazilim', ad: N_('Yazılım Müdürü'), departman: N_('Yazılım'), hucre: 'mudurluk-1', oda: N_('Yazılım Müdürü odası'),
+    gorev: N_('kod işlerini ve planlamayı yönetir; proje ekiplerinin (Stajyer · Uzman · Kıdemli) müdürüdür'),
+    ekip: [N_('Proje ekipleri: Stajyer · Uzman · Kıdemli'), N_('Uzmanlıklar: Backend · UI · Mobil'), N_('Proje sorumluları')] },
+  { key: 'it', ad: N_('IT Müdürü'), departman: 'IT', hucre: 'mudurluk-1', oda: N_('IT Müdürü odası'),
+    gorev: N_('Sunucu odasını ve güvenliği yönetir; IT ekibi ile IT güvenlik uzmanı ona bağlıdır'),
+    ekip: [N_('IT ekibi: IT sorumlusu · 2 IT uzmanı (nöbetli)'), N_('IT güvenlik uzmanı (güvenlik denetçisi)')] },
+  { key: 'qa', ad: N_('QA Müdürü'), departman: 'QA (Test)', hucre: 'mudurluk-2', oda: N_('QA Müdürü odası'),
+    gorev: N_('kod incelemelerini ve Kontrol çalıştırmalarını yönetir; QA odasının müdürüdür'),
+    ekip: [N_('QA odası: Stajyer Tester · Kıdemli Tester')] },
+  { key: 'analist', ad: N_('Analist Müdürü'), departman: N_('Analiz'), hucre: 'mudurluk-2', oda: N_('Analist Müdürü odası'),
+    gorev: N_('plan incelemelerini yönetir; iş analistleri her projeye bakabilir'),
+    ekip: [N_('Analist odası: iş analistleri'), N_('Değerlendirme ekibi: gün sonu, 2 kişi (akşam penceresinde)')] },
 ];
 // step 4 (bin/mudur.py): the manager card of /api/state.mudur_kararlari this manager (key) visits now — one it is
 // looking at, or one it answered less than TOPLANTI_MS ago; null otherwise.
@@ -788,7 +825,7 @@ export function bakilacakIsler(st) {
   for (const t of Array.isArray(st && st.tasks) ? st.tasks : []) if (t && t.note && t.status === 'tikandi') out.set(notAdi(t.note), 'takildi');
   return out;
 }
-export const BAKIS_METNI = { sessiz: 'sessiz işe bakıyor', takildi: 'takılan işe bakıyor' };
+export const BAKIS_METNI = { sessiz: N_('sessiz işe bakıyor'), takildi: N_('takılan işe bakıyor') }; // T() where shown
 
 // What a staff member at its desk says when it has no duty (owner decision 2026-11-18: real things, never filler): a
 // short "masasında · …" from the state — a manager its department's open work (the Yazılım Müdürü also the busiest
@@ -801,25 +838,26 @@ export function masaSozu(gorevli, st, ms, { alan = '', proje = '' } = {}) {
   const s = st && typeof st === 'object' ? st : {};
   const tasks = (Array.isArray(s.tasks) ? s.tasks : []).filter((t) => t && t.note);
   const acik = tasks.filter((t) => ACIK_DURUMLAR.has(t.status) && !onayAdimi(t) && !argeIsi(t));
-  const m = (x) => (x ? `masasında · ${x}` : 'masasında');
+  const m = (x) => (x ? T('masasında · {ne}', { ne: x }) : T('masasında'));
   if (gorevli === 'mudur') {
     if (alan === 'it') {
       const sv = s.sistem && typeof s.sistem === 'object' ? s.sistem : null;
-      const ad = sv && { yesil: 'sistem rahat', sari: 'sistem yoğun', kirmizi: 'sistem çok yoğun' }[sv.seviye];
-      return m(ad || '');
+      const ad = sv && { yesil: N_('sistem rahat'), sari: N_('sistem yoğun'), kirmizi: N_('sistem çok yoğun') }[sv.seviye];
+      return m(ad ? T(ad) : '');
     }
     const is = acik.filter((t) => isDepartmani(t) === alan && (alan !== 'yazilim' || !planIsi(t)));
-    const ad = { yazilim: 'kod işi', qa: 'inceleme', analist: 'plan incelemesi' }[alan];
+    const ad = { yazilim: [N_('açık kod işi yok'), N_('{n} kod işi takipte')], qa: [N_('açık inceleme yok'), N_('{n} inceleme takipte')],
+      analist: [N_('açık plan incelemesi yok'), N_('{n} plan incelemesi takipte')] }[alan];
     if (!ad) return m('');
-    if (!is.length) return m(`açık ${ad} yok`);
+    if (!is.length) return m(T(ad[0]));
     let ek = '';
     if (alan === 'yazilim') { // the busiest project: the most open jobs, then the name
       const say = new Map();
       for (const t of is) if (t.project) say.set(t.project, (say.get(t.project) || 0) + 1);
       const en = [...say].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
-      if (en && say.size > 1) ek = ` · en yoğun: ${en[0]}`;
+      if (en && say.size > 1) ek = ` · ${T('en yoğun: {proje}', { proje: en[0] })}`;
     }
-    return m(`${is.length} ${ad} takipte${ek}`);
+    return m(`${T(ad[1], { n: is.length })}${ek}`);
   }
   if (gorevli === 'revir') {
     const sh = { ...DEFAULT_SAHNE, ...(s.sahne || {}) };
@@ -828,30 +866,30 @@ export function masaSozu(gorevli, st, ms, { alan = '', proje = '' } = {}) {
     const gun = (v) => { const t = zamanMs(v, sh.saat_dilimi, ofset); return t === null ? '' : gunOf(t); };
     const bugun = Number.isFinite(ms) ? gunOf(ms) : '';
     const n = tasks.filter((t) => t.status === 'tikandi' && bugun && gun(t.finished) === bugun).length;
-    return m(n ? `bugün ${n} iş takıldı` : 'ofis sağlıklı');
+    return m(n ? T('bugün {n} iş takıldı', { n }) : T('ofis sağlıklı'));
   }
   if (gorevli === 'psikolog') {
     const n = acik.filter((t) => Number(t.kontrol_deneme) >= 2).length;
-    return m(n ? `${n} iş ikinci Kontrol denemesinde` : '');
+    return m(n ? T('{n} iş ikinci Kontrol denemesinde', { n }) : '');
   }
   if (gorevli === 'ik') {
     const n = acik.filter((t) => t.status === 'calisiyor').length;
-    return m(n ? `${n} iş üzerinde çalışılıyor` : 'şu an çalışan iş yok');
+    return m(n ? T('{n} iş üzerinde çalışılıyor', { n }) : T('şu an çalışan iş yok'));
   }
   if (gorevli === 'muhasebe') {
     const sum = s.summary && typeof s.summary === 'object' ? s.summary : {};
     const n = Number.isFinite(sum.finished_today) && sum.finished_today >= 0 ? Math.floor(sum.finished_today) : null;
-    return m(n === null ? '' : n ? `bugün ${n} iş bitti` : 'bugün biten iş yok');
+    return m(n === null ? '' : n ? T('bugün {n} iş bitti', { n }) : T('bugün biten iş yok'));
   }
   if (gorevli === 'idari') {
     const n = (Array.isArray(s.schedules) ? s.schedules : []).filter((z) => z && !z.duraklatildi).length;
-    return m(n ? `${n} zamanlanmış iş` : '');
+    return m(n ? T('{n} zamanlanmış iş', { n }) : '');
   }
   if (gorevli === 'proje') {
     const n = acik.filter((t) => t.project === proje).length;
-    return m(n ? `${n} açık iş` : '');
+    return m(n ? T('{n} açık iş', { n }) : '');
   }
-  return 'masasında';
+  return T('masasında');
 }
 
 export const MUDURLUK_ARA = 1.4; // the gap between the two offices of a cell (base units: 2.1 world, rooms never touch)
@@ -868,26 +906,26 @@ export const QA_MASALARI = { kidemli: ['qa-masa-0', 'qa-masa-1'], stajyer: ['qa-
 // its pod (platform / yaratici / influencer); alan = its platform or area; rol = what it will do. No real work yet:
 // their cards say "Şu an atanmış iş yok".
 export const SOSYAL_EKIBI = [
-  { id: 'instagram', ad: 'Instagram uzmanı', grup: 'platform', alan: 'Instagram', rol: 'Instagram paylaşımlarını ve hikâyeleri planlayacak.' },
-  { id: 'x', ad: 'X (Twitter) uzmanı', grup: 'platform', alan: 'X (Twitter)', rol: 'X paylaşımlarını ve duyuruları yazacak.' },
-  { id: 'reddit', ad: 'Reddit uzmanı', grup: 'platform', alan: 'Reddit', rol: 'İlgili Reddit topluluklarında projeleri tanıtacak.' },
-  { id: 'youtube', ad: 'YouTube uzmanı', grup: 'platform', alan: 'YouTube', rol: 'YouTube videolarını ve kanal düzenini planlayacak.' },
-  { id: 'tiktok', ad: 'TikTok uzmanı', grup: 'platform', alan: 'TikTok', rol: 'Kısa TikTok videolarının fikirlerini üretecek.' },
-  { id: 'pinterest', ad: 'Pinterest uzmanı', grup: 'platform', alan: 'Pinterest', rol: 'Pinterest panolarını ve görsel paylaşımları hazırlayacak.' },
-  { id: 'linkedin', ad: 'LinkedIn uzmanı', grup: 'platform', alan: 'LinkedIn', rol: 'LinkedIn paylaşımlarını ve duyuruları hazırlayacak.' },
-  { id: 'icerik', ad: 'İçerik üreticisi (metin)', grup: 'yaratici', alan: 'metin', rol: 'Paylaşımların ve sayfaların metinlerini yazacak.' },
-  { id: 'video', ad: 'Video editörü', grup: 'yaratici', alan: 'video', rol: 'Videoları kurgulayıp platformlara göre hazırlayacak.' },
-  { id: 'grafik', ad: 'Grafik tasarımcı', grup: 'yaratici', alan: 'görsel', rol: 'Paylaşımlar için görselleri hazırlayacak.' },
-  { id: 'web', ad: 'Web site tasarımcısı', grup: 'yaratici', alan: 'web sitesi', rol: 'Projelerin tanıtım sayfalarını tasarlayacak.' },
-  { id: 'uiux', ad: 'UI/UX tasarımcısı', grup: 'yaratici', alan: 'arayüz', rol: 'Uygulama ekranlarının kullanım ve görünüşünü tasarlayacak.' },
-  { id: 'influencer', ad: 'Influencer ilişkileri sorumlusu', grup: 'influencer', alan: 'influencer', rol: 'Projeler için içerik üreticileriyle iş birliklerini yürütecek.' },
-  { id: 'topluluk', ad: 'Topluluk yöneticisi', grup: 'influencer', alan: 'topluluk', rol: 'Yorumlara ve topluluk sorularına cevap verecek.' },
+  { id: 'instagram', ad: N_('Instagram uzmanı'), grup: 'platform', alan: 'Instagram', rol: N_('Instagram paylaşımlarını ve hikâyeleri planlayacak.') },
+  { id: 'x', ad: N_('X (Twitter) uzmanı'), grup: 'platform', alan: 'X (Twitter)', rol: N_('X paylaşımlarını ve duyuruları yazacak.') },
+  { id: 'reddit', ad: N_('Reddit uzmanı'), grup: 'platform', alan: 'Reddit', rol: N_('İlgili Reddit topluluklarında projeleri tanıtacak.') },
+  { id: 'youtube', ad: N_('YouTube uzmanı'), grup: 'platform', alan: 'YouTube', rol: N_('YouTube videolarını ve kanal düzenini planlayacak.') },
+  { id: 'tiktok', ad: N_('TikTok uzmanı'), grup: 'platform', alan: 'TikTok', rol: N_('Kısa TikTok videolarının fikirlerini üretecek.') },
+  { id: 'pinterest', ad: N_('Pinterest uzmanı'), grup: 'platform', alan: 'Pinterest', rol: N_('Pinterest panolarını ve görsel paylaşımları hazırlayacak.') },
+  { id: 'linkedin', ad: N_('LinkedIn uzmanı'), grup: 'platform', alan: 'LinkedIn', rol: N_('LinkedIn paylaşımlarını ve duyuruları hazırlayacak.') },
+  { id: 'icerik', ad: N_('İçerik üreticisi (metin)'), grup: 'yaratici', alan: N_('metin'), rol: N_('Paylaşımların ve sayfaların metinlerini yazacak.') },
+  { id: 'video', ad: N_('Video editörü'), grup: 'yaratici', alan: 'video', rol: N_('Videoları kurgulayıp platformlara göre hazırlayacak.') },
+  { id: 'grafik', ad: N_('Grafik tasarımcı'), grup: 'yaratici', alan: N_('görsel'), rol: N_('Paylaşımlar için görselleri hazırlayacak.') },
+  { id: 'web', ad: N_('Web site tasarımcısı'), grup: 'yaratici', alan: N_('web sitesi'), rol: N_('Projelerin tanıtım sayfalarını tasarlayacak.') },
+  { id: 'uiux', ad: N_('UI/UX tasarımcısı'), grup: 'yaratici', alan: N_('arayüz'), rol: N_('Uygulama ekranlarının kullanım ve görünüşünü tasarlayacak.') },
+  { id: 'influencer', ad: N_('Influencer ilişkileri sorumlusu'), grup: 'influencer', alan: 'influencer', rol: N_('Projeler için içerik üreticileriyle iş birliklerini yürütecek.') },
+  { id: 'topluluk', ad: N_('Topluluk yöneticisi'), grup: 'influencer', alan: N_('topluluk'), rol: N_('Yorumlara ve topluluk sorularına cevap verecek.') },
 ];
 export const sosyalMasasi = (id) => `sosyal-masa-${id}`;
 // ik: the İK ve İdari İşler Müdürü (the owner, 2026-11-13: the İK staff NPC is that manager in the org chart; reports to the
 // Genel Müdür, the office's support staff report to it)
-export const TESIS_PERSONELI = { muhasebe: 'Muhasebeci', idari: 'İdari işler sorumlusu', ik: 'İK ve İdari İşler Müdürü',
-  revir: 'Ofis doktoru', psikolog: 'Ofis psikoloğu', masaj: 'Masajcı', sunucu: 'IT sorumlusu', arge: 'Ar-Ge uzmanı' };
+export const TESIS_PERSONELI = { muhasebe: N_('Muhasebeci'), idari: N_('İdari işler sorumlusu'), ik: N_('İK ve İdari İşler Müdürü'),
+  revir: N_('Ofis doktoru'), psikolog: N_('Ofis psikoloğu'), masaj: N_('Masajcı'), sunucu: N_('IT sorumlusu'), arge: N_('Ar-Ge uzmanı') };
 // The Ar-Ge odası (plan "Sonraki iş (6)"): the research workspace of ofis.json's `arge` project. It is a facility, never a
 // team bay: the arge project's jobs get no robot of their own — the Ar-Ge uzmanı (sus:arge) types at its desk while one
 // runs (ARGE_ACIK) and stands for it. A whiteboard on the back wall, a bookshelf by the right wall and a second desk.
@@ -914,8 +952,8 @@ export const argeIsi = (t) => !!t && t.project === ARGE_PROJESI && ARGE_ACIK.has
 // server's own time; aktif_dk from the server) and while the review job is open (a task with gun_sonu at work). Never
 // drawn otherwise; no new furniture, two robots only in those minutes.
 export const DEGERLENDIRME_EKIBI = [
-  { id: 'sus:degerlendirme:0', etiket: 'Ölçüm uzmanı' },
-  { id: 'sus:degerlendirme:1', etiket: 'Değerlendirme uzmanı' },
+  { id: 'sus:degerlendirme:0', etiket: N_('Ölçüm uzmanı') },
+  { id: 'sus:degerlendirme:1', etiket: N_('Değerlendirme uzmanı') },
 ];
 export const DEGERLENDIRME_MASALARI = ['analist-masa-3', 'analist-masa-2', 'analist-masa-1', 'analist-masa-0'];
 const DEGERLENDIRME_AKTIF = 10; // minutes, when the server does not say (gun_sonu.aktif_dk)
@@ -935,13 +973,13 @@ export function degerlendirmeDurumu(st, ms) {
 export function degerlendirmeMetinleri(d) {
   const saat = d.son && /^\d{2}:\d{2}$/.test(String(d.son.olcum_saati || '')) ? ` · ${d.son.olcum_saati}` : '';
   const kotu = d.son ? Math.max(0, Math.floor(Number(d.son.kotu) || 0)) : 0;
-  const olcum = d.olcum ? `günü ölçtü${saat}` : `ölçüm hazır${saat}`;
+  const olcum = d.olcum ? `${T('günü ölçtü')}${saat}` : `${T('ölçüm hazır')}${saat}`;
   if (d.is) {
     const soru = d.is.status === 'karar-bekliyor';
-    return [[olcum, 'yaziyor'], [soru ? `değerlendirme · ${sahip('in')} cevabını bekliyor`
-      : `kök nedenleri arıyor · ${kisa(d.is.title || 'Gün sonu değerlendirmesi', 40)}`, soru ? 'bekliyor' : 'yaziyor']];
+    return [[olcum, 'yaziyor'], [soru ? T('değerlendirme · {sahip} cevabını bekliyor', { sahip: sahip('in') })
+      : T('kök nedenleri arıyor · {is}', { is: kisa(d.is.title || T('Gün sonu değerlendirmesi'), 40) }), soru ? 'bekliyor' : 'yaziyor']];
   }
-  return [[olcum, 'yaziyor'], [kotu ? `kötü giden ${kotu} durumu not etti` : 'bugün kötü giden yok', 'yaziyor']];
+  return [[olcum, 'yaziyor'], [kotu ? T('kötü giden {n} durumu not etti', { n: kotu }) : T('bugün kötü giden yok'), 'yaziyor']];
 }
 export const ARGE_TAHTA_OLCU = [2.6, 0.5]; // the whiteboard on its stand (x, z; world units): web/scene.js draws it so
 export const ARGE_KITAPLIK_OLCU = [0.6, 2.2]; // the bookshelf (x, z)
@@ -961,48 +999,48 @@ export const SUNUCU_KABIN_YERI_2 = 'sunucu-kabin-2';
 export const IT_NOBET_MASASI = 'sunucu-masa';
 export const IT_ARKADAS_MASASI = 'sunucu-masa-2';
 export const IT_EKIBI = [
-  { id: 'sus:sunucu', etiket: 'IT sorumlusu', ad: 'IT sorumlusu' },
-  { id: 'sus:sunucu:1', etiket: 'IT uzmanı', ad: '1. IT uzmanı' },
-  { id: 'sus:sunucu:2', etiket: 'IT uzmanı', ad: '2. IT uzmanı' },
+  { id: 'sus:sunucu', etiket: N_('IT sorumlusu'), ad: N_('IT sorumlusu') },
+  { id: 'sus:sunucu:1', etiket: N_('IT uzmanı'), ad: N_('1. IT uzmanı') },
+  { id: 'sus:sunucu:2', etiket: N_('IT uzmanı'), ad: N_('2. IT uzmanı') },
 ];
 // The guard and the Sekreter (plan "Sonraki iş (8)", owner decision 2026-11-12): three people each on the same rotating shifts.
 // The first keeps the old single id ('sus:guvenlik' / 'sus:sekreter'); every member has the team's label.
 export const GUVENLIK_EKIBI = [
-  { id: 'sus:guvenlik', etiket: 'Güvenlik görevlisi', ad: '1. güvenlik görevlisi' },
-  { id: 'sus:guvenlik:1', etiket: 'Güvenlik görevlisi', ad: '2. güvenlik görevlisi' },
-  { id: 'sus:guvenlik:2', etiket: 'Güvenlik görevlisi', ad: '3. güvenlik görevlisi' },
+  { id: 'sus:guvenlik', etiket: N_('Güvenlik görevlisi'), ad: N_('1. güvenlik görevlisi') },
+  { id: 'sus:guvenlik:1', etiket: N_('Güvenlik görevlisi'), ad: N_('2. güvenlik görevlisi') },
+  { id: 'sus:guvenlik:2', etiket: N_('Güvenlik görevlisi'), ad: N_('3. güvenlik görevlisi') },
 ];
 export const SEKRETER_EKIBI = [
-  { id: 'sus:sekreter', etiket: 'Sekreter', ad: '1. sekreter' },
-  { id: 'sus:sekreter:1', etiket: 'Sekreter', ad: '2. sekreter' },
-  { id: 'sus:sekreter:2', etiket: 'Sekreter', ad: '3. sekreter' },
+  { id: 'sus:sekreter', etiket: N_('Sekreter'), ad: N_('1. sekreter') },
+  { id: 'sus:sekreter:1', etiket: N_('Sekreter'), ad: N_('2. sekreter') },
+  { id: 'sus:sekreter:2', etiket: N_('Sekreter'), ad: N_('3. sekreter') },
 ];
 // The kitchen (the owner, 2026-11-14: "meals are always ready"): the Yemekhane sorumlusu became three yemekhane görevlisi and
 // three aşçı joined them, both teams on the same 24/7 rotation as the guards and the IT team (one of each on duty at any
 // time, weekends and holidays too). The first server keeps the old single id 'sus:yemekhane'.
 export const YEMEKHANE_EKIBI = [
-  { id: 'sus:yemekhane', etiket: 'Yemekhane görevlisi', ad: '1. yemekhane görevlisi' },
-  { id: 'sus:yemekhane:1', etiket: 'Yemekhane görevlisi', ad: '2. yemekhane görevlisi' },
-  { id: 'sus:yemekhane:2', etiket: 'Yemekhane görevlisi', ad: '3. yemekhane görevlisi' },
+  { id: 'sus:yemekhane', etiket: N_('Yemekhane görevlisi'), ad: N_('1. yemekhane görevlisi') },
+  { id: 'sus:yemekhane:1', etiket: N_('Yemekhane görevlisi'), ad: N_('2. yemekhane görevlisi') },
+  { id: 'sus:yemekhane:2', etiket: N_('Yemekhane görevlisi'), ad: N_('3. yemekhane görevlisi') },
 ];
 export const ASCI_EKIBI = [
-  { id: 'sus:asci', etiket: 'Aşçı', ad: '1. aşçı' },
-  { id: 'sus:asci:1', etiket: 'Aşçı', ad: '2. aşçı' },
-  { id: 'sus:asci:2', etiket: 'Aşçı', ad: '3. aşçı' },
+  { id: 'sus:asci', etiket: N_('Aşçı'), ad: N_('1. aşçı') },
+  { id: 'sus:asci:1', etiket: N_('Aşçı'), ad: N_('2. aşçı') },
+  { id: 'sus:asci:2', etiket: N_('Aşçı'), ad: N_('3. aşçı') },
 ];
 // The shift teams by their gorevli: `arkadas` — the person whose day or evening shift just ended stays as a colleague
 // while its own office hours last (the IT team only; the guard and the Sekreter go home when their shift ends);
 // `isGunleri` — the team works only the shifts that begin on a work day (the work calendar, the owner, 2026-11-13: the
 // Sekreters are off on weekends and public holidays; the guards and the IT team keep their 24/7 rotation).
 export const NOBET_EKIPLERI = {
-  sunucu: { ad: 'IT ekibi', uyeler: IT_EKIBI, arkadas: true },
-  guvenlik: { ad: 'Güvenlik ekibi', uyeler: GUVENLIK_EKIBI, arkadas: false },
-  sekreter: { ad: 'Sekreterler', uyeler: SEKRETER_EKIBI, arkadas: false, isGunleri: true },
-  yemekhane: { ad: 'Yemekhane ekibi', uyeler: YEMEKHANE_EKIBI, arkadas: false },
-  asci: { ad: 'Aşçılar', uyeler: ASCI_EKIBI, arkadas: false },
+  sunucu: { ad: N_('IT ekibi'), uyeler: IT_EKIBI, arkadas: true },
+  guvenlik: { ad: N_('Güvenlik ekibi'), uyeler: GUVENLIK_EKIBI, arkadas: false },
+  sekreter: { ad: N_('Sekreterler'), uyeler: SEKRETER_EKIBI, arkadas: false, isGunleri: true },
+  yemekhane: { ad: N_('Yemekhane ekibi'), uyeler: YEMEKHANE_EKIBI, arkadas: false },
+  asci: { ad: N_('Aşçılar'), uyeler: ASCI_EKIBI, arkadas: false },
 };
 // the shifts in the office zone, minutes of the day: gece 00–08, gündüz 08–16, akşam 16–24
-export const VARDIYALAR = [{ ad: 'gece', bas: 0 }, { ad: 'gündüz', bas: 480 }, { ad: 'akşam', bas: 960 }];
+export const VARDIYALAR = [{ ad: N_('gece'), bas: 0 }, { ad: N_('gündüz'), bas: 480 }, { ad: N_('akşam'), bas: 960 }]; // ad: T() where shown
 export const VARDIYA_DK = 480;
 export const IT_VARDIYALAR = VARDIYALAR;
 export const IT_VARDIYA_DK = VARDIYA_DK;
@@ -1092,7 +1130,7 @@ export function nobetCikisi(pa, ms, sure, yer) {
   let bitis = pa.cikis && Number.isFinite(pa.cikis_bitis) ? pa.cikis_bitis : null;
   if (bitis === null && !pa.cikis) bitis = ms + sure(pa.yer || yer, 'asansor') + NOBET_CIKIS_PAYI_MS;
   if (bitis === null || ms >= bitis) return null;
-  return { bitis, metin: pa.cikis_metni || (pa.nobetci || pa.devretti ? 'nöbeti devretti · otele gidiyor' : 'otele gidiyor') };
+  return { bitis, metin: pa.cikis_metni || (pa.nobetci || pa.devretti ? T('nöbeti devretti · otele gidiyor') : T('otele gidiyor')) };
 }
 // puts a leaving member on its walk to the lift (nobetCikisi's result)
 function eveYolla(a, c) {
@@ -1137,16 +1175,16 @@ export function otelKadrosu(projeler = []) {
   for (const m of MUDURLUKLER) out.push({ id: mudurId(m.key), gorevli: 'mudur', alan: m.key, etiket: m.ad });
   for (const u of SOSYAL_EKIBI) out.push({ id: `sus:sosyal:${u.id}`, gorevli: 'sosyal', rol: u.id, etiket: u.ad });
   for (const [k, ad] of Object.entries(TESIS_PERSONELI)) {
-    if (k !== 'sunucu') out.push({ id: `sus:${k}`, gorevli: k, etiket: k === 'revir' ? 'Ofis doktoru' : ad });
+    if (k !== 'sunucu') out.push({ id: `sus:${k}`, gorevli: k, etiket: k === 'revir' ? N_('Ofis doktoru') : ad });
   }
-  out.push({ id: 'sus:cayci', gorevli: 'cayci', etiket: 'Çaycı' });
+  out.push({ id: 'sus:cayci', gorevli: 'cayci', etiket: N_('Çaycı') });
   for (const u of YEMEKHANE_EKIBI) out.push({ id: u.id, gorevli: 'yemekhane', etiket: u.etiket });
   for (const u of ASCI_EKIBI) out.push({ id: u.id, gorevli: 'asci', etiket: u.etiket });
   for (const u of IT_EKIBI) out.push({ id: u.id, gorevli: 'sunucu', it_kisi: IT_EKIBI.indexOf(u), etiket: u.etiket });
   for (const u of GUVENLIK_EKIBI) out.push({ id: u.id, gorevli: 'guvenlik', etiket: u.etiket });
   for (const u of SEKRETER_EKIBI) out.push({ id: u.id, gorevli: 'sekreter', etiket: u.etiket });
   for (const p of projeler || []) {
-    if (p && p !== ARGE_PROJESI) out.push({ id: `sus:proje:${p}`, gorevli: 'proje', proje: p, etiket: `${aileAdi(p)} sorumlusu` });
+    if (p && p !== ARGE_PROJESI) out.push({ id: `sus:proje:${p}`, gorevli: 'proje', proje: p, etiket: T('{proje} sorumlusu', { proje: aileAdi(p) }) });
   }
   return out;
 }
@@ -1233,7 +1271,7 @@ export function yayaSayisi(now, sahne, hafif = false) {
 export const OTEL_UYKU = [22, 8];
 export const otelMetni = (ms, tz) => {
   const h = Math.floor(gununDakikasi(ms, tz) / 60);
-  return h >= OTEL_UYKU[0] || h < OTEL_UYKU[1] ? 'otelde · uyuyor' : 'otelde';
+  return h >= OTEL_UYKU[0] || h < OTEL_UYKU[1] ? T('otelde · uyuyor') : T('otelde');
 };
 export const YEMEKHANE_SERVIS = 'yemekhane-servis'; // the Yemekhane sorumlusu's counter
 export const YEMEKHANE_BULASIK = 'yemekhane-bulasik'; // its place at the Bulaşıkhane's sink
@@ -1379,10 +1417,10 @@ export function ofisPlani(projects, options = {}) {
   // centre), external auditor; the model board between the meeting room and the CEO's room, at the back edge, facing
   // the camera
   const cx = Wc / 2;
-  let k = room('toplanti', 'toplanti', 'Toplantı odası', 0, 0, ROOM_W, TOP_D, 'o0');
+  let k = room('toplanti', 'toplanti', N_('Toplantı odası'), 0, 0, ROOM_W, TOP_D, 'o0');
   for (let i = 0; i < 6; i++) place(`toplanti-sandalye-${i}`, 'toplanti', 'sandalye', 2.6 + 2.4 * (i % 3), i < 3 ? 2.75 : 5.25, k);
   place('toplanti-ozet', 'toplanti', 'ozet', 9, 1.2, k);
-  k = room('ceo', 'ceo', 'CEO odası', cx - ROOM_W / 2, 0, ROOM_W, TOP_D, 'o0');
+  k = room('ceo', 'ceo', N_('CEO odası'), cx - ROOM_W / 2, 0, ROOM_W, TOP_D, 'o0');
   place('ceo-masa', 'ceo', 'masa', cx, 3.4, k);
   helpers('ceo-yardimci', 'ceo', cx, 3.4, 'ceo-masa');
   for (let i = 0; i < 6; i++) place(`ceo-kuyruk-${i}`, 'ceo', 'kuyruk', cx + 1.6 + 1.55 * i, corridorZ.o0 - 0.5, k);
@@ -1390,14 +1428,14 @@ export function ofisPlani(projects, options = {}) {
   // where the Genel Müdür stands when it brings a workflow's approval summary to the CEO's door (left of the door; the
   // Sekreter's spot is the door itself, the waiting jobs queue on the right)
   place(GM_KAPI_YERI, 'ceo', 'ayakta', cx - 1.6, corridorZ.o0 - 0.5, k);
-  k = room('denetci', 'denetci', 'Dış denetçi', Wc - DW, 0, DW, TOP_D, 'o0');
+  k = room('denetci', 'denetci', N_('Dış denetçi'), Wc - DW, 0, DW, TOP_D, 'o0');
   // (the security reviewer has no desk here: its runs show at the IT güvenlik desk in the Sunucu odası)
   const odadakiler = odaDenetcileri(denetciler);
   odadakiler.forEach((ad, i) => place(denetciMasasi(ad), 'denetci', 'masa',
     Wc - DW / 2 + DENETCI_DX * (i - (odadakiler.length - 1) / 2), 3.4, k));
   // the Müdür's private office (glass, smaller than the CEO's) between the meeting room and the CEO's room: the
   // fable kadro idles at its desk, planning / fable work is done there
-  k = room('mudur', 'mudur', 'Genel Müdür odası', ROOM_W + TEAM_GAP, 0, MUDUR_W, TOP_D, 'o0');
+  k = room('mudur', 'mudur', N_('Genel Müdür odası'), ROOM_W + TEAM_GAP, 0, MUDUR_W, TOP_D, 'o0');
   place(MUDUR_MASASI, 'mudur', 'mudur-masasi', ROOM_W + TEAM_GAP + MUDUR_W / 2, 3.4, k);
   helpers(`${MUDUR_MASASI}-yardimci`, 'mudur', ROOM_W + TEAM_GAP + MUDUR_W / 2, 3.4, MUDUR_MASASI);
   ek[place(`${MUDUR_MASASI}-yan`, 'mudur', 'yan', ROOM_W + TEAM_GAP + MUDUR_W / 2 + 1.3, 3.4, MUDUR_MASASI)] =
@@ -1406,7 +1444,7 @@ export function ofisPlani(projects, options = {}) {
   // middle row: the Uzmanlar odası (a quiet work room under the CEO's room): review work (inceleme tier, plan- and
   // kod-inceleme steps run by Claude) and the hakem type at its desks; two rows of three, a door on both corridors
   const ux = cx - UZMAN_W / 2;
-  k = room('uzmanlar', 'uzmanlar', 'Uzmanlar odası', ux, zMid, UZMAN_W, TEAM_D, 'o0');
+  k = room('uzmanlar', 'uzmanlar', N_('Uzmanlar odası'), ux, zMid, UZMAN_W, TEAM_D, 'o0');
   const uAlt = node('uzmanlar-kapi-alt', cx, zMid + TEAM_D, 'kapi', 'uzmanlar');
   doorsOn.o1.push(uAlt);
   for (let i = 0; i < UZMAN_MASA; i++) {
@@ -1419,7 +1457,7 @@ export function ofisPlani(projects, options = {}) {
   // the Oyun odası (middle row, left of the Uzmanlar odası; its size never depends on the projects): a table-tennis
   // table (two players face each other across it), a billiards table (one leans with the cue, the other waits), a
   // darts board on the back wall and a bean bag. Idle actors only (molaPlani); a door on both corridors.
-  k = room('oyun', 'oyun', 'Oyun odası', 0, zMid, OYUN_W, TEAM_D, 'o0');
+  k = room('oyun', 'oyun', N_('Oyun odası'), 0, zMid, OYUN_W, TEAM_D, 'o0');
   const oAlt = node('oyun-kapi-alt', OYUN_W / 2, zMid + TEAM_D, 'kapi', 'oyun');
   doorsOn.o1.push(oAlt);
   const ping = [3.8, zMid + 3.4], bil = [9.2, zMid + 5.4], dart = [11.4, zMid + 0.5];
@@ -1441,7 +1479,7 @@ export function ofisPlani(projects, options = {}) {
   // and a foot spot in front of each bed (tur 'ayak'), so a sleeper walks along the aisle and never over another bed.
   const dx0 = ux + UZMAN_W + TEAM_GAP;
   const dw = Wc - dx0;
-  k = room('dinlenme', 'dinlenme', 'Dinlenme odası', dx0, zMid, dw, TEAM_D, 'o0');
+  k = room('dinlenme', 'dinlenme', N_('Dinlenme odası'), dx0, zMid, dw, TEAM_D, 'o0');
   {
     const K = OLCU.K, bw = YATAK_OLCU[0] / K, bd = YATAK_OLCU[1] / K; // a bed in base units
     const kapiBosluk = 1.9, kenar = 0.3, yari = DINLENME_YATAK / 4; // beds per half row
@@ -1463,7 +1501,7 @@ export function ofisPlani(projects, options = {}) {
   }
 
   // front row: tea corner, the shared lounge, canteen (the Revir follows with the facilities)
-  k = room('cay-ocagi', 'cay-ocagi', 'Çay ocağı', 0, zb, CAY_W, BOT_D, 'o1');
+  k = room('cay-ocagi', 'cay-ocagi', N_('Çay ocağı'), 0, zb, CAY_W, BOT_D, 'o1');
   place('cay-ocagi-tezgah', 'cay-ocagi', 'tezgah', 1.2, zb + 1.1, k);
   // the long counter (kettle, samovar, coffee machine, cups): two places to stand while getting a drink
   for (let i = 0; i < 2; i++) place(`cay-ocagi-tezgah-yer-${i}`, 'cay-ocagi', 'ayakta', 2.6 + 1.6 * i, zb + 2.0, k);
@@ -1482,7 +1520,7 @@ export function ofisPlani(projects, options = {}) {
   // the shared lounge (Ortak alan): one armchair per Claude model for its resident staff (kadro), spread over the
   // room's four corners around a low table, so their robots and labels never crowd
   const sx = CAY_W + TEAM_GAP;
-  k = room('ortak-alan', 'ortak-alan', 'Ortak alan', sx, zb, SALON_W, BOT_D, 'o1');
+  k = room('ortak-alan', 'ortak-alan', N_('Ortak alan'), sx, zb, SALON_W, BOT_D, 'o1');
   LOUNGE.forEach((f, i) => place(`ortak-alan-${f}`, 'ortak-alan', 'bekleme', sx + 1.7 + 8.6 * (i % 2), zb + 2.2 + 3.6 * Math.floor(i / 2), k));
   // two café tables in the middle with two chairs each: idle actors sit there with their cup
   const kafeMasalari = [[sx + SALON_W / 2, zb + 2.6], [sx + SALON_W / 2, zb + 5.6]];
@@ -1583,8 +1621,8 @@ export function ofisPlani(projects, options = {}) {
   }
   // slots 4 and 5 (one above the other): the "Sosyal medya ve tasarım" department — the platform pod in the first
   // room, the creative and influencer pods in the studio (a mood board, a ring light, a camera); no real work yet
-  for (const [key, ad, grup] of [['sosyal', 'Sosyal medya ve tasarım', ['platform']],
-    ['sosyal-studyo', 'Sosyal medya ve tasarım · stüdyo', ['yaratici', 'influencer']]]) {
+  for (const [key, ad, grup] of [['sosyal', N_('Sosyal medya ve tasarım'), ['platform']],
+    ['sosyal-studyo', N_('Sosyal medya ve tasarım · stüdyo'), ['yaratici', 'influencer']]]) {
     const { x0, z0, w: RW, kor, alt: altKor } = tesisBay(key);
     const kk = room(key, 'sosyal', ad, x0, z0, RW, TEAM_D, kor);
     const uyeler = SOSYAL_EKIBI.filter((u) => grup.includes(u.grup));
@@ -1608,7 +1646,7 @@ export function ofisPlani(projects, options = {}) {
   // off-duty staff's
   {
     const { x0, z0, w: RW, kor, alt: altKor } = tesisBay('spor');
-    const kk = room('spor', 'spor', 'Spor salonu', x0, z0, RW, TEAM_D, kor);
+    const kk = room('spor', 'spor', N_('Spor salonu'), x0, z0, RW, TEAM_D, kor);
     const alet = (id, tur, x, z) => { const n = place(id, 'spor', tur, x, z, kk); ek[n] = [x, z]; return n; };
     const spots = [alet('spor-kosu-0', 'spor-kosu', x0 + 2.2, z0 + 3.0), alet('spor-kosu-1', 'spor-kosu', x0 + 4.4, z0 + 3.0),
       alet('spor-bisiklet', 'spor-bisiklet', x0 + 6.8, z0 + 3.0), alet('spor-agirlik', 'spor-agirlik', x0 + 9.6, z0 + 3.0)];
@@ -1621,7 +1659,7 @@ export function ofisPlani(projects, options = {}) {
   }
   {
     const { x0, z0, w: RW, kor, alt: altKor } = tesisBay('dus');
-    const kk = room('dus', 'dus', 'Duş', x0, z0, RW, TEAM_D, kor,
+    const kk = room('dus', 'dus', N_('Duş'), x0, z0, RW, TEAM_D, kor,
       { blok: { x: x0 + 0.8, z: z0 + 0.8, w: 4.6, d: 4.4 } });
     const gecit = place('dus-gecit', 'dus', 'gecit', x0 + 6.6, z0 + 6.2, kk);
     let prevDoor = gecit;
@@ -1662,7 +1700,7 @@ export function ofisPlani(projects, options = {}) {
   // SALON_SIRA rows of SALON_KOLTUK chairs facing the screen; a second door onto the corridor below
   {
     const { x0, z0, w: RW, kor, alt: altKor } = tesisBay('konferans');
-    const kk = room('konferans', 'konferans', 'Konferans salonu', x0, z0, RW, TEAM_D, kor,
+    const kk = room('konferans', 'konferans', N_('Konferans salonu'), x0, z0, RW, TEAM_D, kor,
       { salon: { ekran: [x0 + 3.0, z0 + 0.35] } });
     place(SALON_KURSU, 'konferans', 'kursu', x0 + 9.0, z0 + 2.9, kk);
     const koltuklar = [];
@@ -1702,7 +1740,7 @@ export function ofisPlani(projects, options = {}) {
       }
     });
   }
-  for (const [key, ad] of [['qa', 'QA odası'], ['analist', 'Analist odası']]) {
+  for (const [key, ad] of [['qa', N_('QA odası')], ['analist', N_('Analist odası')]]) {
     const { x0, z0, w: RW, kor, alt: altKor } = tesisBay(key);
     const kk = room(key, key, ad, x0, z0, RW, TEAM_D, kor);
     const masalar = [];
@@ -1738,7 +1776,7 @@ export function ofisPlani(projects, options = {}) {
   });
   for (let j = 0; j < izgara.yedek; j++) {
     const { x0, z0, w, d, kor } = bayOf(izgara.hucreler[T + j], true);
-    room(`bos-ekip-${j + 1}`, 'bos-ekip', 'Boş ekip alanı · yeni proje', x0, z0, w, d, kor);
+    room(`bos-ekip-${j + 1}`, 'bos-ekip', N_('Boş ekip alanı · yeni proje'), x0, z0, w, d, kor);
   }
   let otel = null; // the hotel outside the floor (laid out with the lobby: its path starts at the entrance)
   // the lobby (Giriş) in the floor's front-right corner, two cells wide, its door on the wing corridor above it: the
@@ -1747,7 +1785,7 @@ export function ofisPlani(projects, options = {}) {
   // plants, a water dispenser)
   {
     const { x: x0, z: z0, w, d } = izgara.lobi;
-    const kk = room('lobi', 'lobi', 'Giriş', x0, z0, w, d, `k${R - 2}`,
+    const kk = room('lobi', 'lobi', N_('Giriş'), x0, z0, w, d, `k${R - 2}`,
       { lobi: { sehpa: [x0 + 5.2, z0 + 7.7], su: [x0 + 11.3, z0 + 1.0], bitkiler: [[x0 + 0.8, z0 + 0.9], [x0 + 0.8, z0 + d - 0.8],
         [x0 + 15.5, z0 + 0.9]] } });
     for (let i = 0; i < 6; i++) place(`lobi-koltuk-${i}`, 'lobi', 'bekleme', x0 + 2.6 + 2.6 * (i % 3), z0 + 3.0 + 2.8 * Math.floor(i / 3), kk);
@@ -1765,7 +1803,7 @@ export function ofisPlani(projects, options = {}) {
     const { W: ow, D: od, ARA } = OTEL_OLCU;
     const giris = place('lobi-giris', 'lobi', 'giris', cxL, z0 + d, kk);
     const yolu = place('otel-yol', null, 'dis', cxL, z0 + d + ARA / 2, giris);
-    otel = { id: 'otel', tur: 'otel', ad: 'Otel', x: cxL - ow / 2, z: z0 + d + ARA, w: ow, d: od, kapi: null, katlar: 2 };
+    otel = { id: 'otel', tur: 'otel', ad: N_('Otel'), x: cxL - ow / 2, z: z0 + d + ARA, w: ow, d: od, kapi: null, katlar: 2 };
     otel.kapi = place('otel-kapi', 'otel', 'kapi', cxL, otel.z, yolu);
     const hol = place('otel-hol', 'otel', 'hol', cxL, otel.z + 1.2, otel.kapi);
     const sutun = OTEL_ODA / 4;
@@ -1784,7 +1822,7 @@ export function ofisPlani(projects, options = {}) {
     const { x0, z0, w, kor } = bayOf(izgara.hucre(...SIGARA_HUCRESI));
     const kul = [x0 + 2.4, z0 + 5.0];
     const banklar = [[x0 + 8.4, z0 + 8.75, 3.2, 0], [x0 + 11.1, z0 + 4.6, 3.0, 1]]; // [x, z, length, along z]
-    const kapi = room('sigara', 'balkon', 'Sigara odası', x0, z0, w, TEAM_D, kor,
+    const kapi = room('sigara', 'balkon', N_('Sigara odası'), x0, z0, w, TEAM_D, kor,
       { balkon: { kul, banklar, bitkiler: [[x0 + 0.8, z0 + 8.8], [x0 + 11.2, z0 + 0.9], [x0 + 6.2, z0 + 6.0]] } });
     [[-1.1, -1.2], [1.1, -1.2], [-1.1, 1.3], [1.1, 1.3]].forEach(([dx, dz], i) => {
       ek[place(`sigara-yer-${i}`, 'sigara', 'sigara', kul[0] + dx, kul[1] + dz, kapi)] = kul; });
@@ -2195,7 +2233,7 @@ export function isDepartmani(t, s = null) {
 export function testerUnvani(fam) {
   const u = UNVAN[fam];
   if (!u || fam === 'codex') return UZMANLIK_BASLIK.test;
-  return fam === 'fable' ? `${u.unvan} (QA adına)` : rolMetni(fam, 'test');
+  return fam === 'fable' ? `${u.unvan} (${N_('QA adına')})` : rolMetni(fam, 'test');
 }
 // The floor label of a Claude review in the QA odası / the Analist odası (the model stays in parentheses, as for jobs).
 // A job with its own specialisation shows it ("Kıdemli Tester" for a kod-inceleme step, routed to test); one without
@@ -2204,7 +2242,7 @@ function incelemeEtiketi(a, oda) {
   const fam = modelAilesi(a.model);
   const m = fam ? ` (${aileAdi(fam)})` : '';
   if (uzmanlikEki(fam, a.uzmanlik)) return `${a.proje} · ${rolMetni(fam, a.uzmanlik)}${m}`;
-  return oda === 'analist' ? `${a.proje} · İş analisti · ${(UNVAN[fam] || BILINMEYEN).unvan}${m}` : `${a.proje} · ${testerUnvani(fam)}${m}`;
+  return oda === 'analist' ? `${a.proje} · ${N_('İş analisti')} · ${(UNVAN[fam] || BILINMEYEN).unvan}${m}` : `${a.proje} · ${testerUnvani(fam)}${m}`;
 }
 
 // The rule table ("gerçek durum önce gelir": a working agent never leaves its desk, never at lunch or at home).
@@ -2223,39 +2261,39 @@ function niyet({ session, calisiyor, task, kota, ms, escalatedTo, title }) {
   const age = finishedAt === null ? Infinity : Math.max(0, ms - finishedAt);
   const w = (yer, poz, simge, metin, oncelik) => ({ yer, poz, simge, metin, oncelik });
   const isim = title ? ` · ${kisa(title, 40)}` : '';
-  if (status === 'waiting') return w('masa', 'el-kaldirmis', '!', 'izin bekliyor', 0);
+  if (status === 'waiting') return w('masa', 'el-kaldirmis', '!', T('izin bekliyor'), 0);
   if (open) {
-    if (job === 'kontrolde') return w('masa', 'bekliyor', 'test', 'Kontrol çalışıyor', 0);
+    if (job === 'kontrolde') return w('masa', 'bekliyor', 'test', T('Kontrol çalışıyor'), 0);
     if (job === 'karar-bekliyor') {
-      if (busy) return w('masa', 'yaziyor', '?', `çalışıyor · ${sahip('in')} cevabını bekliyor`, 0);
-      return w('kuyruk', 'bekliyor', '?', `${sahip('in')} cevabını bekliyor`, 0);
+      if (busy) return w('masa', 'yaziyor', '?', T('çalışıyor · {sahip} cevabını bekliyor', { sahip: sahip('in') }), 0);
+      return w('kuyruk', 'bekliyor', '?', T('{sahip} cevabını bekliyor', { sahip: sahip('in') }), 0);
     }
     if (isInceleme(task, session) && session) {
-      if (busy) return w('uzman', 'yaziyor', null, `inceliyor${isim}`, 3);
+      if (busy) return w('uzman', 'yaziyor', null, `${T('inceliyor')}${isim}`, 3);
     } else if (busy) {
-      return w('masa', 'yaziyor', null, `çalışıyor${isim}`, 0);
+      return w('masa', 'yaziyor', null, `${T('çalışıyor')}${isim}`, 0);
     }
     if (kota) return w('masa', 'evde', null, kota, 3);
-    if (isInceleme(task, session) && session) return w('uzman', 'bekliyor', null, 'inceleme · sessiz', 3);
+    if (isInceleme(task, session) && session) return w('uzman', 'bekliyor', null, T('inceleme · sessiz'), 3);
     if (!session) {
-      if (job === 'baslatiliyor') return w('masa', 'yuruyor', null, 'geliyor', 1);
-      return w('masa', 'bekliyor', null, 'oturum görünmüyor', 1);
+      if (job === 'baslatiliyor') return w('masa', 'yuruyor', null, T('geliyor'), 1);
+      return w('masa', 'bekliyor', null, T('oturum görünmüyor'), 1);
     }
-    if (job === 'baslatiliyor') return w('masa', 'bekliyor', null, 'başlıyor', 1);
-    return w('masa', 'bekliyor', null, 'masada · sessiz', 1);
+    if (job === 'baslatiliyor') return w('masa', 'bekliyor', null, T('başlıyor'), 1);
+    return w('masa', 'bekliyor', null, T('masada · sessiz'), 1);
   }
   // a finished or stuck review stays where the review was done (the Uzmanlar odası), never at a team desk
   const inc = isInceleme(task, session);
   const w2 = (yer, ...rest) => w(inc && yer === 'masa' ? 'uzman' : yer, ...rest);
-  if (busy) return w2('masa', 'yaziyor', job === 'bitti' && age < CIKIS_MS ? '✓' : null, 'çalışıyor', 0);
+  if (busy) return w2('masa', 'yaziyor', job === 'bitti' && age < CIKIS_MS ? '✓' : null, T('çalışıyor'), 0);
   if (task && job === 'tikandi' && escalatedTo) {
-    if (age < TASIMA_MS) return w('tasima', 'yuruyor', null, 'dosyayı devrediyor', 4);
-    if (age < CIKIS_MS) return w('cikis', 'yuruyor', null, 'çıkıyor', 4);
+    if (age < TASIMA_MS) return w('tasima', 'yuruyor', null, T('dosyayı devrediyor'), 4);
+    if (age < CIKIS_MS) return w('cikis', 'yuruyor', null, T('çıkıyor'), 4);
   } else if (task && job === 'tikandi') {
-    if (session || age < TIKANDI_GORUNUR_MS) return w2('masa', 'basi-onde', 'kirmizi', 'takıldı', 2);
+    if (session || age < TIKANDI_GORUNUR_MS) return w2('masa', 'basi-onde', 'kirmizi', T('takıldı'), 2);
   } else if (task && job === 'bitti' && age < CIKIS_MS) {
-    if (age < KUTLAMA_MS) return w2('masa', 'kutluyor', '✓', '✓ bitti', 2);
-    if (!session) return w('cikis', 'yuruyor', '✓', 'çıkıyor', 4);
+    if (age < KUTLAMA_MS) return w2('masa', 'kutluyor', '✓', T('✓ bitti'), 2);
+    if (!session) return w('cikis', 'yuruyor', '✓', T('çıkıyor'), 4);
   }
   if (!session) return null; // nothing real to show
   if (kota) return w('masa', 'evde', null, kota, 3);
@@ -2269,7 +2307,7 @@ function kotaMetni(modeller, model, ms, tz) {
   const m = fam && (modeller || []).find((x) => x && x.model === fam);
   if (!m || m.durum !== 'kota') return '';
   const d = donusMetni(m.donus, ms, tz);
-  return d ? `Evde · ${d}` : 'Evde · kota doldu';
+  return d ? T('Evde · {donus}', { donus: d }) : T('Evde · kota doldu');
 }
 
 // A "+N" stand-in for actors that do not fit a room; never clickable.
@@ -2291,13 +2329,13 @@ function ozetAktor(id, yer, proje, n, metin, gizliler = []) {
 // a half day would need a second leave time per day for every staff member; kept simple on purpose.
 // Fixed holidays (Law 2429 on national and general holidays), every year: 'MM-DD' -> {ad, kisa}.
 export const SABIT_TATILLER = {
-  '01-01': { ad: 'Yılbaşı', kisa: 'Yılbaşı' },
-  '04-23': { ad: 'Ulusal Egemenlik ve Çocuk Bayramı', kisa: '23 Nisan' },
-  '05-01': { ad: 'Emek ve Dayanışma Günü', kisa: '1 Mayıs' },
-  '05-19': { ad: "Atatürk'ü Anma, Gençlik ve Spor Bayramı", kisa: '19 Mayıs' },
-  '07-15': { ad: 'Demokrasi ve Millî Birlik Günü', kisa: '15 Temmuz' },
-  '08-30': { ad: 'Zafer Bayramı', kisa: '30 Ağustos' },
-  '10-29': { ad: 'Cumhuriyet Bayramı', kisa: '29 Ekim' },
+  '01-01': { ad: N_('Yılbaşı'), kisa: N_('Yılbaşı') },
+  '04-23': { ad: N_('Ulusal Egemenlik ve Çocuk Bayramı'), kisa: N_('23 Nisan') },
+  '05-01': { ad: N_('Emek ve Dayanışma Günü'), kisa: N_('1 Mayıs') },
+  '05-19': { ad: N_("Atatürk'ü Anma, Gençlik ve Spor Bayramı"), kisa: N_('19 Mayıs') },
+  '07-15': { ad: N_('Demokrasi ve Millî Birlik Günü'), kisa: N_('15 Temmuz') },
+  '08-30': { ad: N_('Zafer Bayramı'), kisa: N_('30 Ağustos') },
+  '10-29': { ad: N_('Cumhuriyet Bayramı'), kisa: N_('29 Ekim') },
 };
 // Ramazan and Kurban Bayramı per year: [first day 'MM-DD', number of days, name]. Source: Diyanet İşleri Başkanlığı,
 // "Dini Günler" tables (vakithesaplama.diyanet.gov.tr — 2026: dinigunler.php?yil=2026, 2027: icerik.php?icerik=154,
@@ -2305,9 +2343,9 @@ export const SABIT_TATILLER = {
 // 2028-02-25, 2028-05-04) stay work days (see above). A year missing here still has its fixed holidays; add a row
 // from Diyanet's table each year.
 export const DINI_BAYRAMLAR = {
-  2026: [['03-20', 3, 'Ramazan Bayramı'], ['05-27', 4, 'Kurban Bayramı']],
-  2027: [['03-09', 3, 'Ramazan Bayramı'], ['05-16', 4, 'Kurban Bayramı']],
-  2028: [['02-26', 3, 'Ramazan Bayramı'], ['05-05', 4, 'Kurban Bayramı']],
+  2026: [['03-20', 3, N_('Ramazan Bayramı')], ['05-27', 4, N_('Kurban Bayramı')]],
+  2027: [['03-09', 3, N_('Ramazan Bayramı')], ['05-16', 4, N_('Kurban Bayramı')]],
+  2028: [['02-26', 3, N_('Ramazan Bayramı')], ['05-05', 4, N_('Kurban Bayramı')]],
 };
 const gunNo = (y, m, d) => Math.round(Date.UTC(y, m - 1, d) / 86400000); // days since 1970-01-01
 const gundenTarih = (g) => { const t = new Date(g * 86400000); return { yil: t.getUTCFullYear(), ay: t.getUTCMonth() + 1, gun: t.getUTCDate() }; };
@@ -2328,8 +2366,9 @@ function takvimGunu(x, sahne) {
 export function tatil(x, sahne) {
   const t = takvimGunu(x, sahne);
   const dini = DINI_GUNLER.get(gunNo(t.yil, t.ay, t.gun));
-  if (dini) return { ad: dini, kisa: dini };
-  return SABIT_TATILLER[`${String(t.ay).padStart(2, '0')}-${String(t.gun).padStart(2, '0')}`] || null;
+  if (dini) return { ad: T(dini), kisa: T(dini) };
+  const s = SABIT_TATILLER[`${String(t.ay).padStart(2, '0')}-${String(t.gun).padStart(2, '0')}`];
+  return s ? { ad: T(s.ad), kisa: T(s.kisa) } : null; // in the page's language
 }
 // The holiday's name ("Cumhuriyet Bayramı", "Kurban Bayramı") or '' on any other day.
 export const tatilAdi = (x, sahne) => (tatil(x, sahne) || {}).ad || '';
@@ -2440,7 +2479,7 @@ export function serbestZaman(now, sahne) {
   return g.is ? { ...g, tur: 'aksam' } : g;
 }
 // The label word of a free time: "hafta sonu" / "tatil" / "akşam".
-export const tatilSozu = (g) => (g && g.tur === 'tatil' ? 'tatil' : g && g.tur === 'aksam' ? 'akşam' : 'hafta sonu');
+export const tatilSozu = (g) => T(g && g.tur === 'tatil' ? N_('tatil') : g && g.tur === 'aksam' ? N_('akşam') : N_('hafta sonu'));
 // One staff member's own day: 'iceride' (at work), 'cikiyor' (its EVE_GIDIS_MS walk to the lift after its leave time) or
 // 'evde' (personelSaati). Arrival and leave are seeded within ±MESAI_SAPMA_DK of the office hours; no office hours:
 // always 'iceride'; on a weekend or a public holiday (the work calendar) always 'evde'.
@@ -2616,13 +2655,14 @@ export function dekorEkibi(plan, actors, now, sahne) {
 // An agent's state as the engine drew it: 'çalışıyor', 'uyuyor', 'yemekte', 'molada', 'dinleniyor', 'kota doldu', 'hata'.
 // An agent not drawn (a kadro whose body works as a job: devral) is working — kadroDurumu first asks its body.
 function ajanDurumu(a) {
-  if (!a) return 'çalışıyor';
-  if (a.poz === 'evde') return 'kota doldu';
-  if (a.simge === 'kirmizi') return 'hata';
-  if (a.poz === 'yaziyor' || a.poz === 'toplanti' || a.simge === 'test') return 'çalışıyor';
-  if (a.poz === 'yatiyor' || /uyuyor/.test(String(a.durum_metni || ''))) return 'uyuyor';
-  if (a.poz === 'yemek') return 'yemekte';
-  return a.mola ? 'molada' : 'dinleniyor';
+  if (!a) return N_('çalışıyor');
+  if (a.poz === 'evde') return N_('kota doldu');
+  if (a.simge === 'kirmizi') return N_('hata');
+  if (a.poz === 'yaziyor' || a.poz === 'toplanti' || a.simge === 'test') return N_('çalışıyor');
+  const dm = String(a.durum_metni || ''); // drawn in the page's language
+  if (a.poz === 'yatiyor' || /uyuyor/.test(dm) || dm.includes(T('uyuyor'))) return N_('uyuyor');
+  if (a.poz === 'yemek') return N_('yemekte');
+  return a.mola ? N_('molada') : N_('dinleniyor');
 }
 // The drawn workers of a Claude family: its jobs and sessions, the hakem and the security reviewer (their `aile`) — the
 // bodies a kadro of that family walks as (devral); leaving ones and the "+N" summaries are not here.
@@ -2673,27 +2713,27 @@ export function kimNerede(state, now, aktorler = null) {
     vardiya: null, metin: '', ...e });
   const akt = new Map((Array.isArray(aktorler) ? aktorler : []).filter((a) => a && a.id).map((a) => [a.id, a]));
   // the agents
-  ekle({ id: 'ceo', ad: 'CEO', grup: 'ajan', durum: 'ofiste', metin: aktorler ? ajanDurumu(akt.get('ceo')) : '' });
+  ekle({ id: 'ceo', ad: 'CEO', grup: 'ajan', durum: 'ofiste', metin: aktorler ? T(ajanDurumu(akt.get('ceo'))) : '' });
   for (const f of KADRO) {
-    ekle({ id: `kadro:${f}`, ad: `${UNVAN[f].unvan} (${KADRO_ADI[f]})`, grup: 'ajan', durum: 'ofiste',
-      metin: aktorler ? kadroDurumu(akt, aktorler, f) : '' });
+    ekle({ id: `kadro:${f}`, ad: `${T(UNVAN[f].unvan)} (${KADRO_ADI[f]})`, grup: 'ajan', durum: 'ofiste',
+      metin: aktorler ? T(kadroDurumu(akt, aktorler, f)) : '' });
   }
   for (const ad of denetciListesi(st.modeller)) {
     // the security reviewer is drawn only while its review runs (a Claude call): not drawn means not at work — never
     // "çalışıyor" (ajanDurumu's undrawn = working holds for a kadro whose body works as a job, not for it); it rests
     // like the others, asleep at night
     const a = akt.get(`denetci:${ad}`);
-    const metin = !aktorler ? '' : ad === GUVENLIK && !a ? (uykuVaktiMi(ms, sahne) ? 'uyuyor' : 'dinleniyor') : ajanDurumu(a);
-    ekle({ id: `denetci:${ad}`, ad: ad === GUVENLIK ? GUVENLIK_UNVAN : denetciAdi(ad), grup: 'ajan', durum: 'ofiste', metin });
+    const metin = !aktorler ? '' : ad === GUVENLIK && !a ? (uykuVaktiMi(ms, sahne) ? T('uyuyor') : T('dinleniyor')) : T(ajanDurumu(a));
+    ekle({ id: `denetci:${ad}`, ad: ad === GUVENLIK ? T(GUVENLIK_UNVAN) : denetciAdi(ad), grup: 'ajan', durum: 'ofiste', metin });
   }
   // the shift teams
   const v = vardiya(ms, sahne);
   for (const [g, e] of Object.entries(NOBET_EKIPLERI)) {
     for (const u of nobetEkibi(g, ms, sahne)) {
       const p = nobetPlani(u.kisi, ms, sahne, g);
-      const x = { id: u.id, ad: u.ad, grup: 'nobet', ekip: g };
+      const x = { id: u.id, ad: T(u.ad), grup: 'nobet', ekip: g };
       if (u.durum === 'nobette') ekle({ ...x, durum: 'nobette', gelis: p.simdiki.bas, bitis: p.simdiki.son, vardiya: v.vardiya });
-      else if (u.durum === 'iceride') ekle({ ...x, durum: 'ofiste', metin: 'nöbet dışı', gelis: p.onceki.bas });
+      else if (u.durum === 'iceride') ekle({ ...x, durum: 'ofiste', metin: T('nöbet dışı'), gelis: p.onceki.bas });
       else {
         let cikis = p.onceki ? p.onceki.son : null;
         if (e.arkadas && p.onceki && p.onceki.vardiya !== 0) { // the IT colleague stayed after its day / evening shift
@@ -2716,12 +2756,12 @@ export function kimNerede(state, now, aktorler = null) {
   const projeler = (Array.isArray(st.projects) ? st.projects : []).map((p) => (typeof p === 'string' ? p : p && p.name))
     .filter((p) => p && p !== ARGE_PROJESI);
   const tasks = Array.isArray(st.tasks) ? st.tasks : [];
-  const personel = [['sus:cayci', 'Çaycı'], // (the kitchen teams are shift teams since 2026-11-14: below)
+  const personel = [['sus:cayci', T('Çaycı')], // (the kitchen teams are shift teams since 2026-11-14: below)
     ...Object.entries(TESIS_PERSONELI).filter(([k]) => !NOBET_EKIPLERI[k])
-      .map(([k, ad]) => [`sus:${k}`, ad, k === 'arge' ? ARGE_PROJESI : undefined]),
-    ...SOSYAL_EKIBI.map((u) => [`sus:sosyal:${u.id}`, u.ad]),
-    ...MUDURLUKLER.map((m) => [mudurId(m.key), m.ad]),
-    ...[...new Set(projeler)].map((p) => [`sus:proje:${p}`, `${aileAdi(p)} sorumlusu`, p])];
+      .map(([k, ad]) => [`sus:${k}`, T(ad), k === 'arge' ? ARGE_PROJESI : undefined]),
+    ...SOSYAL_EKIBI.map((u) => [`sus:sosyal:${u.id}`, T(u.ad)]),
+    ...MUDURLUKLER.map((m) => [mudurId(m.key), T(m.ad)]),
+    ...[...new Set(projeler)].map((p) => [`sus:proje:${p}`, T('{proje} sorumlusu', { proje: aileAdi(p) }), p])];
   // the Değerlendirme ekibi: in the office exactly while its work runs (it has no office hours; never drawn otherwise)
   const deg = degerlendirmeDurumu(st, ms);
   if (deg.calisiyor) {
@@ -2729,14 +2769,14 @@ export function kimNerede(state, now, aktorler = null) {
     DEGERLENDIRME_EKIBI.forEach((u, i) => {
       const a = akt.get(u.id);
       if (aktorler && !a) return; // no free desk for it now: not drawn, so not counted in
-      ekle({ id: u.id, ad: u.etiket, grup: 'personel', durum: 'ofiste', metin: a ? String(a.durum_metni || metin[i][0]) : metin[i][0] });
+      ekle({ id: u.id, ad: T(u.etiket), grup: 'personel', durum: 'ofiste', metin: a ? String(a.durum_metni || metin[i][0]) : metin[i][0] });
     });
   }
   for (const [id, ad, proje] of personel) {
     const x = { id, ad, grup: 'personel' };
     if (proje === ARGE_PROJESI ? tasks.some(argeIsi)
       : proje && tasks.some((t) => t && t.project === proje && !FINAL.has(t.status) && t.status !== 'sirada')) {
-      ekle({ ...x, durum: 'ofiste', metin: proje === ARGE_PROJESI ? 'araştırma işi açık' : 'projesinin işi açık' });
+      ekle({ ...x, durum: 'ofiste', metin: proje === ARGE_PROJESI ? T('araştırma işi açık') : T('projesinin işi açık') });
       continue;
     }
     const pg = personelGunu(id, sahne);
@@ -2745,9 +2785,9 @@ export function kimNerede(state, now, aktorler = null) {
     if (!pg) ekle({ ...x, durum: 'ofiste' });
     // called in for a duty outside its hours (a resident taking a new job's file over, a visit that ran on): the engine
     // drew it on that duty
-    else if (d !== 'iceride' && a && a.gorevde && !a.cikis) ekle({ ...x, durum: 'ofiste', metin: String(a.durum_metni || 'görevde') });
+    else if (d !== 'iceride' && a && a.gorevde && !a.cikis) ekle({ ...x, durum: 'ofiste', metin: String(a.durum_metni || T('görevde')) });
     else if (d === 'iceride') ekle({ ...x, durum: 'ofiste', gelis: geri(pg.gel) });
-    else if (d === 'cikiyor') ekle({ ...x, durum: 'cikiyor', metin: 'otele gidiyor', cikis: geri(pg.git) });
+    else if (d === 'cikiyor') ekle({ ...x, durum: 'cikiyor', metin: T('otele gidiyor'), cikis: geri(pg.git) });
     else {
       // the work calendar: the leave after its last arrival on a work day, the next arrival on a work day
       const sure = ((((pg.git - pg.gel) % 1440) + 1440) % 1440) * 60000;
@@ -2859,11 +2899,11 @@ export function personelMolasi(id, ms, plan, ogle) {
   const h = hash(`${id}:mola:${dilim}`) % 6;
   if (ogle) { // a meal: true (lunch, as before) or its kind (ogun)
     const tur = ogle === true ? 'ogle' : ogle;
-    if (guard) return { yer: 'lobi-nobet', poz: 'yemek', metin: tur === 'ogle' ? 'nöbette yemek yiyor' : `nöbette · ${OGUN_METNI[tur]}`, mola: true };
-    if (nodes['yemekhane-personel-0']) return { yer: 'yemekhane-personel-0', poz: 'yemek', metin: OGUN_METNI[tur] || OGUN_METNI.ogle, mola: true };
+    if (guard) return { yer: 'lobi-nobet', poz: 'yemek', metin: tur === 'ogle' ? T('nöbette yemek yiyor') : T('nöbette · {ne}', { ne: T(OGUN_METNI[tur]) }), mola: true };
+    if (nodes['yemekhane-personel-0']) return { yer: 'yemekhane-personel-0', poz: 'yemek', metin: T(OGUN_METNI[tur] || OGUN_METNI.ogle), mola: true };
   }
-  if (h === 0 && nodes['lobi-su']) return { yer: 'lobi-su', poz: 'cay', metin: 'su içiyor', mola: true };
-  if (h === 1 && guard && nodes['lobi-kapi']) return { yer: 'lobi-kapi', poz: 'bekliyor', metin: 'kapıya bakıyor' };
+  if (h === 0 && nodes['lobi-su']) return { yer: 'lobi-su', poz: 'cay', metin: T('su içiyor'), mola: true };
+  if (h === 1 && guard && nodes['lobi-kapi']) return { yer: 'lobi-kapi', poz: 'bekliyor', metin: T('kapıya bakıyor') };
   return null;
 }
 
@@ -2880,11 +2920,11 @@ export function personelKisiligi(id) {
 }
 // The spots of each option (staff-only, never an agent's); a corridor walk needs none.
 const PERSONEL_YERLERI = {
-  cay: [['cay-ocagi-personel-2', 'cay', 'çay içiyor']],
-  oyun: [['oyun-izleyici-0', 'bekliyor', 'oyunu izliyor'], ['oyun-izleyici-1', 'bekliyor', 'oyunu izliyor']],
-  spor: [['spor-mat-2', 'yoga', 'spor yapıyor'], ['spor-mat-3', 'yoga', 'spor yapıyor']],
-  sigara: [['sigara-yer-4', 'sigara', 'sigara molası']],
-  salon: [['ortak-alan-sohbet-0', 'bekliyor', 'sohbet ediyor'], ['ortak-alan-sohbet-1', 'bekliyor', 'sohbet ediyor']],
+  cay: [['cay-ocagi-personel-2', 'cay', N_('çay içiyor')]],
+  oyun: [['oyun-izleyici-0', 'bekliyor', N_('oyunu izliyor')], ['oyun-izleyici-1', 'bekliyor', N_('oyunu izliyor')]],
+  spor: [['spor-mat-2', 'yoga', N_('spor yapıyor')], ['spor-mat-3', 'yoga', N_('spor yapıyor')]],
+  sigara: [['sigara-yer-4', 'sigara', N_('sigara molası')]],
+  salon: [['ortak-alan-sohbet-0', 'bekliyor', N_('sohbet ediyor')], ['ortak-alan-sohbet-1', 'bekliyor', N_('sohbet ediyor')]],
 };
 // The corridor nodes nearest a seat (a short walk stays near home): the six nearest by walk length.
 function yakinKoridorlar(plan, ev) {
@@ -2916,13 +2956,13 @@ export function personelRotasi(id, ms, plan, dolu = new Set(), opts = {}) {
   if (secim === 'yuruyus') {
     const corridors = yakinKoridorlar(plan, opts.ev);
     return corridors.length ? { yer: corridors[hash(`${id}:yuruyus:${dilim}`) % corridors.length], poz: 'yuruyor',
-      metin: 'biraz dolaşıyor', secim, mola: true } : null;
+      metin: T('biraz dolaşıyor'), secim, mola: true } : null;
   }
   const spots = (PERSONEL_YERLERI[secim] || []).filter(([y]) => nodes[y] && !dolu.has(y) && yakin(y));
   const spot = spots.find(([y]) => y === opts.onceki) || spots[0];
   if (!spot) return null;
   dolu.add(spot[0]);
-  return { yer: spot[0], poz: spot[1], metin: spot[2], secim, mola: true };
+  return { yer: spot[0], poz: spot[1], metin: T(spot[2]), secim, mola: true };
 }
 
 // The Yemekhane sorumlusu (owner decision 2026-11-12), seeded per YEMEKHANE_ADIM_MS slot, never on a seat:
@@ -2942,8 +2982,8 @@ export function yemekhaneSorumlusu(now, plan, sahne, dolu = new Set(), opts = {}
   const seg = Math.floor(ms / YEMEKHANE_ADIM_MS);
   const id = opts.id || 'sus:yemekhane';
   const o = yemekPenceresi(ms, sahne);
-  const servis = { yer: YEMEKHANE_SERVIS, poz: 'cay-al', metin: 'servis yapıyor', gorevde: true, faz: 'servis' };
-  const yika = { yer: YEMEKHANE_BULASIK, poz: 'yikiyor', metin: 'bulaşık yıkıyor', gorevde: true, faz: 'yikiyor' };
+  const servis = { yer: YEMEKHANE_SERVIS, poz: 'cay-al', metin: T('servis yapıyor'), gorevde: true, faz: 'servis' };
+  const yika = { yer: YEMEKHANE_BULASIK, poz: 'yikiyor', metin: T('bulaşık yıkıyor'), gorevde: true, faz: 'yikiyor' };
   if (o) {
     if (o.gecen < OGLE_YEMEK_DK[0] * (o.sure / 60)) return servis;
     const t = ms - seg * YEMEKHANE_ADIM_MS;
@@ -2951,22 +2991,22 @@ export function yemekhaneSorumlusu(now, plan, sahne, dolu = new Set(), opts = {}
     const uclar = Object.keys(nodes).filter((k) => /^yemekhane-masa-ucu-\d+$/.test(k))
       .sort((a, b) => Number(a.split('-').pop()) - Number(b.split('-').pop()));
     if (!uclar.length) return yika;
-    return { yer: uclar[hash(`yemekhane:topla:${seg}`) % uclar.length], poz: 'tepsi', metin: 'tepsileri topluyor', gorevde: true,
+    return { yer: uclar[hash(`yemekhane:topla:${seg}`) % uclar.length], poz: 'tepsi', metin: T('tepsileri topluyor'), gorevde: true,
       faz: 'topluyor' };
   }
   const sonra = yemekPenceresi(ms, sahne, OGLE_HAZIRLIK_DK);
   if (sonra && sonra.gecen < OGLE_HAZIRLIK_DK) {
-    return { yer: YEMEKHANE_SERVIS, poz: 'cay-al', metin: OGUN_HAZIRLIK[sonra.tur], gorevde: true, faz: 'hazirlik' };
+    return { yer: YEMEKHANE_SERVIS, poz: 'cay-al', metin: T(OGUN_HAZIRLIK[sonra.tur]), gorevde: true, faz: 'hazirlik' };
   }
   const { dilim } = molaDilimi(id, ms);
   const h = hash(`${id === 'sus:yemekhane' ? 'yemekhane' : id}:serbest:${dilim}`) % 4;
-  if (h === 0) return { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: 'tezgâhta', gorevde: false, faz: 'serbest' };
-  if (h === 1 && nodes[YEMEKHANE_BULASIK]) return { ...yika, metin: 'bulaşıkhaneyi topluyor', gorevde: false, faz: 'serbest' };
+  if (h === 0) return { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: T('tezgâhta'), gorevde: false, faz: 'serbest' };
+  if (h === 1 && nodes[YEMEKHANE_BULASIK]) return { ...yika, metin: T('bulaşıkhaneyi topluyor'), gorevde: false, faz: 'serbest' };
   const m = personelRotasi(id, ms, plan, dolu, { ev: YEMEKHANE_SERVIS, onceki: opts.onceki, gece: !!opts.gece });
   return m ? { yer: m.yer, poz: m.poz, metin: m.metin, gorevde: false, faz: 'serbest', mola: true }
-    : { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: 'tezgâhta', gorevde: false, faz: 'serbest' };
+    : { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: T('tezgâhta'), gorevde: false, faz: 'serbest' };
 }
-const OGUN_HAZIRLIK = { kahvalti: 'kahvaltıyı hazırlıyor', ogle: 'öğle yemeğini hazırlıyor', aksam: 'akşam yemeğini hazırlıyor' };
+const OGUN_HAZIRLIK = { kahvalti: N_('kahvaltıyı hazırlıyor'), ogle: N_('öğle yemeğini hazırlıyor'), aksam: N_('akşam yemeğini hazırlıyor') };
 // The aşçı on duty (ASCI_EKIBI, 2026-11-14), in the kitchen corner, never on a seat: from ASCI_HAZIRLIK_DK minutes
 // before a meal until its end it cooks — at the stove most of each YEMEKHANE_ADIM_MS slot, a moment at the fridge —;
 // otherwise it cleans the stove or tidies the fridge (seeded per slot). Returns {yer, poz, metin, gorevde, faz:
@@ -2984,14 +3024,14 @@ export function asciPlani(now, plan, sahne, opts = {}) {
   if (p) {
     // a trip to the fridge in one slot of three (calm walking: the stove is its place)
     if (t >= 0.8 * YEMEKHANE_ADIM_MS && hash(`${id}:dolap:${seg}`) % 3 === 0) {
-      return { yer: dolap, poz: 'cay-al', metin: 'malzeme alıyor', gorevde: true, faz: 'pisiriyor' };
+      return { yer: dolap, poz: 'cay-al', metin: T('malzeme alıyor'), gorevde: true, faz: 'pisiriyor' };
     }
-    return { yer: ocak, poz: 'yikiyor', metin: { kahvalti: 'kahvaltıyı hazırlıyor', ogle: 'öğle yemeğini pişiriyor', aksam: 'akşam yemeğini pişiriyor' }[p.tur],
+    return { yer: ocak, poz: 'yikiyor', metin: T({ kahvalti: N_('kahvaltıyı hazırlıyor'), ogle: N_('öğle yemeğini pişiriyor'), aksam: N_('akşam yemeğini pişiriyor') }[p.tur]),
       gorevde: true, faz: 'pisiriyor' };
   }
   const h = hash(`${id}:mutfak:${seg}`) % 3;
-  if (h === 0) return { yer: dolap, poz: 'bekliyor', metin: 'dolabı düzenliyor', gorevde: false, faz: 'temizlik' };
-  return { yer: ocak, poz: h === 1 ? 'yikiyor' : 'bekliyor', metin: h === 1 ? 'ocağı temizliyor' : 'mutfakta', gorevde: false, faz: 'temizlik' };
+  if (h === 0) return { yer: dolap, poz: 'bekliyor', metin: T('dolabı düzenliyor'), gorevde: false, faz: 'temizlik' };
+  return { yer: ocak, poz: h === 1 ? 'yikiyor' : 'bekliyor', metin: h === 1 ? T('ocağı temizliyor') : T('mutfakta'), gorevde: false, faz: 'temizlik' };
 }
 
 // The restroom door of an actor: a stable per-actor seed (the robots have no gender; no label or card names it).
@@ -3036,35 +3076,36 @@ export function molaPlani(list, ms, plan, zorla = '', opts = {}) {
     const e = molaEtkinligi(a.id, ms, a.zorla || zorla, { gece: !!opts.gece, tatil: !!opts.tatil, ogle: !!opts.ogle });
     if (e === 'cay') {
       const drink = hash(`${a.id}:icecek:${dilim}`) % 2 ? 'kahve' : 'çay';
-      if (gecen < MOLA_CAY_MS) istek.push({ a, havuz: P.tezgah, f: () => ({ poz: 'cay-al', metin: `${drink} alıyor` }) });
-      else istek.push({ a, havuz: P.kafe, f: () => ({ poz: 'cay', metin: `${drink} içiyor · ortak alan` }) });
-    } else if (e === 'sigara') istek.push({ a, havuz: P.sigara, f: (s) => ({ poz: s[1], metin: s[2] }) });
+      const kahve = drink === 'kahve';
+      if (gecen < MOLA_CAY_MS) istek.push({ a, havuz: P.tezgah, f: () => ({ poz: 'cay-al', metin: kahve ? T('kahve alıyor') : T('çay alıyor') }) });
+      else istek.push({ a, havuz: P.kafe, f: () => ({ poz: 'cay', metin: kahve ? T('kahve içiyor · ortak alan') : T('çay içiyor · ortak alan') }) });
+    } else if (e === 'sigara') istek.push({ a, havuz: P.sigara, f: (s) => ({ poz: s[1], metin: T(s[2]) }) });
     else if (e === 'wc') {
       const kapi = wcKapisi(a.id);
       const yer = gecen < WC_ICERDE_MS ? `wc-ici-${kapi}` : gecen < WC_LAVABO_MS ? `wc-lavabo-${kapi}` : null;
       if (yer && has(yer) && !tek.has(`wc-${kapi}`) && !uzak(a, yer)) {
         tek.add(`wc-${kapi}`);
-        out.set(a.id, yer.startsWith('wc-ici') ? { yer, poz: 'lavaboda', metin: 'lavaboda', mola: true }
-          : { yer, poz: 'bekliyor', metin: 'ellerini yıkıyor', mola: true });
+        out.set(a.id, yer.startsWith('wc-ici') ? { yer, poz: 'lavaboda', metin: T('lavaboda'), mola: true }
+          : { yer, poz: 'bekliyor', metin: T('ellerini yıkıyor'), mola: true });
       }
     } else if (e === 'spor') {
       const dus = hash(`${a.id}:dus:${dilim}`) % 2 === 0;
       const kabin = wcKapisi(`${a.id}:dus`);
       if (gecen >= SPOR_MS && dus && has(`dus-ici-${kabin}`) && !tek.has(`dus-${kabin}`)) {
         tek.add(`dus-${kabin}`);
-        out.set(a.id, { yer: `dus-ici-${kabin}`, poz: 'dusta', metin: 'duşta', mola: true });
-      } else if (gecen < SPOR_MS) istek.push({ a, havuz: P.alet, f: (s) => ({ poz: s[1], metin: 'spor yapıyor' }) });
+        out.set(a.id, { yer: `dus-ici-${kabin}`, poz: 'dusta', metin: T('duşta'), mola: true });
+      } else if (gecen < SPOR_MS) istek.push({ a, havuz: P.alet, f: (s) => ({ poz: s[1], metin: T('spor yapıyor') }) });
     } else if (e === 'masaj') {
-      if (a.yorgun) istek.push({ a, havuz: P.masaj, f: () => ({ poz: 'masajda', metin: 'masajda' }) });
+      if (a.yorgun) istek.push({ a, havuz: P.masaj, f: () => ({ poz: 'masajda', metin: T('masajda') }) });
     } else if (e === 'uyku') {
-      if (a.uzun) istek.push({ a, havuz: P.yatak, f: () => ({ poz: 'yatiyor', metin: opts.gece ? 'uyuyor' : 'dinleniyor · uyuyor' }) });
-    } else if (e === 'sohbet') istek.push({ a, havuz: P.sohbet, f: () => ({ poz: 'bekliyor', metin: 'sohbet ediyor' }) });
+      if (a.uzun) istek.push({ a, havuz: P.yatak, f: () => ({ poz: 'yatiyor', metin: opts.gece ? T('uyuyor') : T('dinleniyor · uyuyor') }) });
+    } else if (e === 'sohbet') istek.push({ a, havuz: P.sohbet, f: () => ({ poz: 'bekliyor', metin: T('sohbet ediyor') }) });
     else if (e === 'oyun') players.push(a);
     else if (e === 'yuruyus') {
       const cs = yakinKoridorlar(plan, a.ev);
       if (cs.length) {
         out.set(a.id, { yer: cs[hash(`${a.id}:yuruyus:${dilim}`) % cs.length], poz: 'yuruyor',
-          metin: a.kadro ? 'hazır · biraz dolaşıyor' : 'boşta · dolaşıyor', mola: true });
+          metin: a.kadro ? T('hazır · biraz dolaşıyor') : T('boşta · dolaşıyor'), mola: true });
       }
     }
   }
@@ -3083,15 +3124,15 @@ export function molaPlani(list, ms, plan, zorla = '', opts = {}) {
   }
   const games = [];
   if (players.length >= 2 && has('oyun-pingpong-0')) {
-    games.push(['oyun-pingpong-0', 'pingpong', 'masa tenisi oynuyor'], ['oyun-pingpong-1', 'pingpong', 'masa tenisi oynuyor']);
+    games.push(['oyun-pingpong-0', 'pingpong', N_('masa tenisi oynuyor')], ['oyun-pingpong-1', 'pingpong', N_('masa tenisi oynuyor')]);
   }
   if (players.length - games.length >= 2 && has('oyun-bilardo-0')) {
-    games.push(['oyun-bilardo-0', 'bilardo', 'bilardo oynuyor'], ['oyun-bilardo-1', 'bekliyor', 'bilardo oynuyor']);
+    games.push(['oyun-bilardo-0', 'bilardo', N_('bilardo oynuyor')], ['oyun-bilardo-1', 'bekliyor', N_('bilardo oynuyor')]);
   }
-  if (has('oyun-dart')) games.push(['oyun-dart', 'dart', 'dart atıyor']);
-  if (has('oyun-puf')) games.push(['oyun-puf', 'bekliyor', 'puf koltukta dinleniyor']);
+  if (has('oyun-dart')) games.push(['oyun-dart', 'dart', N_('dart atıyor')]);
+  if (has('oyun-puf')) games.push(['oyun-puf', 'bekliyor', N_('puf koltukta dinleniyor')]);
   const oyunda = new Set();
-  const oyuna = (a, g) => { oyunda.add(g[0]); out.set(a.id, { yer: g[0], poz: g[1], metin: g[2], mola: true }); };
+  const oyuna = (a, g) => { oyunda.add(g[0]); out.set(a.id, { yer: g[0], poz: g[1], metin: T(g[2]), mola: true }); };
   const bekleyen = [];
   for (const a of players) { const g = games.find((x) => x[0] === a.onceki && !oyunda.has(x[0])); if (g) oyuna(a, g); else bekleyen.push(a); }
   for (const a of bekleyen) { const g = games.find((x) => !oyunda.has(x[0])); if (g && !uzak(a, g[0])) oyuna(a, g); }
@@ -3136,14 +3177,15 @@ export function niyetler(state, now, prev = null, options = {}) {
     return ogun(id, ms, sahne, o);
   };
   const yemekte = (id, o) => !!ogunu(id, o);
-  const yemekMetni = (id, o) => OGUN_METNI[ogunu(id, o)] || OGUN_METNI.ogle;
+  const yemekMetni = (id, o) => T(OGUN_METNI[ogunu(id, o)] || OGUN_METNI.ogle);
   // outside the office hours (sahne.mesai): no games, smoking or gym for the staff (they are at the Otel); the agents
   // sleep at night (uyku). A day off's day hours (tatil, owner decision 2026-11-14): the agents are awake and spend the day in
   // the common areas (molaPlani with `tatil`), never at their work desks unless real work takes them there
   const gece = !mesaiMi(ms, sahne);
   const tatil = gece ? serbestZaman(ms, sahne) : null;
   const uyku = gece && !tatil;
-  const tatilMetni = (x) => `${tatilSozu(tatil)} · ${String(x).replace(/^(hazır|boşta) · /, '')}`;
+  const hazirBos = new RegExp(`^(${T('hazır')}|${T('boşta')}) · `); // the texts arrive in the page's language
+  const tatilMetni = (x) => `${tatilSozu(tatil)} · ${String(x).replace(hazirBos, '')}`;
   const plan = options.plan || planOnbellekli(st.projects || [], { denetciler: denetciListesi(st.modeller), ...options });
   const projects = new Set(plan.projeler);
   const prevDesk = new Map();
@@ -3202,7 +3244,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       isaret = ms + KONTROL_ISARET_MS;
     }
     if (isaret && task.status === 'calisiyor' && n.yer === 'masa') {
-      a.kontrol_kaldi = isaret; a.simge = 'kaldi'; a.durum_metni = 'Kontrol geçmedi · düzeltiyor';
+      a.kontrol_kaldi = isaret; a.simge = 'kaldi'; a.durum_metni = T('Kontrol geçmedi · düzeltiyor');
     }
     actors.push(a);
   };
@@ -3244,7 +3286,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   for (const a of actors) {
     if (!planIsi(a._task, a._session)) continue;
     a.rol = 'plan';
-    a.etiket = `${a.etiket} (Yazılım Müdürü adına)`;
+    a.etiket = `${a.etiket} (${N_('Yazılım Müdürü adına')})`;
   }
   // the Genel Müdür's office desk: the first other fable-family worker that needs a desk (whichever project) works there —
   // the one that already sat there keeps it; other planning work uses its team's manager's desk
@@ -3284,8 +3326,8 @@ export function niyetler(state, now, prev = null, options = {}) {
       for (const a of left) a._gizli = true;
       const yardimci = left.reduce((n, a) => n + helperCount(a), 0);
       ozet.push(ozetAktor(`ozet:ekip-${p}`, `ekip-${p}-ozet`, p, left.length,
-        `${left.length} ajan daha: ${left.map((a) => a.durum_metni).join(', ')}` +
-        (yardimci ? ` · ${yardimci} yardımcı` : ''), left));
+        T('{n} ajan daha: {liste}', { n: left.length, liste: left.map((a) => a.durum_metni).join(', ') }) +
+        (yardimci ? ` · ${T('{n} yardımcı', { n: yardimci })}` : ''), left));
     }
   }
 
@@ -3297,18 +3339,18 @@ export function niyetler(state, now, prev = null, options = {}) {
     .filter((id) => /^yemekhane-sandalye-\d+$/.test(id) && id !== 'yemekhane-sandalye-7')
     .sort((a, b) => Number(a.slice(19)) - Number(b.slice(19))));
   const rooms = {
-    kuyruk: { spots: 6, prefix: 'ceo-kuyruk-', ozet: 'ceo-kuyruk-ozet', list: [], metin: 'karar bekliyor' },
-    uzmanlar: { spots: OLCU.UZMAN_MASA, prefix: 'uzmanlar-masa-', ozet: 'uzmanlar-ozet', list: [], metin: 'Uzmanlar odasında',
+    kuyruk: { spots: 6, prefix: 'ceo-kuyruk-', ozet: 'ceo-kuyruk-ozet', list: [], metin: N_('karar bekliyor') },
+    uzmanlar: { spots: OLCU.UZMAN_MASA, prefix: 'uzmanlar-masa-', ozet: 'uzmanlar-ozet', list: [], metin: N_('Uzmanlar odasında'),
       masa: true },
     // plan "Sonraki iş (9)": a Claude kod review (and an inceleme-tier job) at a desk of the QA odası — a haiku review at a
     // Stajyer Tester desk first, any other at a Kıdemli Tester desk —, a plan review at a desk of the Analist odası
-    qa: { spots: EKIP_ODASI_MASA, prefix: 'qa-masa-', ozet: 'qa-ozet', list: [], metin: 'QA odasında', masa: true,
+    qa: { spots: EKIP_ODASI_MASA, prefix: 'qa-masa-', ozet: 'qa-ozet', list: [], metin: N_('QA odasında'), masa: true,
       sira: (a) => (a.model === 'haiku' ? [...QA_MASALARI.stajyer, ...QA_MASALARI.kidemli] : [...QA_MASALARI.kidemli, ...QA_MASALARI.stajyer]) },
-    analist: { spots: EKIP_ODASI_MASA, prefix: 'analist-masa-', ozet: 'analist-ozet', list: [], metin: 'Analist odasında',
+    analist: { spots: EKIP_ODASI_MASA, prefix: 'analist-masa-', ozet: 'analist-ozet', list: [], metin: N_('Analist odasında'),
       masa: true },
     yemek: { spots: yemekYerleri.length, yerler: yemekYerleri, prefix: 'yemekhane-sandalye-', ozet: 'yemekhane-ozet', list: [],
-      metin: 'yemekte' },
-    cay: { spots: 9, prefix: 'cay-ocagi-yer-', ozet: 'cay-ocagi-ozet', list: [], metin: 'çay ocağında' },
+      metin: N_('yemekte') },
+    cay: { spots: 9, prefix: 'cay-ocagi-yer-', ozet: 'cay-ocagi-ozet', list: [], metin: N_('çay ocağında') },
   };
   const molacilar = []; // idle actors whose break molaPlani chooses: [{id, kadro, a}]
   // a day off's day hours (tatil): the idle agents whose own seat is a work desk (the auditors, the Genel Müdür, the CEO)
@@ -3334,7 +3376,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     const hf = modelAilesi(hakemModel);
     hakem = { id: 'hakem', tur: 'ajan', hakem: true, unvan: hu.unvan, rank: hu.rank, model: hf,
       proje: reviewed ? reviewed.project : '', yer: null, masa: null, poz: 'yaziyor', simge: null,
-      etiket: `Hakem (${aileAdi(hf) || kisa(hakemModel, 20)})`, ipucu: `Hakem (${aileAdi(hf) || kisa(hakemModel, 20)})`, durum_metni: 'bulguları tartıyor', tiklama: reviewClick };
+      etiket: `${N_('Hakem')} (${aileAdi(hf) || kisa(hakemModel, 20)})`, ipucu: `${N_('Hakem')} (${aileAdi(hf) || kisa(hakemModel, 20)})`, durum_metni: T('bulguları tartıyor'), tiklama: reviewClick };
     rooms.uzmanlar.list.push(hakem);
   }
   for (const a of visible) {
@@ -3351,7 +3393,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       if (yemekte(a.id)) { a.poz = 'yemek'; a.durum_metni = yemekMetni(a.id); rooms.yemek.list.push(a); }
       // at night (also in hafif) an idle session sleeps in a bed of the Dinlenme odası (GECE_UYKUSU)
       else if (uyku) molacilar.push({ id: a.id, kadro: false, uzun: true, a, onceki: prevYer.get(a.id), ev: null, zorla: 'uyku' });
-      else if (hafif) { a.poz = 'cay'; a.durum_metni = 'boşta · çay molası'; a.mola = true; rooms.cay.list.push(a); }
+      else if (hafif) { a.poz = 'cay'; a.durum_metni = T('boşta · çay molası'); a.mola = true; rooms.cay.list.push(a); }
       else { // its break is chosen with the idle kadro (molaPlani); a nap only after OTURUM_UYKU_MS idle
         const since = a._task ? a._task._bitis : null;
         molacilar.push({ id: a.id, kadro: false, uzun: since !== null && ms - since > OTURUM_UYKU_MS, a,
@@ -3381,7 +3423,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   const kadroCikan = []; // kadro members walking out by the lift (their model's queued job started from the lobby)
   const kadroCikisi = (f, pk, bitis) => ({ id: `kadro:${f}`, tur: 'ajan', kadro: true, unvan: UNVAN[f].unvan,
     rank: UNVAN[f].rank, model: f, proje: '', yer: 'asansor', masa: null, poz: 'yuruyor', simge: null,
-    etiket: `${UNVAN[f].unvan} (${KADRO_ADI[f]})`, kisa_etiket: `${UNVAN[f].unvan} (${KADRO_ADI[f]})`, durum_metni: 'çıkıyor',
+    etiket: `${UNVAN[f].unvan} (${KADRO_ADI[f]})`, kisa_etiket: `${UNVAN[f].unvan} (${KADRO_ADI[f]})`, durum_metni: T('çıkıyor'),
     tiklama: null, cikis: true, cikis_bitis: bitis });
   for (const f of KADRO) {
     const fam = actors.filter((a) => a.model === f);
@@ -3410,7 +3452,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       yer: kadroYeri(f), masa: f === 'fable' ? MUDUR_MASASI : null, poz: 'bekliyor', simge: null,
       // role first, the model in parentheses, as on the side panel ("Kıdemli (Opus)")
       etiket: `${u.unvan} (${KADRO_ADI[f]})`,
-      kisa_etiket: `${u.unvan} (${KADRO_ADI[f]})`, durum_metni: 'hazır · iş bekliyor', tiklama: null };
+      kisa_etiket: `${u.unvan} (${KADRO_ADI[f]})`, durum_metni: T('hazır · iş bekliyor'), tiklama: null };
     const leaving = fam.filter((a) => a._n.yer === 'cikis').sort((a, b) => (a.id < b.id ? -1 : 1))[0];
     if (leaving) leaving._gizli = true; // it walks back to the lounge as the kadro
     if (!prevIds.has(kid) && prev) {
@@ -3422,10 +3464,10 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (m.durum === 'kota') {
       k.poz = 'evde';
       const d = donusMetni(m.donus, ms, tz);
-      k.durum_metni = d ? `Evde · ${d}` : 'Evde · kota doldu';
-    } else if (m.durum === 'hata') { k.simge = 'kirmizi'; k.durum_metni = 'son çağrı hata verdi'; }
+      k.durum_metni = d ? T('Evde · {donus}', { donus: d }) : T('Evde · kota doldu');
+    } else if (m.durum === 'hata') { k.simge = 'kirmizi'; k.durum_metni = T('son çağrı hata verdi'); }
     else if (m.durum === 'hazir' || m.durum === 'calisiyor') {
-      if (yemekte(kid) && !(f === 'fable' && ceoTeslimde)) { k.poz = 'yemek'; k.durum_metni = gece ? yemekMetni(kid) : `hazır · ${yemekMetni(kid)}`; rooms.yemek.list.push(k); }
+      if (yemekte(kid) && !(f === 'fable' && ceoTeslimde)) { k.poz = 'yemek'; k.durum_metni = gece ? yemekMetni(kid) : T('hazır · {ne}', { ne: yemekMetni(kid) }); rooms.yemek.list.push(k); }
       // idle life (molaPlani), the Müdür too (owner decision 2026-11-12): its office desk is its seat when it rests. A nap only
       // when no work of its model is known for KADRO_UYKU_MS (the newest start / finish of that family's jobs)
       // at night (also in hafif) it sleeps in a bed (GECE_UYKUSU), also right after its body came back from a job
@@ -3438,7 +3480,7 @@ export function niyetler(state, now, prev = null, options = {}) {
         molacilar.push({ id: kid, kadro: true, uzun: !(son > ms - KADRO_UYKU_MS), masa: f === 'fable',
           yorgun: calismaSuresi(tasks, f, ms, tz, ofset) > MASAJ_ESIGI_MS, a: k, onceki: prevYer.get(kid), ev: kadroYeri(f) });
       }
-    } else k.durum_metni = 'durumu bilinmiyor';
+    } else k.durum_metni = T('durumu bilinmiyor');
     // the Müdür's desk taken by another worker: the idle Müdür waits at its lounge seat instead
     if (f === 'fable' && k.yer === MUDUR_MASASI && actors.some((a) => a.masa === MUDUR_MASASI && !a._gizli)) {
       k.yer = 'ortak-alan-fable'; k.masa = null;
@@ -3478,8 +3520,8 @@ export function niyetler(state, now, prev = null, options = {}) {
       rank: u.rank, model: ad, proje: '', yer: masa, masa, poz: 'bekliyor', simge: null,
       // the floor shows the short name only ("Codex", "GLM", "IT güvenlik uzmanı"); the role is in the tooltip and the card
       etiket: guvenlik ? GUVENLIK_KISA : denetciAdi(ad), kisa_etiket: guvenlik ? GUVENLIK_KISA : denetciAdi(ad),
-      ipucu: guvenlik ? `${GUVENLIK_KISA} · ${GUVENLIK_UNVAN} (${aileAdi(fam)})` : `${denetciAdi(ad)} · ${u.unvan}${free ? ' · ücretsiz' : ''}`,
-      durum_metni: 'hazır', tiklama: null };
+      ipucu: guvenlik ? `${GUVENLIK_KISA} · ${GUVENLIK_UNVAN} (${aileAdi(fam)})` : `${denetciAdi(ad)} · ${u.unvan}${free ? ` · ${N_('ücretsiz')}` : ''}`,
+      durum_metni: T('hazır'), tiklama: null };
     if (guvenlik) { a.aile = fam; if (devralCagri[a.id]) a.devral = devralCagri[a.id]; } // its Claude family's kadro
     // (the security row mirrors its Claude model's state, so only its own `calisan` says it runs)
     const busy = working ? working.has(ad)
@@ -3488,20 +3530,20 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (busy) {
       a.poz = 'yaziyor';
       const proje = reviewed ? reviewed.project : (review && !working ? review.project : '');
-      a.durum_metni = proje ? `inceliyor · ${proje}` : 'inceliyor';
+      a.durum_metni = proje ? T('inceliyor · {proje}', { proje }) : T('inceliyor');
       a.tiklama = reviewClick;
     } else if (m.durum === 'kota') {
       a.poz = 'evde';
       const d = donusMetni(m.donus, ms, tz);
-      a.durum_metni = d ? `Evde · ${d}` : 'Evde · kota doldu';
-    } else if (m.durum === 'hata') { a.simge = 'kirmizi'; a.durum_metni = 'son çalışma hata verdi'; }
+      a.durum_metni = d ? T('Evde · {donus}', { donus: d }) : T('Evde · kota doldu');
+    } else if (m.durum === 'hata') { a.simge = 'kirmizi'; a.durum_metni = T('son çalışma hata verdi'); }
     else {
-      if (m.durum !== 'hazir' && m.durum !== 'calisiyor') a.durum_metni = 'durumu bilinmiyor';
+      if (m.durum !== 'hazir' && m.durum !== 'calisiyor') a.durum_metni = T('durumu bilinmiyor');
       if (m.durum !== 'calisiyor') { // idle (hazir / bilinmiyor): office life like the kadro
         // lunch only on a free canteen chair (an auditor never hides in the canteen's "+N"; else it eats at its desk)
         if (yemekte(a.id)) {
           if (rooms.yemek.list.length < rooms.yemek.spots) {
-            a.poz = 'yemek'; a.durum_metni = gece ? yemekMetni(a.id) : `hazır · ${yemekMetni(a.id)}`; rooms.yemek.list.push(a);
+            a.poz = 'yemek'; a.durum_metni = gece ? yemekMetni(a.id) : T('hazır · {ne}', { ne: yemekMetni(a.id) }); rooms.yemek.list.push(a);
           }
         }
         else if (uyku) molacilar.push({ id: a.id, kadro: true, uzun: true, a, onceki: prevYer.get(a.id), ev: null, zorla: 'uyku' });
@@ -3518,7 +3560,7 @@ export function niyetler(state, now, prev = null, options = {}) {
           x._task.status === 'calisiyor' && x.masa && x.yer === x.masa);
         const hedef = kod && plan.dugumler[`${kod.masa}-yan`] ? `${kod.masa}-yan` : null;
         if (hedef && ms < t._bitis + sure(masa, hedef) + IS_KALIS_MS) {
-          a.yer = hedef; a.poz = 'yuruyor'; a.dosya = true; a.durum_metni = 'bulguları götürüyor'; a.tiklama = { note: kod._task.note };
+          a.yer = hedef; a.poz = 'yuruyor'; a.dosya = true; a.durum_metni = T('bulguları götürüyor'); a.tiklama = { note: kod._task.note };
           const i = molacilar.findIndex((m) => m.a === a);
           if (i >= 0) molacilar.splice(i, 1); // the errand, not a break
           break;
@@ -3568,7 +3610,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     const x = mola.get(m.id);
     if (x) { m.a.yer = x.yer; m.a.poz = x.poz; m.a.durum_metni = tatil ? tatilMetni(x.metin) : x.metin; m.a.mola = true; }
     else if (!m.kadro) {
-      m.a.poz = 'cay'; m.a.durum_metni = tatil ? tatilMetni('çay içiyor') : gece ? 'boşta · dinleniyor' : 'boşta · çay molası';
+      m.a.poz = 'cay'; m.a.durum_metni = tatil ? tatilMetni(T('çay içiyor')) : gece ? T('boşta · dinleniyor') : T('boşta · çay molası');
       m.a.mola = true; rooms.cay.list.push(m.a);
     } else if (tatil) tatilKoltuk.push({ a: m.a, masa: !!m.masa });
   }
@@ -3577,7 +3619,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   for (const { a, masa } of tatilKoltuk) {
     const id = a === ceoMola ? 'ceo' : a.id;
     const okur = hash(`${id}:tatil:${molaDilimi(id, ms).dilim}`) % 2 === 0;
-    a.durum_metni = tatilMetni(okur && masa ? 'kitap okuyor' : 'dinleniyor');
+    a.durum_metni = tatilMetni(okur && masa ? T('kitap okuyor') : T('dinleniyor'));
     if (!masa) continue;
     a.poz = 'bekliyor'; a.mola = true; a.tatil_koltuk = true;
     if (a.masa === MUDUR_MASASI) a.masa = null;
@@ -3617,7 +3659,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     }
     if (kalan.length) {
       const extra = kalan.length;
-      ozet.push(ozetAktor(`ozet:${key}`, r.ozet, '', extra, `${extra} ajan daha ${r.metin}`, kalan));
+      ozet.push(ozetAktor(`ozet:${key}`, r.ozet, '', extra, T('{n} ajan daha {yer}', { n: extra, yer: T(r.metin) }), kalan));
     }
   }
   for (const a of visible) {
@@ -3649,15 +3691,15 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (i >= 6) return;
     const model = isModeli(t, null, katmanlar);
     const u = unvanOf(model);
-    let text = t.queue_position ? `sırada ${t.queue_position}.` : 'sırada';
-    if (t.held) text += ' · bekletiliyor';
-    if (t.blocked) text += ' · engel var';
+    let text = t.queue_position ? T('sırada {sira}.', { sira: t.queue_position }) : T('sırada');
+    if (t.held) text += ` · ${T('bekletiliyor')}`;
+    if (t.blocked) text += ` · ${T('engel var')}`;
     out.push({ id: `is:${notAdi(t.note)}`, tur: 'ajan', unvan: u.unvan, rank: u.rank, model: modelAilesi(model),
       rol_metni: rolMetni(model, t.uzmanlik), uzmanlik: isUzmanligi(t),
       proje: t.project, yer: lobiYeri.get(t), masa: null, poz: 'lobide', simge: null,
       etiket: etiketOf(t.project, model, t.uzmanlik), durum_metni: text, tiklama: { note: t.note } });
   });
-  if (lobby.length > 6) out.push(ozetAktor('ozet:lobi', 'lobi-ozet', '', lobby.length - 6, `${lobby.length - 6} iş daha sırada`));
+  if (lobby.length > 6) out.push(ozetAktor('ozet:lobi', 'lobi-ozet', '', lobby.length - 6, T('{n} iş daha sırada', { n: lobby.length - 6 })));
   for (const a of visible) {
     if (a._n.yer === 'tasima' && !a.yer) {
       const seat = out.find((x) => x.id === a.hedef_id);
@@ -3673,11 +3715,11 @@ export function niyetler(state, now, prev = null, options = {}) {
     const rows = [];
     for (const h of list || []) {
       if (!h || !h.id) continue;
-      if (!h.bitti) { rows.push({ h, poz: 'yaziyor', simge: null, metin: kisa(h.gorev) || 'yardım ediyor' }); continue; }
+      if (!h.bitti) { rows.push({ h, poz: 'yaziyor', simge: null, metin: kisa(h.gorev) || T('yardım ediyor') }); continue; }
       const t = zamanMs(h.son_yazma, tz, ofset);
       const age = t === null ? Infinity : Math.max(0, ms - t);
       // a finished helper shows ✓ beside its parent for a moment, then is gone (helpers never use the lift)
-      if (age < 20000) rows.push({ h, poz: 'kutluyor', simge: '✓', metin: '✓ bitti' });
+      if (age < 20000) rows.push({ h, poz: 'kutluyor', simge: '✓', metin: T('✓ bitti') });
     }
     rows.forEach((r, i) => {
       if (i >= YARDIMCI_EN_COK) return;
@@ -3685,7 +3727,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       const fam = modelAilesi(r.h.model);
       const a = { id: `${parentId}/alt:${r.h.id}`, tur: 'alt-ajan', unvan: u.unvan, rank: u.rank, model: fam, proje,
         yer: r.cikis ? 'asansor' : `${spot}-${i}`, masa: null, poz: r.poz, simge: r.simge,
-        etiket: fam ? `Yardımcı · ${u.unvan} (${aileAdi(fam)})` : `Yardımcı · ${u.unvan}`, durum_metni: r.metin,
+        etiket: fam ? `${N_('Yardımcı')} · ${u.unvan} (${aileAdi(fam)})` : `${N_('Yardımcı')} · ${u.unvan}`, durum_metni: r.metin,
         tiklama, ebeveyn: parentId };
       if (r.cikis) a.cikis = true;
       helpers.push(a);
@@ -3693,14 +3735,14 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (rows.length > YARDIMCI_EN_COK) {
       const extra = rows.length - YARDIMCI_EN_COK;
       helpers.push({ ...ozetAktor(`${parentId}/alt:+`, `${spot}-${YARDIMCI_EN_COK}`, proje, extra,
-        `${extra} yardımcı daha`), ebeveyn: parentId });
+        T('{n} yardımcı daha', { n: extra })), ebeveyn: parentId });
     }
   };
   for (const a of visible) {
     if (!a._session || a._gizli || a.poz === 'evde') continue;
     if (a.masa && a.yer === a.masa) addHelpers(a.id, a._session.alt_ajanlar, `${a.masa}-yardimci`, a.proje, a.tiklama);
     else if (a.yer && helperCount(a)) {
-      helpers.push({ ...ozetAktor(`${a.id}/alt:+`, a.yer, a.proje, helperCount(a), `${helperCount(a)} yardımcı`),
+      helpers.push({ ...ozetAktor(`${a.id}/alt:+`, a.yer, a.proje, helperCount(a), T('{n} yardımcı', { n: helperCount(a) })),
         ebeveyn: a.id });
     }
   }
@@ -3807,7 +3849,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       delete gmKadro.mola;
       gmKadro.ozet_gorevi = ozetG;
       gmKadro.yer = GM_KAPI_YERI; gmKadro.poz = 'yuruyor'; gmKadro.dosya = true;
-      gmKadro.durum_metni = "onay özetini CEO'ya götürüyor";
+      gmKadro.durum_metni = T("onay özetini CEO'ya götürüyor");
     }
   }
 
@@ -3819,30 +3861,30 @@ export function niyetler(state, now, prev = null, options = {}) {
   const claudeKota = ['haiku', 'sonnet', 'opus', 'fable'].map((f) => (st.modeller || []).find((m) => m && m.model === f));
   const hesapKota = claudeKota.every((m) => m && m.durum === 'kota'); // every Claude model: the account's limit
   const ceoBusy = ceo.state === 'busy' || (ceo.state !== 'waiting' && acikYardimci(ceo.alt_ajanlar));
-  if (ceo.state === 'waiting') { c.poz = 'el-kaldirmis'; c.simge = '!'; c.durum_metni = 'izin sorusunda bekliyor'; }
-  else if (ceoBusy && ceo.state === 'busy' && ceo.tur_kapaniyor) { c.poz = 'bekliyor'; c.durum_metni = 'Cevap verdi · tur kapanıyor'; }
-  else if (ceoBusy) { c.poz = 'yaziyor'; c.durum_metni = 'çalışıyor'; }
+  if (ceo.state === 'waiting') { c.poz = 'el-kaldirmis'; c.simge = '!'; c.durum_metni = T('izin sorusunda bekliyor'); }
+  else if (ceoBusy && ceo.state === 'busy' && ceo.tur_kapaniyor) { c.poz = 'bekliyor'; c.durum_metni = T('Cevap verdi · tur kapanıyor'); }
+  else if (ceoBusy) { c.poz = 'yaziyor'; c.durum_metni = T('çalışıyor'); }
   else if (hesapKota && (ceo.state === 'idle' || ceo.state === 'dormant')) {
     c.poz = 'evde';
     const back = claudeKota.map((m) => zamanMs(m.donus, tz)).filter((x) => x !== null);
     const d = back.length ? donusMetni(Math.max(...back), ms, tz) : '';
-    c.durum_metni = d ? `Evde · ${d}` : 'Evde · kota doldu';
+    c.durum_metni = d ? T('Evde · {donus}', { donus: d }) : T('Evde · kota doldu');
   } else if (ceo.state === 'idle' || ceo.state === 'dormant') {
     // real state first: with something open (a queue, a helper, a decision for the owner) it stays at its desk, never at
     // lunch, on a round or on a break. The label tells where it is: "uyuyor" only in bed.
-    c.poz = 'bekliyor'; c.durum_metni = 'odasında';
+    c.poz = 'bekliyor'; c.durum_metni = T('odasında');
     if (ceoYemekte) { c.yer = 'yemekhane-sandalye-7'; c.poz = 'yemek'; c.durum_metni = yemekMetni('ceo'); c.mola = true; }
     else if (teslim && ceoTeslimHazir && ms < teslimIlk(teslim)) {
-      c.yer = teslim.zincir.length ? teslim.zincir[0].ara : teslim.hedef; c.poz = 'yuruyor'; c.durum_metni = 'işi teslim ediyor';
+      c.yer = teslim.zincir.length ? teslim.zincir[0].ara : teslim.hedef; c.poz = 'yuruyor'; c.durum_metni = T('işi teslim ediyor');
       c.dosya = true;
     }
-    else if (ceoYatak) { c.yer = 'dinlenme-yatak-0'; c.poz = 'yatiyor'; c.durum_metni = 'uyuyor'; }
+    else if (ceoYatak) { c.yer = 'dinlenme-yatak-0'; c.poz = 'yatiyor'; c.durum_metni = T('uyuyor'); }
     else if (ceoMola.yer) { c.yer = ceoMola.yer; c.poz = ceoMola.poz; c.durum_metni = ceoMola.durum_metni; c.mola = true; }
-    else if (ceoPlan && ceoPlan.tur === 'tur' && !hafif) { c.yer = ceoPlan.durak; c.poz = 'yuruyor'; c.durum_metni = 'ofisi dolaşıyor'; }
+    else if (ceoPlan && ceoPlan.tur === 'tur' && !hafif) { c.yer = ceoPlan.durak; c.poz = 'yuruyor'; c.durum_metni = T('ofisi dolaşıyor'); }
   }
-  else if (ceo.state === 'absent') c.durum_metni = 'henüz başlamadı';
-  else c.durum_metni = 'durum bilinmiyor';
-  if (ceo.queue) c.durum_metni += ` · sırada ${ceo.queue}`;
+  else if (ceo.state === 'absent') c.durum_metni = T('henüz başlamadı');
+  else c.durum_metni = T('durum bilinmiyor');
+  if (ceo.queue) c.durum_metni += ` · ${T('sırada {n}', { n: ceo.queue })}`;
   if (teslim) c.teslim = teslim; // carried: the sorumlu reads it below, the next tick goes on with it
   if (teslimVerilen.size) c.teslim_verilen = [...teslimVerilen].slice(-20);
   if (c.poz !== 'evde') addHelpers('ceo', ceo.alt_ajanlar, 'ceo-yardimci', '', null);
@@ -3853,7 +3895,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     for (const a of visible) {
       if (a._gizli || !a._session || !pencere.alanlar.has(a._session.name) || !a.masa || a.yer !== a.masa) continue;
       a.duyuru_alindi = true;
-      a.durum_metni = `${a.durum_metni} · duyuru alındı`;
+      a.durum_metni = `${a.durum_metni} · ${T('duyuru alındı')}`;
     }
   }
   const result = [c, ...auditors.filter((a) => !a._gizli), ...visible.filter((a) => !a._gizli), ...kadro.filter((a) => !a._gizli),
@@ -3882,7 +3924,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   const evdeMi = (a) => {
     const d = personelSaati(a.id, ms, sahne);
     if (d === 'evde') return true;
-    if (d === 'cikiyor') { a.yer = 'asansor'; a.masa = null; a.poz = 'yuruyor'; a.durum_metni = 'otele gidiyor'; a.cikis = true; }
+    if (d === 'cikiyor') { a.yer = 'asansor'; a.masa = null; a.poz = 'yuruyor'; a.durum_metni = T('otele gidiyor'); a.cikis = true; }
     return false;
   };
 
@@ -3892,7 +3934,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   // its office hours.
   if (!hafif) {
     const a = { id: 'sus:cayci', tur: 'sus', gorevli: 'cayci', unvan: '', rank: 0, model: '', proje: '', yer: 'cay-ocagi-tezgah',
-      masa: null, poz: 'cay', simge: null, etiket: 'Çaycı', durum_metni: 'çay demliyor', tiklama: null };
+      masa: null, poz: 'cay', simge: null, etiket: N_('Çaycı'), durum_metni: T('çay demliyor'), tiklama: null };
     if (!evdeMi(a)) {
       if (!a.cikis) {
         const pc = prevOf(a.id);
@@ -3909,7 +3951,7 @@ export function niyetler(state, now, prev = null, options = {}) {
             .sort((x, y) => y._task._bitis - x._task._bitis)[0];
           if (fresh) {
             const yer = `${fresh.masa}-yan`;
-            gorev = { yer, bitis: ms + sure(from, yer) + CAYCI_KALIS_MS, metin: 'çay getiriyor', gorevde: true };
+            gorev = { yer, bitis: ms + sure(from, yer) + CAYCI_KALIS_MS, metin: T('çay getiriyor'), gorevde: true };
             verilen.add(fresh.id);
           } else if (ms - sonUzun >= EN_UZUN_ARA_MS && hash(`cayci:uzun:${Math.floor(ms / 60000)}`) % 4 === 0) {
             const masada = visible.filter((x) => x._task && x.masa && x.yer === x.masa && x.poz === 'yaziyor' && !x._gizli &&
@@ -3918,7 +3960,7 @@ export function niyetler(state, now, prev = null, options = {}) {
             const ua = uzun ? masada.find((x) => x._task === uzun) : null;
             if (ua) {
               const yer = `${ua.masa}-yan`;
-              gorev = { yer, bitis: ms + sure(from, yer) + CAYCI_KALIS_MS, metin: 'en uzun çalışana çay götürüyor', gorevde: true };
+              gorev = { yer, bitis: ms + sure(from, yer) + CAYCI_KALIS_MS, metin: T('en uzun çalışana çay götürüyor'), gorevde: true };
               sonUzun = ms;
             }
           }
@@ -3931,7 +3973,7 @@ export function niyetler(state, now, prev = null, options = {}) {
           const duraklar = planListesi(plan, 'cay-duraklari', () => Object.keys(plan.dugumler).filter((k) => /^koridor-[01]-/.test(k)).sort());
           if (duraklar.length && gecen >= 0.6 * CAYCI_TUR_MS) {
             const i = gecen < 0.8 * CAYCI_TUR_MS ? 0 : 1;
-            a.yer = duraklar[hash(`cayci:${dilim}:${i}`) % duraklar.length]; a.poz = 'yuruyor'; a.durum_metni = 'çay dağıtıyor';
+            a.yer = duraklar[hash(`cayci:${dilim}:${i}`) % duraklar.length]; a.poz = 'yuruyor'; a.durum_metni = T('çay dağıtıyor');
           }
         }
         a.cay_verilen = [...verilen].slice(-20);
@@ -3969,11 +4011,11 @@ export function niyetler(state, now, prev = null, options = {}) {
     const sekreterAktoru = (u, ps, nobetci) => {
       const sek = { id: u.id, tur: 'sus', gorevli: 'sekreter', unvan: '', rank: 0, model: '', proje: '',
         yer: 'lobi-resepsiyon', masa: null, poz: 'bekliyor', simge: null, etiket: u.etiket,
-        durum_metni: gece ? 'nöbette' : 'resepsiyonda', tiklama: null };
+        durum_metni: gece ? T('nöbette') : T('resepsiyonda'), tiklama: null };
       if (nobetci) nobetciYap(sek); else sek.devretti = true;
       if (notlar.length) {
         sek.simge = '?'; sek.dosya = true;
-        sek.durum_metni = `${gece ? 'nöbette · ' : ''}${sahip('e')} ${notlar.length} soru bekliyor`;
+        sek.durum_metni = `${gece ? `${T('nöbette')} · ` : ''}${T('{sahip} {n} soru bekliyor', { sahip: sahip('e'), n: notlar.length })}`;
       }
       sek.karar_notlari = notlar;
       // the one on shift takes the new decisions (the role's memory says which are new); the outgoing one only
@@ -3991,7 +4033,7 @@ export function niyetler(state, now, prev = null, options = {}) {
         ilk: sure((ps && ps.yer) || 'asansor', 'ceo-kapi'), gidis: sure('lobi-resepsiyon', 'ceo-kapi'),
         donus: sure('ceo-kapi', 'lobi-resepsiyon'), bekle: nobetci ? kapiBos - ms : 0 });
       if (tas.tasima) sek.tasima = tas.tasima;
-      if (tas.kapida) { sek.yer = 'ceo-kapi'; sek.poz = 'yuruyor'; sek.durum_metni = 'karar götürüyor'; sek.gorevde = true; }
+      if (tas.kapida) { sek.yer = 'ceo-kapi'; sek.poz = 'yuruyor'; sek.durum_metni = T('karar götürüyor'); sek.gorevde = true; }
       // cues (B4): an answer picked up — a job that waited at the CEO's door in the previous tick works again: she
       // takes the answer from the CEO's door to its desk; a group report just written (state.son_rapor): she files it at
       // the CEO's door. Each errand: the walks plus IS_KALIS_MS at each end; one at a time, after the decision trips.
@@ -4011,7 +4053,7 @@ export function niyetler(state, now, prev = null, options = {}) {
           const t1 = Math.max(bas + sure(isler.length ? 'lobi-resepsiyon' : nerede, 'ceo-kapi') + IS_KALIS_MS,
             cayBitis(hedef) + 1000);
           isler.push({ anahtar: a.id, ara: 'ceo-kapi', hedef, t1, bitis: t1 + sure('ceo-kapi', hedef) + IS_KALIS_MS,
-            metin: 'cevabı götürüyor' });
+            metin: T('cevabı götürüyor') });
         }
         const r = st.son_rapor && typeof st.son_rapor === 'object' ? st.son_rapor : null;
         const ry = r ? zamanMs(r.yazildi, tz, ofset) : null;
@@ -4019,7 +4061,7 @@ export function niyetler(state, now, prev = null, options = {}) {
           !(Array.isArray(rol.raporlar) && rol.raporlar.includes(String(r.grup)))) {
           const bas = isler.length ? isler[isler.length - 1].bitis : ms;
           isler.push({ anahtar: `rapor:${r.grup}`, ara: null, hedef: 'ceo-kapi',
-            t1: bas, bitis: bas + sure(nerede, 'ceo-kapi') + IS_KALIS_MS, metin: 'raporu dosyalıyor' });
+            t1: bas, bitis: bas + sure(nerede, 'ceo-kapi') + IS_KALIS_MS, metin: T('raporu dosyalıyor') });
         }
       }
       const raporlar = [...new Set([...(rol && Array.isArray(rol.raporlar) ? rol.raporlar : []),
@@ -4077,7 +4119,8 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (argeGorev) { // real work first: at its desk while the research job is open, also outside its office hours
       const soru = argeIs.status === 'karar-bekliyor';
       a.poz = soru ? 'bekliyor' : 'yaziyor';
-      a.durum_metni = soru ? `araştırma · ${sahip('in')} cevabını bekliyor` : `araştırıyor · ${kisa(argeIs.title || 'Ar-Ge işi', 40)}`;
+      a.durum_metni = soru ? T('araştırma · {sahip} cevabını bekliyor', { sahip: sahip('in') })
+        : T('araştırıyor · {is}', { is: kisa(argeIs.title || T('Ar-Ge işi'), 40) });
       a.gorevde = true;
       a.arge_is = argeIs.note;
       result.push(a);
@@ -4090,14 +4133,14 @@ export function niyetler(state, now, prev = null, options = {}) {
       const z = doktorZiyareti(pa, cases, ms, (f, t) => sure(f || masa, t));
       a.vakalar = z.vakalar;
       if (z.ziyaret) a.ziyaret = z.ziyaret;
-      if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = 'moral veriyor'; ziyarette = true; a.gorevde = true; }
+      if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('moral veriyor'); ziyarette = true; a.gorevde = true; }
     }
     if (key === 'masaj') { // beside a table while someone is on it
       const yatan = result.find((x) => x.poz === 'masajda' && /^masaj-yatak-\d$/.test(x.yer || ''));
-      if (yatan && plan.dugumler[`${yatan.yer}-yan`]) { a.yer = `${yatan.yer}-yan`; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = 'masaj yapıyor'; ziyarette = true; a.gorevde = true; }
+      if (yatan && plan.dugumler[`${yatan.yer}-yan`]) { a.yer = `${yatan.yer}-yan`; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('masaj yapıyor'); ziyarette = true; a.gorevde = true; }
     }
     if (key === 'revir') { // the doctor: duty (a visit) first; the visited agent is never moved, only visited
-      a.etiket = 'Ofis doktoru';
+      a.etiket = N_('Ofis doktoru');
       // not drawn in the previous tick (it was home): coming in by the lift in the morning every open case is new to it;
       // at home it visits nobody (no night call, plan "Sonraki iş (8)")
       const pd = pa || (Array.isArray(prev) && prev.length && personelSaati(a.id, ms, sahne) !== 'evde'
@@ -4107,7 +4150,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       const z = doktorZiyareti(pd, kapali ? [] : vakalar, ms, (f, t) => sure(f || masa, t));
       a.vakalar = kapali ? vakalar.map((c) => c.id) : z.vakalar;
       if (z.ziyaret) a.ziyaret = z.ziyaret;
-      if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = 'hastaya bakıyor'; ziyarette = true; a.gorevde = true; }
+      if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('hastaya bakıyor'); ziyarette = true; a.gorevde = true; }
     }
     if (!ziyarette && evdeMi(a)) {
       // home; one still drawn in the previous tick and not yet walking out (a visit ran past its leave time) walks to
@@ -4208,7 +4251,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       if (gorulen.size) a.gorulen = [...gorulen].slice(-10);
       if (iz) {
         a.inceleme_ziyareti = iz;
-        a.yer = QA_MUDUR_YERI; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = 'incelemeyi başlatıyor'; a.gorevde = true;
+        a.yer = QA_MUDUR_YERI; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('incelemeyi başlatıyor'); a.gorevde = true;
         gorevde = true;
       }
     }
@@ -4220,7 +4263,7 @@ export function niyetler(state, now, prev = null, options = {}) {
         plan.dugumler[`${x.masa}-yan`]);
       if (soran) {
         a.yer = `${soran.masa}-yan`; a.masa = null; a.poz = 'bekliyor'; a.dosya = true; a.gorevde = true;
-        a.durum_metni = k.durum === 'bakiyor' ? 'teknik soruya bakıyor' : 'teknik soruyu cevapladı';
+        a.durum_metni = k.durum === 'bakiyor' ? T('teknik soruya bakıyor') : T('teknik soruyu cevapladı');
         a.tiklama = { note: soran._task.note };
         gorevde = true;
       }
@@ -4229,8 +4272,8 @@ export function niyetler(state, now, prev = null, options = {}) {
       if (m.key === 'yazilim') {
         a.plan_toplantisi = planToplantisi;
         a.yer = ziyaretYeri; a.masa = null; a.poz = 'bekliyor'; a.dosya = true;
-        a.durum_metni = 'planı Analist Müdürüyle görüşüyor';
-      } else { a.poz = 'bekliyor'; a.durum_metni = 'plan incelemesini görüşüyor'; }
+        a.durum_metni = T('planı Analist Müdürüyle görüşüyor');
+      } else { a.poz = 'bekliyor'; a.durum_metni = T('plan incelemesini görüşüyor'); }
       a.gorevde = true;
       gorevde = true;
     }
@@ -4245,7 +4288,7 @@ export function niyetler(state, now, prev = null, options = {}) {
           !result.some((y) => y.yer === `${v.masa}-yan`));
         if (x) {
           const anahtar = notAdi(x._task.note), hedef = `${x.masa}-yan`;
-          bz = { anahtar, hedef, note: x._task.note, metin: `${BAKIS_METNI[sorunlu.get(anahtar)]} · ${kisa(x._task.title || anahtar, 30)}`,
+          bz = { anahtar, hedef, note: x._task.note, metin: `${T(BAKIS_METNI[sorunlu.get(anahtar)])} · ${kisa(x._task.title || anahtar, 30)}`,
             bitis: ms + sure((pa && pa.yer) || masa, hedef) + TOPLANTI_MS };
           bakilan.add(anahtar);
           a.bakilan = [...bakilan].slice(-10);
@@ -4276,27 +4319,27 @@ export function niyetler(state, now, prev = null, options = {}) {
     for (const u of itEkibi(ms, sahne)) {
       const pa = prevOf(u.id);
       const a = { id: u.id, tur: 'sus', gorevli: 'sunucu', it_kisi: u.kisi, unvan: '', rank: 0, model: '', proje: '',
-        yer: IT_NOBET_MASASI, masa: IT_NOBET_MASASI, poz: 'yaziyor', simge: null, etiket: u.etiket, durum_metni: 'masasında',
+        yer: IT_NOBET_MASASI, masa: IT_NOBET_MASASI, poz: 'yaziyor', simge: null, etiket: u.etiket, durum_metni: T('masasında'),
         tiklama: null };
       if (u.durum === 'nobette') {
         // holds the room: never lunch or breaks (breakfast and dinner in its turn); duty ("uyarı var") at the cabinets,
         // also at night and in hafif
         a.nobetci = true; a.vardiya = v.ad; a.vardiya_son = v.son;
-        a.durum_metni = geceVardiyasi ? 'nöbette' : 'masasında · nöbetçi';
+        a.durum_metni = geceVardiyasi ? T('nöbette') : T('masasında · nöbetçi');
         if (uyariVar && kabin) {
-          a.yer = kabin; a.masa = null; a.durum_metni = 'nöbette · uyarı var · kabinlerde';
+          a.yer = kabin; a.masa = null; a.durum_metni = T('nöbette · uyarı var · kabinlerde');
           a.gorevde = true;
         } else if (!hafif && ['kahvalti', 'aksam'].includes(ogunu(a.id, { kim: 'nobet', ekip: 'sunucu' })) &&
           plan.dugumler['yemekhane-personel-1'] && !dolu.has('yemekhane-personel-1')) {
           // breakfast and dinner in its turn (NOBET_SOFRA_SIRASI), only without a warning; still no lunch
           const tur = ogunu(a.id, { kim: 'nobet', ekip: 'sunucu' });
           dolu.add('yemekhane-personel-1');
-          a.yer = 'yemekhane-personel-1'; a.masa = null; a.poz = 'yemek'; a.durum_metni = `nöbette · ${OGUN_METNI[tur]}`; a.mola = true;
+          a.yer = 'yemekhane-personel-1'; a.masa = null; a.poz = 'yemek'; a.durum_metni = T('nöbette · {ne}', { ne: T(OGUN_METNI[tur]) }); a.mola = true;
         } else if (!hafif && kabin) {
           // a seeded round: in about one 10-minute slot of three it checks the cabinets for 90 s
           const tur = molaDilimi(`${a.id}:tur`, ms, SUNUCU_TUR_MS);
           if (hash(`${a.id}:tur:${tur.dilim}`) % 3 === 0 && tur.gecen < SUNUCU_TUR_KALIS_MS) {
-            a.yer = kabin; a.masa = null; a.durum_metni = geceVardiyasi ? 'nöbette · kabinleri kontrol ediyor' : 'kabinleri kontrol ediyor';
+            a.yer = kabin; a.masa = null; a.durum_metni = geceVardiyasi ? T('nöbette · kabinleri kontrol ediyor') : T('kabinleri kontrol ediyor');
           }
         }
         result.push(a);
@@ -4307,7 +4350,7 @@ export function niyetler(state, now, prev = null, options = {}) {
         a.yer = arkMasa; a.masa = arkMasa; a.poz = 'yaziyor';
         if (uyariVar && kabin2 && !gece && !yardimVar) {
           // one colleague helps at the second cabinet spot while the warning lasts (office hours only)
-          a.yer = kabin2; a.masa = null; a.durum_metni = 'uyarı var · kabinlerde yardım ediyor'; a.gorevde = true;
+          a.yer = kabin2; a.masa = null; a.durum_metni = T('uyarı var · kabinlerde yardım ediyor'); a.gorevde = true;
           yardimVar = true;
         } else if (!yemegeGit(a)) {
           const m = personelRotasi(a.id, ms, plan, dolu, { ev: arkMasa, onceki: prevYer.get(a.id), gece });
@@ -4344,7 +4387,7 @@ export function niyetler(state, now, prev = null, options = {}) {
         const tur = ogunu(u.id, { kim: 'nobet', ekip });
         if ((tur === 'kahvalti' || tur === 'aksam') && plan.dugumler[sandalye] && !dolu.has(sandalye)) {
           dolu.add(sandalye);
-          a.yer = sandalye; a.poz = 'yemek'; a.durum_metni = OGUN_METNI[tur]; a.mola = true;
+          a.yer = sandalye; a.poz = 'yemek'; a.durum_metni = T(OGUN_METNI[tur]); a.mola = true;
           result.push(a);
           continue;
         }
@@ -4361,7 +4404,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     const masa = sosyalMasasi(u.id);
     if (!plan.dugumler[masa] || hafif) continue; // hafif: the room only
     const a = { id: `sus:sosyal:${u.id}`, tur: 'sus', gorevli: 'sosyal', rol: u.id, unvan: '', rank: 0, model: '', proje: '',
-      yer: masa, masa, poz: 'bekliyor', simge: null, etiket: u.ad, durum_metni: 'atanmış iş yok', tiklama: null };
+      yer: masa, masa, poz: 'bekliyor', simge: null, etiket: u.ad, durum_metni: T('atanmış iş yok'), tiklama: null };
     if (evdeMi(a)) continue;
     if (!a.cikis && !yemegeGit(a)) { // no real work yet: lunch, else its personality decides (personelRotasi)
       const m = personelRotasi(a.id, ms, plan, dolu, { ev: masa, onceki: prevYer.get(a.id), gece });
@@ -4375,7 +4418,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     const dolu2 = result.some((x) => x.masa === mudur && x.tur !== 'sus');
     const r = { id: `sus:proje:${p}`, tur: 'sus', gorevli: 'proje', unvan: '', rank: 0, model: '', proje: p,
       yer: dolu2 ? `${mudur}-yan` : mudur, masa: dolu2 ? null : mudur, poz: dolu2 ? 'bekliyor' : 'yaziyor', simge: null,
-      etiket: `${aileAdi(p)} sorumlusu`, durum_metni: dolu2 ? 'ekibin yanında' : masaSozu('proje', st, ms, { proje: p }),
+      etiket: T('{proje} sorumlusu', { proje: aileAdi(p) }), durum_metni: dolu2 ? T('ekibin yanında') : masaSozu('proje', st, ms, { proje: p }),
       tiklama: null };
     // duty: while a job of its project is open it stays at its bay (also outside its office hours); else its
     // personality decides, and outside its hours it is home
@@ -4412,7 +4455,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       const t = tasks.find((x) => x.project === p && x.status === 'bitti' && x._bitis !== null && ms >= x._bitis &&
         ms - x._bitis < KUTLAMA_MS && !kutlanan.has(notAdi(x.note)));
       if (t) {
-        kutlama = { anahtar: notAdi(t.note), metin: `ekibini kutluyor · ${kisa(t.title || notAdi(t.note), 30)}`,
+        kutlama = { anahtar: notAdi(t.note), metin: T('ekibini kutluyor · {is}', { is: kisa(t.title || notAdi(t.note), 30) }),
           bitis: ms + sure((op && op.yer) || r.yer, r.yer) + KUTLAMA_MS };
         kutlanan.add(kutlama.anahtar);
       }
@@ -4424,7 +4467,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     } else if (gorusme) {
       r.gorusme = gorusme;
       r.yer = gorusme.hedef; r.masa = null; r.poz = 'yuruyor'; r.gorevde = true;
-      r.durum_metni = gorusme.mudur ? 'Genel Müdürle planı görüşüyor' : 'planı görüşüyor';
+      r.durum_metni = gorusme.mudur ? T('Genel Müdürle planı görüşüyor') : T('planı görüşüyor');
     } else if (kutlama) {
       r.kutlama = kutlama;
       r.poz = 'kutluyor'; r.durum_metni = kutlama.metin; r.gorevde = true;
@@ -4445,7 +4488,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     const gelenler = asansordenGelenler(result, prev).filter((x) => !(x.tur === 'sus' && NOBET_EKIPLERI[x.gorevli]));
     const uyeler = nobetEkibi('guvenlik', ms, sahne);
     const yeni = (u) => ({ id: u.id, tur: 'sus', gorevli: 'guvenlik', unvan: '', rank: 0, model: '', proje: '',
-      yer: 'lobi-nobet', masa: null, poz: 'bekliyor', simge: null, etiket: u.etiket, durum_metni: gece ? 'nöbette' : 'girişte',
+      yer: 'lobi-nobet', masa: null, poz: 'bekliyor', simge: null, etiket: u.etiket, durum_metni: gece ? T('nöbette') : T('girişte'),
       tiklama: null });
     for (const u of uyeler) { // the outgoing first: a greeting it began holds the greeting spot until it ends
       if (u.durum === 'nobette' || hafif) continue;
@@ -4453,7 +4496,7 @@ export function niyetler(state, now, prev = null, options = {}) {
       if (!og) continue;
       const guard = yeni(u);
       if (!og.cikis && Number.isFinite(og.karsilama_bitis) && ms < og.karsilama_bitis && og.yer === 'lobi-karsilama') {
-        guard.yer = 'lobi-karsilama'; guard.durum_metni = 'karşılıyor'; guard.gorevde = true; guard.devretti = true;
+        guard.yer = 'lobi-karsilama'; guard.durum_metni = T('karşılıyor'); guard.gorevde = true; guard.devretti = true;
         guard.karsilama_bitis = og.karsilama_bitis;
         dolu.add('lobi-karsilama');
         result.push(guard);
@@ -4474,7 +4517,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     }
     if (karsilama) guard.karsilama_bitis = karsilama;
     if (!hafif && ms < karsilama) {
-      if (plan.dugumler['lobi-karsilama']) { guard.yer = 'lobi-karsilama'; guard.durum_metni = 'karşılıyor'; guard.gorevde = true; }
+      if (plan.dugumler['lobi-karsilama']) { guard.yer = 'lobi-karsilama'; guard.durum_metni = T('karşılıyor'); guard.gorevde = true; }
     } else if (!hafif && !lobby.length && ms >= karsilama + 60000) {
       const m = personelMolasi(guard.id, ms, plan, ogunu(guard.id, { kim: 'nobet', ekip: 'guvenlik' }));
       if (m && (m.yer === 'lobi-nobet' || !dolu.has(m.yer))) {
@@ -4485,7 +4528,7 @@ export function niyetler(state, now, prev = null, options = {}) {
   }
   if (!hafif) oteleYerlestir(result, prev, plan, ms, (f, t) => sure(f, t), tz);
   if (pencere) salonaTopla(result, plan, ceoKendiIsi || !(ceoSt.state === 'idle' || ceoSt.state === 'dormant'));
-  return result;
+  return etiketleriCevir(result);
 }
 
 // The Otel (owner decision 2026-11-14): everyone of otelKadrosu who is not at work now stays at the hotel instead of vanishing
@@ -4510,7 +4553,7 @@ export function oteleYerlestir(result, prev, plan, ms, sure, tz) {
       if (a.cikis) { // walking out: to its room, not to the lift
         a.otel_varis = pa && pa.cikis && Number.isFinite(pa.otel_varis) ? pa.otel_varis : ms + sure((pa && pa.yer) || a.masa || a.yer, oda);
         a.yer = oda; a.masa = null; a.poz = 'yuruyor';
-        const metin = String(a.durum_metni || '').replace('eve gidiyor', 'otele gidiyor') || 'otele gidiyor';
+        const metin = String(a.durum_metni || '').replace('eve gidiyor', T('otele gidiyor')) || T('otele gidiyor');
         a.durum_metni = metin; a.cikis_metni = metin;
       }
       return;
@@ -4520,7 +4563,7 @@ export function oteleYerlestir(result, prev, plan, ms, sure, tz) {
     // just out of the office (in the previous tick at work or walking out): its walk to the room goes on
     const bitis = pa ? (pa.otel ? pa.otel_varis : varis(pa.yer)) : null;
     if (Number.isFinite(bitis) && ms < bitis) {
-      h.poz = 'yuruyor'; h.durum_metni = 'otele gidiyor'; h.otel_varis = bitis;
+      h.poz = 'yuruyor'; h.durum_metni = T('otele gidiyor'); h.otel_varis = bitis;
     }
     result.push(h);
   });
@@ -4537,7 +4580,7 @@ export function salonaTopla(actors, plan, ceoMesgul = false) {
     .sort((a, b) => Number(a.slice(19)) - Number(b.slice(19)));
   const ceo = actors.find((a) => a && a.id === 'ceo');
   if (ceo && !ceoMesgul && ceo.poz !== 'evde') {
-    ceo.yer = SALON_KURSU; ceo.masa = null; ceo.poz = 'bekliyor'; ceo.simge = null; ceo.durum_metni = 'duyuruyu okuyor';
+    ceo.yer = SALON_KURSU; ceo.masa = null; ceo.poz = 'bekliyor'; ceo.simge = null; ceo.durum_metni = T('duyuruyu okuyor');
     ceo.salonda = true;
   }
   const dinler = (a) => (a.kadro ? a.poz !== 'evde' && a.simge !== 'kirmizi' && !a.dosya
@@ -4549,7 +4592,7 @@ export function salonaTopla(actors, plan, ceoMesgul = false) {
     a.yer = koltuklar[i];
     if (a.tur === 'sus') a.masa = null;
     a.poz = 'bekliyor';
-    a.durum_metni = 'duyuruyu dinliyor';
+    a.durum_metni = T('duyuruyu dinliyor');
     a.salonda = true;
   });
   return actors;

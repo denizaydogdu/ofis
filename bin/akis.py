@@ -170,8 +170,11 @@ NONE_TEXT = re.compile(
     r"|none(?:\s+found)?|nothing(?:\s+found)?|n/?a|not\s+found"
     r"|no(?:\s+(?:blocker|major|minor|serious|critical))*(?:\s*(?:or|and|/|,)\s*(?:blocker|major|minor))*"
     r"(?:\s+(?:issues?|findings?|problems?))?(?:\s+(?:found|detected|identified|reported))?")
+# Turkish and, for the page's English option (ofis.json dil: en, its "Approve" button sends "I approve"), English.
 APPROVALS = {"onay", "onayla", "onayliyorum", "onaylandi", "onayladim", "onaylarim", "evet", "evet onayliyorum",
-             "evet onay", "tamam", "kabul", "kabul ediyorum"}
+             "evet onay", "tamam", "kabul", "kabul ediyorum",
+             "approve", "approved", "i approve", "yes", "yes i approve", "yes approve", "ok", "okay", "accept",
+             "accepted", "i accept"}
 NO_FINDING_LINE, NO_FINDING_RULE = denetci.NO_FINDING_LINE, denetci.NO_FINDING_RULE
 REVIEW_RULES = (
     "Yalnız doğruluk, güvenlik ve davranış sorunlarına bak; üslup, biçim, isim zevki ve \"şöyle de yapılabilirdi\" "
@@ -375,7 +378,7 @@ def review_outcome(text):
 
 
 def is_approval(text):
-    """True only for a plain approval ("Onaylıyorum", "Evet, onaylıyorum.", "onay", "tamam" …); anything with more
+    """True only for a plain approval ("Onaylıyorum", "Evet, onaylıyorum.", "onay", "tamam", "I approve", "Yes" …); anything with more
     words (a condition, a change request) is for the CEO."""
     words = re.sub(r"[^\w\s]", " ", launch._fold(text or "")).split()
     return " ".join(words) in APPROVALS

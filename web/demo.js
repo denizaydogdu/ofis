@@ -12,6 +12,11 @@
 // Lunch is shown by moving the demo's own lunch window (state.sahne.ogle) onto the current time with sahne.ogle_hepsi
 // (every idle actor at the table at once in that scene): the real lunch logic (ogleMi, ogleYemekte) is unchanged.
 import { ofisSaati, sahip } from './ofis-davranis.js';
+import { tokenMetni } from './ofis-text.js';
+// Language (phase 2): the captions, the chat lines and what the real server translates for the page (the usage
+// popup, the limit pill, the Sunucu odası) follow the page's language; job titles, decision cards, notices and
+// reports stay Turkish like the vault notes they stand for.
+import { t as T, N_ } from './i18n.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const localIso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -138,31 +143,33 @@ const MUHASEBE = {
     dikkat: [{ not: 'c.md', baslik: 'Ana sayfa yeniden tasarım taslağı', proje: 'atolye', usd: 2.85, token: 1240000, butce: 3, durum: 'yakin' }] },
 };
 // GET /api/kullanim (bin/kullanim.py): the usage popup under the limit pill; office display names and numbers only
-const kSatir = (ad, tur, token, cikti, usd, tokMetni, ciktiMetni) => ({ ad, tur, token, cikti_token: cikti, usd,
-  fiyat_eksik: false, oturum_sayisi: 1, metin: `${tokMetni} · API karşılığı ~$${usd.toFixed(2)}`, cikti_metni: `çıktı ${ciktiMetni}` });
-const KULLANIM = {
+const kSatir = (ad, tur, n, cikti, usd) => ({ ad, tur, token: n, cikti_token: cikti, usd,
+  fiyat_eksik: false, oturum_sayisi: 1,
+  metin: T('{tok} · API karşılığı ~${usd}', { tok: tokenMetni(n), usd: usd.toFixed(2) }),
+  cikti_metni: T('çıktı {tok}', { tok: tokenMetni(cikti) }) });
+const KULLANIM = () => ({
   limitler: { pencereler: [
-    { ad: 'haftalik', etiket: 'Haftalık', yuzde: 54, gecti: false, yenilenir: "perşembe 22:00'de yenilenir", kalan: '3 gün sonra' },
-    { ad: 'bes_saat', etiket: '5 saatlik', yuzde: 62, gecti: false, yenilenir: "bugün 21:00'de yenilenir", kalan: '2 sa 14 dk sonra' }],
-  eski: false, olculdu: "bugün 18:44'te ölçüldü", eski_aciklama: '' },
+    { ad: 'haftalik', etiket: T('Haftalık'), yuzde: 54, gecti: false, yenilenir: T("perşembe 22:00'de yenilenir"), kalan: T('3 gün sonra') },
+    { ad: 'bes_saat', etiket: T('5 saatlik'), yuzde: 62, gecti: false, yenilenir: T("bugün 21:00'de yenilenir"), kalan: T('2 sa 14 dk sonra') }],
+  eski: false, olculdu: T("bugün 18:44'te ölçüldü"), eski_aciklama: '' },
   dagilim: {
-    bes_saat: { baslangic: 0, tahmini: false, aralik: "Bu pencere: 16:00'dan beri", satirlar: [
-      kSatir('Onboarding metinleri (ornek-uygulama)', 'is', 4200000, 31000, 2.41, '4,2 mn token', '31 bin token'),
-      kSatir('CEO', 'ceo', 1800000, 9000, 1.12, '1,8 mn token', '9 bin token'),
-      kSatir('CSV dışa aktarımı (kasa)', 'is', 950000, 12000, 0.61, '950 bin token', '12 bin token'),
-      kSatir('Ofis dışı diğer oturumlar', 'diger', 300000, 4000, 0.18, '300 bin token', '4 bin token')],
-    toplam: kSatir('Toplam', 'toplam', 7250000, 56000, 4.32, '7,3 mn token', '56 bin token') },
-    haftalik: { baslangic: 0, tahmini: false, aralik: "Bu pencere: perşembe 22:00'den beri", satirlar: [
-      kSatir('Geliştirici oturumu', 'gelistirici', 61000000, 410000, 38.2, '61 mn token', '410 bin token'),
-      kSatir('CEO', 'ceo', 22000000, 95000, 14.9, '22 mn token', '95 bin token'),
-      kSatir('Onboarding metinleri (ornek-uygulama)', 'is', 9800000, 74000, 5.6, '9,8 mn token', '74 bin token'),
-      kSatir('Jarvis', 'jarvis', 4100000, 30000, 2.7, '4,1 mn token', '30 bin token'),
-      kSatir('Ofis dışı diğer oturumlar', 'diger', 2300000, 21000, 1.4, '2,3 mn token', '21 bin token')],
-    toplam: kSatir('Toplam', 'toplam', 99200000, 630000, 62.8, '99,2 mn token', '630 bin token') },
+    bes_saat: { baslangic: 0, tahmini: false, aralik: T("Bu pencere: 16:00'dan beri"), satirlar: [
+      kSatir('Onboarding metinleri (ornek-uygulama)', 'is', 4200000, 31000, 2.41),
+      kSatir('CEO', 'ceo', 1800000, 9000, 1.12),
+      kSatir('CSV dışa aktarımı (kasa)', 'is', 950000, 12000, 0.61),
+      kSatir(T('Ofis dışı diğer oturumlar'), 'diger', 300000, 4000, 0.18)],
+    toplam: kSatir(T('Toplam'), 'toplam', 7250000, 56000, 4.32) },
+    haftalik: { baslangic: 0, tahmini: false, aralik: T("Bu pencere: perşembe 22:00'den beri"), satirlar: [
+      kSatir(T('Geliştirici oturumu'), 'gelistirici', 61000000, 410000, 38.2),
+      kSatir('CEO', 'ceo', 22000000, 95000, 14.9),
+      kSatir('Onboarding metinleri (ornek-uygulama)', 'is', 9800000, 74000, 5.6),
+      kSatir('Jarvis', 'jarvis', 4100000, 30000, 2.7),
+      kSatir(T('Ofis dışı diğer oturumlar'), 'diger', 2300000, 21000, 1.4)],
+    toplam: kSatir(T('Toplam'), 'toplam', 99200000, 630000, 62.8) },
   },
-  not: 'Plan yüzdesi tokenlarla birebir orantılı değildir (önbellekten okunan tokenlar daha hafif sayılır); bu liste kimin en çok kullandığını gösterir, kesin payını değil.',
+  not: T('Plan yüzdesi tokenlarla birebir orantılı değildir (önbellekten okunan tokenlar daha hafif sayılır); bu liste kimin en çok kullandığını gösterir, kesin payını değil.'),
   hesaplandi: 0,
-};
+});
 
 // GET /api/idari (bin/muhasebe.py idari): the office's operations
 const IDARI = { limitler: { max_running: 3, max_running_per_project: 1, max_queued_per_project: 5, max_bekleyen_onay: 2 },
@@ -170,45 +177,46 @@ const IDARI = { limitler: { max_running: 3, max_running_per_project: 1, max_queu
   gunluk: { dosya: 'server.log', boyut: 1843200, yedek_boyut: 1048576 } };
 
 // GET /api/sistem (bin/sistem.py): the computer's status as group totals only, one suggestion, no domain list yet
-const SISTEM = { cpu: { cekirdek: 10, yuk: [7.4, 6.8, 6.1], yuk_orani: 0.74 },
+const SISTEM = () => ({ cpu: { cekirdek: 10, yuk: [7.4, 6.8, 6.1], yuk_orani: 0.74 },
   bellek: { toplam_gb: 16, kullanilan_gb: 12.6, yuzde: 79, baski: 'normal', bos_yuzde: 31 },
-  disk: { toplam_gb: 460.4, bos_gb: 66.6, dolu_yuzde: 86 }, pil: { yuzde: 94, durum: 'şarj oluyor', kaynak: 'adaptör' },
+  disk: { toplam_gb: 460.4, bos_gb: 66.6, dolu_yuzde: 86 }, pil: { yuzde: 94, durum: T('şarj oluyor'), kaynak: T('adaptör') },
   acik_kalma_sn: 9 * 86400 + 2 * 3600, seviye: 'sari', docker: { konteyner: 0, cpu: 0, bellek_mb: 0 },
   gruplar: [{ ad: 'Node', sayi: 31, cpu: 42.1, bellek_mb: 2900 }, { ad: 'Python', sayi: 9, cpu: 6.3, bellek_mb: 610 },
-    { ad: 'Docker', sayi: 3, cpu: 1.2, bellek_mb: 2150 }, { ad: 'Tarayıcılar', sayi: 34, cpu: 88.4, bellek_mb: 3800 },
-    { ad: 'Claude oturumları', sayi: 4, cpu: 7.2, bellek_mb: 1300, bosta: 3 }, { ad: 'Codex/OpenCode', sayi: 2, cpu: 1.3, bellek_mb: 190 },
-    { ad: 'Ofis sunucusu', sayi: 1, cpu: 2.1, bellek_mb: 85 }, { ad: 'Diğer', sayi: 412, cpu: 61.5, bellek_mb: 2600 }],
-  oneriler: [{ tur: 'docker-bosta', metin: `Docker 2,1 GB bellek tutuyor ama hiç konteyner çalışmıyor. Kullanmıyorsan Docker Desktop'ı kapatmak belleği rahatlatır (karar ${sahip('in')}).` }],
-  domainler: { liste_var: false, metin: 'Domain listesi henüz yok — Ar-Ge ilk çalışmasında soracak', domainler: [], eposta: [],
-    sorun_sayisi: 0, son_kontrol: null } };
+    { ad: 'Docker', sayi: 3, cpu: 1.2, bellek_mb: 2150 }, { ad: T('Tarayıcılar'), sayi: 34, cpu: 88.4, bellek_mb: 3800 },
+    { ad: T('Claude oturumları'), sayi: 4, cpu: 7.2, bellek_mb: 1300, bosta: 3 }, { ad: 'Codex/OpenCode', sayi: 2, cpu: 1.3, bellek_mb: 190 },
+    { ad: T('Ofis sunucusu'), sayi: 1, cpu: 2.1, bellek_mb: 85 }, { ad: T('Diğer'), sayi: 412, cpu: 61.5, bellek_mb: 2600 }],
+  oneriler: [{ tur: 'docker-bosta', metin: T("Docker 2,1 GB bellek tutuyor ama hiç konteyner çalışmıyor. Kullanmıyorsan Docker Desktop'ı kapatmak belleği rahatlatır (karar {sahip}).",
+    { sahip: sahip('in') }) }],
+  domainler: { liste_var: false, metin: T('Domain listesi henüz yok — Ar-Ge ilk çalışmasında soracak'), domainler: [], eposta: [],
+    sorun_sayisi: 0, son_kontrol: null } });
 
 // --- the scripted loop ---
 
 // [id, start second, caption]; a scene lasts until the next one starts, the last one until DEMO_SURE.
 export const DEMO_SAHNELERI = [
-  ['acilis', 0, 'Ofis açılıyor'],
-  ['gelis', 5, 'Yeni iş geliyor: asansörden çıkıp lobide sırasını bekliyor'],
-  ['calisma', 13, 'Sırası geldi: masasına geçti, çalışıyor'],
-  ['yardimci', 21, 'Yardımcı (alt ajan) geldi, yanında çalışıyor'],
-  ['yardimci-bitti', 31, 'Yardımcı işini bitirdi ✓ ve çıkıyor'],
-  ['izin', 37, 'İzin sorusu: ajan elini kaldırdı (!)'],
-  ['kontrol', 46, 'Kontrol çalışıyor: test lambası yanıp sönüyor'],
-  ['bitti', 55, 'İş bitti ✓ — Çaycı çay getiriyor'],
-  ['mola', 70, 'Mola: boştakiler oyun odasında masa tenisi oynuyor'],
-  ['cikis', 85, 'İşini bitiren ajan asansöre yürüyor'],
-  ['karar', 91, "Karar bekleniyor: ajan CEO'nun kapısında (?) — “CEO soruyor” kartını cevaplayabilirsin"],
-  ['inceleme', 111, 'Yüksek riskli inceleme: Codex, GLM ve DeepSeek denetçi odasında, IT güvenlik uzmanı Sunucu odasında; Claude incelemesi QA odasında'],
-  ['hakem', 119, 'Hakem (Sonnet) Uzmanlar odasında denetçilerin bulgularını tartıyor'],
-  ['yukseltme', 137, "Yükseltme: Stajyer dosyayı Kıdemli'nin masasına götürüyor"],
-  ['ogle', 161, 'Öğle arası: boştakiler yemekhanede, çalışanlar masasında'],
-  ['kota', 177, "Sonnet'in kotası doldu: boştaki Sonnet ajanı evde; DeepSeek'in de kotası doldu"],
-  ['donus', 191, 'Kota açıldı: ajan asansörle geri dönüyor'],
+  ['acilis', 0, N_('Ofis açılıyor')],
+  ['gelis', 5, N_('Yeni iş geliyor: asansörden çıkıp lobide sırasını bekliyor')],
+  ['calisma', 13, N_('Sırası geldi: masasına geçti, çalışıyor')],
+  ['yardimci', 21, N_('Yardımcı (alt ajan) geldi, yanında çalışıyor')],
+  ['yardimci-bitti', 31, N_('Yardımcı işini bitirdi ✓ ve çıkıyor')],
+  ['izin', 37, N_('İzin sorusu: ajan elini kaldırdı (!)')],
+  ['kontrol', 46, N_('Kontrol çalışıyor: test lambası yanıp sönüyor')],
+  ['bitti', 55, N_('İş bitti ✓ — Çaycı çay getiriyor')],
+  ['mola', 70, N_('Mola: boştakiler oyun odasında masa tenisi oynuyor')],
+  ['cikis', 85, N_('İşini bitiren ajan asansöre yürüyor')],
+  ['karar', 91, N_("Karar bekleniyor: ajan CEO'nun kapısında (?) — “CEO soruyor” kartını cevaplayabilirsin")],
+  ['inceleme', 111, N_('Yüksek riskli inceleme: Codex, GLM ve DeepSeek denetçi odasında, IT güvenlik uzmanı Sunucu odasında; Claude incelemesi QA odasında')],
+  ['hakem', 119, N_('Hakem (Sonnet) Uzmanlar odasında denetçilerin bulgularını tartıyor')],
+  ['yukseltme', 137, N_("Yükseltme: Stajyer dosyayı Kıdemli'nin masasına götürüyor")],
+  ['ogle', 161, N_('Öğle arası: boştakiler yemekhanede, çalışanlar masasında')],
+  ['kota', 177, N_("Sonnet'in kotası doldu: boştaki Sonnet ajanı evde; DeepSeek'in de kotası doldu")],
+  ['donus', 191, N_('Kota açıldı: ajan asansörle geri dönüyor')],
 ].map(([id, bas, metin]) => ({ id, bas, metin }));
 export const DEMO_SURE = 200;
 // the demo's running limit: its busiest moment runs exactly this many jobs (the pill shows "5/5 · sınırda" then,
 // never more than the limit)
 export const DEMO_MAX_RUNNING = 5;
-const T = Object.fromEntries(DEMO_SAHNELERI.map((x) => [x.id, x.bas]));
+const AN = Object.fromEntries(DEMO_SAHNELERI.map((x) => [x.id, x.bas])); // loop second of each scene
 
 // The scene at loop second t (wrapped into 0..DEMO_SURE).
 export function demoSahnesi(t) {
@@ -264,24 +272,24 @@ export function demoDurumu(t, now, opts = {}) {
   ses('ofis-atolye-bos', 'atolye', 'idle', '', { model: 'claude-haiku-4-5' });
 
   // the new job: lobby -> desk -> helper -> permission -> Kontrol -> ✓ -> lift
-  if (s >= T.gelis) {
+  if (s >= AN.gelis) {
     const n = { tier: 'kolay', model: 'haiku', max_calls: 15, session: 'ofis-blog-n1' };
-    if (s < T.calisma) {
+    if (s < AN.calisma) {
       tasks.push(jobAt('n1.md', 'blog', 'sirada', 'RSS beslemesindeki tarih biçimi', null, null,
-        { ...n, session: '', queue_position: 1, created: localIso(new Date(at(T.gelis))) }));
-    } else if (s < T.bitti) {
-      const status = s < T.kontrol ? 'calisiyor' : 'kontrolde';
-      tasks.push(jobAt('n1.md', 'blog', status, 'RSS beslemesindeki tarih biçimi', at(T.calisma), null,
-        { ...n, spent: '0.004', calls: String(3 + Math.floor((s - T.calisma) / 4)) }));
+        { ...n, session: '', queue_position: 1, created: localIso(new Date(at(AN.gelis))) }));
+    } else if (s < AN.bitti) {
+      const status = s < AN.kontrol ? 'calisiyor' : 'kontrolde';
+      tasks.push(jobAt('n1.md', 'blog', status, 'RSS beslemesindeki tarih biçimi', at(AN.calisma), null,
+        { ...n, spent: '0.004', calls: String(3 + Math.floor((s - AN.calisma) / 4)) }));
       const alt = [];
-      if (s >= T.yardimci) {
+      if (s >= AN.yardimci) {
         alt.push({ id: 'yardimci-1', model: 'claude-haiku-4-5', gorev: 'Tarih biçimlerini tarıyor',
-          bitti: s >= T['yardimci-bitti'], son_yazma: localIso(new Date(s >= T['yardimci-bitti'] ? at(T['yardimci-bitti']) : now)) });
+          bitti: s >= AN['yardimci-bitti'], son_yazma: localIso(new Date(s >= AN['yardimci-bitti'] ? at(AN['yardimci-bitti']) : now)) });
       }
-      const status2 = s >= T.izin && s < T.kontrol ? 'waiting' : s >= T.kontrol ? 'idle' : 'busy';
+      const status2 = s >= AN.izin && s < AN.kontrol ? 'waiting' : s >= AN.kontrol ? 'idle' : 'busy';
       ses('ofis-blog-n1', 'blog', status2, 'n1.md', { alt });
     } else {
-      tasks.push(jobAt('n1.md', 'blog', 'bitti', 'RSS beslemesindeki tarih biçimi', at(T.calisma), at(T.bitti),
+      tasks.push(jobAt('n1.md', 'blog', 'bitti', 'RSS beslemesindeki tarih biçimi', at(AN.calisma), at(AN.bitti),
         { ...n, spent: '0.0081', calls: '11' }));
     }
   }
@@ -290,47 +298,47 @@ export function demoDurumu(t, now, opts = {}) {
 
   // the decision: atolye's Genel Müdür waits at the CEO's door until the owner answers (or the scene ends)
   const c = { tier: 'planlama', model: 'fable', spent: '2.85', tokens: 1240000, calls: '41', max_calls: 60, session: 'ofis-atolye-c' };
-  const answered = opts.cevap && Number.isFinite(opts.cevap.t) && opts.cevap.t >= T.karar && s >= opts.cevap.t + 2.5;
-  const asking = s >= T.karar && s < T.inceleme && !answered;
+  const answered = opts.cevap && Number.isFinite(opts.cevap.t) && opts.cevap.t >= AN.karar && s >= opts.cevap.t + 2.5;
+  const asking = s >= AN.karar && s < AN.inceleme && !answered;
   const decisions = [];
   // until its job starts the Genel Müdür (fable) is the resident staff idling in the lounge; then it walks to the desk
-  if (s >= T.calisma) {
+  if (s >= AN.calisma) {
     tasks.push(jobAt('c.md', 'atolye', asking ? 'karar-bekliyor' : 'calisiyor', 'Ana sayfa yeniden tasarım taslağı',
-      at(T.calisma), null, c));
+      at(AN.calisma), null, c));
     ses('ofis-atolye-c', 'atolye', asking ? 'idle' : 'busy', 'c.md');
   }
   if (asking) {
     decisions.push({
       note: `${today}-atolye-renk-paleti.md`, project: 'atolye', title: 'atolye — Ana renk paleti',
       question: 'Ana sayfada sıcak şeftali paleti mi, yoksa mevcut lacivert tema mı kalsın? Önerim şeftali: marka diliyle uyumlu ve kontrast testlerinden geçiyor.',
-      asked: localIso(new Date(at(T.karar))).slice(0, 16), source: 'ofis-atolye-c', answer_sent: !!opts.cevap,
+      asked: localIso(new Date(at(AN.karar))).slice(0, 16), source: 'ofis-atolye-c', answer_sent: !!opts.cevap,
     });
   }
 
   // a workflow's approval card (from the escalation scene on, after kasa's review): evidence first — the Kontrol, what it proved and did not prove, the
   // agent's own decisions — the summary last, then the optional quiz (answers behind "Cevabı göster")
-  if (s >= T.yukseltme) {
-    decisions.push(demoOnayKarti(today, at(T.yukseltme), 'kasa', 'CSV dışa aktarımında tarih biçimi', 'normal'));
+  if (s >= AN.yukseltme) {
+    decisions.push(demoOnayKarti(today, at(AN.yukseltme), 'kasa', 'CSV dışa aktarımında tarih biçimi', 'normal'));
   }
   // the approval backlog (bin/dispatcher.py): in the lunch scene a second card waits, so new kod work is held
   const birikti = sc.id === 'ogle';
   if (birikti) {
-    decisions.push(demoOnayKarti(today, at(T.ogle), 'ornek-uygulama', 'Giriş ekranında boş parola uyarısı', 'yuksek'));
+    decisions.push(demoOnayKarti(today, at(AN.ogle), 'ornek-uygulama', 'Giriş ekranında boş parola uyarısı', 'yuksek'));
     tasks.push(jobAt('h.md', 'kasa', 'sirada', 'Fatura PDF şablonunu güncelle', null, null,
       { tier: 'kod', model: 'opus', session: '', queue_position: 1, onay_birikti: true,
-        created: localIso(new Date(at(T.ogle))) }));
+        created: localIso(new Date(at(AN.ogle))) }));
   }
 
   // the review: queued in the lobby, then at a Kıdemli Tester desk of the QA odası, then ✓ and out
   const r = { tier: 'inceleme', model: 'opus', max_calls: 60, step_kind: 'kod-inceleme', session: 'ofis-atolye-r' };
-  if (s < T.inceleme) {
+  if (s < AN.inceleme) {
     tasks.push(jobAt('r.md', 'atolye', 'sirada', 'Kod incelemesi: İletişim formu', null, null, { ...r, session: '', queue_position: 1, created: localIso(new Date(at(0) - 20 * 60000)) }));
-  } else if (s < T.yukseltme) {
-    tasks.push(jobAt('r.md', 'atolye', 'calisiyor', 'Kod incelemesi: İletişim formu', at(T.inceleme), null,
+  } else if (s < AN.yukseltme) {
+    tasks.push(jobAt('r.md', 'atolye', 'calisiyor', 'Kod incelemesi: İletişim formu', at(AN.inceleme), null,
       { ...r, spent: '0.2', calls: '5' }));
     ses('ofis-atolye-r', 'atolye', 'busy', 'r.md');
   } else {
-    tasks.push(jobAt('r.md', 'atolye', 'bitti', 'Kod incelemesi: İletişim formu', at(T.inceleme), at(T.yukseltme),
+    tasks.push(jobAt('r.md', 'atolye', 'bitti', 'Kod incelemesi: İletişim formu', at(AN.inceleme), at(AN.yukseltme),
       { ...r, spent: '0.31', calls: '8' }));
   }
 
@@ -339,26 +347,26 @@ export function demoDurumu(t, now, opts = {}) {
   const p = { tier: 'inceleme', model: '', max_calls: 60, step_kind: 'kod-inceleme', inceleme_yurutucu: 'codex',
     workflow: 'akis-demo-kasa', step: '2', session: '' };
   let denetim = null;
-  if (s >= T.inceleme && s < T.yukseltme) {
-    tasks.push(jobAt('p.md', 'kasa', 'incelemede', 'Kod incelemesi: CSV dışa aktarımı', at(T.inceleme), null, p));
-    denetim = s < T.hakem
+  if (s >= AN.inceleme && s < AN.yukseltme) {
+    tasks.push(jobAt('p.md', 'kasa', 'incelemede', 'Kod incelemesi: CSV dışa aktarımı', at(AN.inceleme), null, p));
+    denetim = s < AN.hakem
       ? { is: 'p.md', denetciler: ['codex', 'glm', 'deepseek', 'guvenlik'], hakem: '',
-        baslangic: localIso(new Date(at(T.inceleme))) }
-      : { is: 'p.md', denetciler: [], hakem: 'sonnet', baslangic: localIso(new Date(at(T.hakem))) };
-  } else if (s >= T.yukseltme) {
-    tasks.push(jobAt('p.md', 'kasa', 'bitti', 'Kod incelemesi: CSV dışa aktarımı', at(T.inceleme), at(T.yukseltme), p));
+        baslangic: localIso(new Date(at(AN.inceleme))) }
+      : { is: 'p.md', denetciler: [], hakem: 'sonnet', baslangic: localIso(new Date(at(AN.hakem))) };
+  } else if (s >= AN.yukseltme) {
+    tasks.push(jobAt('p.md', 'kasa', 'bitti', 'Kod incelemesi: CSV dışa aktarımı', at(AN.inceleme), at(AN.yukseltme), p));
   }
 
   // the escalation: the Stajyer's job is stuck after two Kontrols; a Kıdemli takes it over
   const g = { tier: 'genel', model: 'haiku', max_calls: 40, session: 'ofis-ornek-uygulama-g' };
-  if (s < T.yukseltme) {
+  if (s < AN.yukseltme) {
     tasks.push(jobAt('g.md', 'ornek-uygulama', 'calisiyor', 'Bildirim izinleri ekranı', at(0) - 30 * 60000, null,
       { ...g, spent: '0.09', tokens: 96500, calls: '22' }));
     ses('ofis-ornek-uygulama-g', 'ornek-uygulama', 'busy', 'g.md');
   } else {
-    tasks.push(jobAt('g.md', 'ornek-uygulama', 'tikandi', 'Bildirim izinleri ekranı', at(0) - 30 * 60000, at(T.yukseltme),
+    tasks.push(jobAt('g.md', 'ornek-uygulama', 'tikandi', 'Bildirim izinleri ekranı', at(0) - 30 * 60000, at(AN.yukseltme),
       { ...g, spent: '0.12', tokens: 128000, calls: '29' }));
-    tasks.push(jobAt('h.md', 'ornek-uygulama', 'calisiyor', 'Bildirim izinleri ekranı', at(T.yukseltme), null,
+    tasks.push(jobAt('h.md', 'ornek-uygulama', 'calisiyor', 'Bildirim izinleri ekranı', at(AN.yukseltme), null,
       { tier: 'kod', model: 'opus', spent: '0.05', calls: '2', escalated_from: 'g.md', session: 'ofis-ornek-uygulama-h' }));
     ses('ofis-ornek-uygulama-h', 'ornek-uygulama', 'busy', 'h.md');
   }
@@ -377,7 +385,7 @@ export function demoDurumu(t, now, opts = {}) {
   wf('w5.md', 5, 'onay', 149, 120, {});
 
   // models: busy sessions per family; Sonnet's quota during the quota scene (back two hours later)
-  const quota = s >= T.kota && s < T.donus;
+  const quota = s >= AN.kota && s < AN.donus;
   const fam = (m) => ['haiku', 'sonnet', 'opus', 'fable'].find((f) => String(m).includes(f)) || '';
   const busy = {};
   for (const x of live) {
@@ -419,7 +427,7 @@ export function demoDurumu(t, now, opts = {}) {
   // the break scene: the demo's own setting sends every idle actor to the Oyun odası (the real schedule is seeded by
   // time, so a scripted loop could otherwise miss it; the server never sends `mola`)
   if (sc.id === 'mola') sahne.mola = 'oyun';
-  const metin = sc.id === 'karar' && answered ? 'Cevap iletildi: ajan CEO kapısından masasına dönüyor' : sc.metin;
+  const metin = sc.id === 'karar' && answered ? T('Cevap iletildi: ajan CEO kapısından masasına dönüyor') : T(sc.metin);
   const onay = decisions.filter((x) => x.kind === 'akis-onay').length;
   return { sahne_id: sc.id, sahne_metni: metin, tasks, live, decisions, modeller, denetim, sahne,
     onay_birikti: { bekleyen: onay, sinir: 2 } };
@@ -526,15 +534,15 @@ export function createDemo({ onState, onChat, onSahne = null, baslangic = 0, mol
     limitler: { haftalik: { yuzde: 54, sifirlanma: Math.floor(Date.now() / 1000) + 3 * 86400, gecti: false },
       bes_saat: { yuzde: 62, sifirlanma: Math.floor(Date.now() / 1000) + 8040, gecti: false },
       olculdu: Math.floor(Date.now() / 1000) - 120, eski: false,
-      metin: "Haftalık sınır %54 · perşembe 22:00'de sıfırlanır · 5 saatlik %62 · 21:00'de", kisa: 'Haftalık %54 · 5 saat %62' },
+      metin: T("Haftalık sınır %54 · perşembe 22:00'de sıfırlanır · 5 saatlik %62 · 21:00'de"), kisa: T('Haftalık %54 · 5 saat %62') },
   };
   const chat = [
-    { role: 'sahip', text: 'Günaydın. Bugün ornek-uygulama ve kasa işlerini başlat.', time: ago(45).toISOString() },
-    { role: 'ceo', text: `Günaydın ${sahip()}. İkisini de başlattım; ornek-uygulama onboarding metinlerinde, kasa CSV dışa aktarımında.`, time: ago(44).toISOString() },
+    { role: 'sahip', text: T('Günaydın. Bugün ornek-uygulama ve kasa işlerini başlat.'), time: ago(45).toISOString() },
+    { role: 'ceo', text: T('Günaydın {sahip}. İkisini de başlattım; ornek-uygulama onboarding metinlerinde, kasa CSV dışa aktarımında.', { sahip: sahip() }), time: ago(44).toISOString() },
     // an office notice inline in the conversation (the Komuta masası gives it "Ayrıntı" / "Cevapla")
     { role: 'system', kind: 'notice', time: ago(12).toISOString(),
       text: `kasa akışı onay bekliyor: CSV dışa aktarımında tarih biçimi (akis-demo-kasa). Kararlar notu yazıldı: ${today}-akis-kasa-onay. Kartta kanıt var.` },
-    { role: 'ceo', text: "kasa'nın CSV işi onay bekliyor; kanıt kartta. **Risk normal**, Kontrol geçti.", time: ago(11).toISOString() },
+    { role: 'ceo', text: T("kasa'nın CSV işi onay bekliyor; kanıt kartta. **Risk normal**, Kontrol geçti."), time: ago(11).toISOString() },
   ];
   // GET /api/ceo/adimlar: the CEO's last tool steps (bin/adimlar.py shape: names and short targets only)
   const ADIMLAR = [
@@ -621,10 +629,10 @@ export function createDemo({ onState, onChat, onSahne = null, baslangic = 0, mol
       emitChat();
       if (busy) {
         s.ceo.queue += 1; emitState();
-        setTimeout(() => { s.ceo.queue = Math.max(0, s.ceo.queue - 1); ceoReply('Sıradaki mesajını da aldım. (demo)'); }, 3000);
+        setTimeout(() => { s.ceo.queue = Math.max(0, s.ceo.queue - 1); ceoReply(T('Sıradaki mesajını da aldım. (demo)')); }, 3000);
         return { status: 202, data: { status: 'queued' } };
       }
-      ceoReply('Tamam, not aldım. (demo cevabı)');
+      ceoReply(T('Tamam, not aldım. (demo cevabı)'));
       return { status: 202, data: { status: 'delivered' } };
     }
     if (path === '/api/answer') {
@@ -634,7 +642,7 @@ export function createDemo({ onState, onChat, onSahne = null, baslangic = 0, mol
       chat.push({ role: 'sahip', text: body.answer, note: body.note, time: new Date().toISOString() });
       emitChat(); emitState();
       setTimeout(() => {
-        chat.push({ role: 'ceo', text: `Cevabını ${d.project} oturumuna olduğu gibi ilettim; ajan masasına dönüyor.`, time: new Date().toISOString() });
+        chat.push({ role: 'ceo', text: T('Cevabını {proje} oturumuna olduğu gibi ilettim; ajan masasına dönüyor.', { proje: d.project }), time: new Date().toISOString() });
         emitChat(); emitState();
       }, 2600);
       return { status: 202, data: { status: 'delivered' } };
@@ -655,8 +663,8 @@ export function createDemo({ onState, onChat, onSahne = null, baslangic = 0, mol
     if (path === '/api/muhasebe') {
       return { status: 200, data: { ...structuredClone(MUHASEBE), gun: today, ay: today.slice(0, 7) } };
     }
-    if (path === '/api/sistem') return { status: 200, data: structuredClone(SISTEM) };
-    if (path === '/api/kullanim') return { status: 200, data: structuredClone(KULLANIM) };
+    if (path === '/api/sistem') return { status: 200, data: SISTEM() };
+    if (path === '/api/kullanim') return { status: 200, data: KULLANIM() };
     if (path === '/api/ayarlar') return { status: 200, data: demoAyarlar(s) }; // the Ayarlar tab: read only in the demo
     if (path === '/api/idari') return { status: 200, data: { ...structuredClone(IDARI), sunucu: s.sunucu, obsidian: { sorun: false, python: null } } };
     if (path === '/api/ceo/adimlar') {
