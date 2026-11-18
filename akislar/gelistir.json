@@ -1,0 +1,11 @@
+{
+ "ad": "gelistir",
+ "aciklama": "Yeni özellik ya da birden fazla dosyaya dokunan değişiklik: önce plan, planı ikinci bir oturum inceler, sonra kod, kodu Codex inceler, en son ofisin sahibi onaylar.",
+ "adimlar": [
+  {"tur": "plan"},
+  {"tur": "plan-inceleme"},
+  {"tur": "kod"},
+  {"tur": "kod-inceleme", "yurutucu": "codex"},
+  {"tur": "onay"}
+ ]
+}

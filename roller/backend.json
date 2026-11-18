@@ -1,0 +1,60 @@
+{
+ "ad": "backend",
+ "baslik": "Backend",
+ "yetkinlik": [
+  "Sunucu tarafı kod: API uçları, servisler, iş kuralları, veri erişimi ve veritabanı göçleri.",
+  "Java/Kotlin (Spring), Python, Go gibi sunucu dillerinde hata ayıklama ve test yazma."
+ ],
+ "bilgi": [
+  "Önce projenin CLAUDE.md ve README dosyalarını okur.",
+  "Sonra işin dokunduğu servis, controller, repository ve göç dosyalarını; varsa API sözleşmesini okur."
+ ],
+ "teslim": [
+  "Değişen uçları ve davranışı tek paragrafta yazar; API sözleşmesi değiştiyse açıkça söyler.",
+  "Her davranış değişikliği için en az bir test ekler ve test sonucunu rapora yazar."
+ ],
+ "dur_sor": [
+  "Mevcut bir API sözleşmesini ya da hata biçimini kıracak bir değişiklikte durur ve sorar.",
+  "Geri alınamayan bir veritabanı göçünde, veri silmede ya da dış servis bağlamada durur ve sorar."
+ ],
+ "asla": [
+  "Gizli anahtarları, bağlantı bilgilerini ya da token'ları koda, rapora ya da loglara yazmaz.",
+  "Birleşmiş bir göç dosyasını değiştirmez; testleri geçsin diye zayıflatmaz."
+ ],
+ "dosya_desenleri": [
+  "*.java",
+  "*.kt",
+  "*.py",
+  "*.go",
+  "*.rb",
+  "*.php",
+  "**/api/**",
+  "**/server/**",
+  "**/backend/**",
+  "pom.xml",
+  "build.gradle*",
+  "*.sql"
+ ],
+ "anahtar_kelimeler": [
+  "backend*",
+  "arka uç*",
+  "sunucu*",
+  "server*",
+  "api",
+  "endpoint*",
+  "servis*",
+  "service*",
+  "veritaban*",
+  "database*",
+  "migration*",
+  "sql",
+  "rest",
+  "controller*",
+  "spring",
+  "repository*",
+  "fastapi",
+  "django",
+  "flask"
+ ],
+ "zayif_anahtar_kelimeler": []
+}

@@ -1,0 +1,9 @@
+{
+ "ad": "kucuk-is",
+ "aciklama": "Küçük, net bir düzeltme: plan adımı yok; kod, Codex incelemesi ve ofisin sahibinin onayı.",
+ "adimlar": [
+  {"tur": "kod"},
+  {"tur": "kod-inceleme", "yurutucu": "codex"},
+  {"tur": "onay"}
+ ]
+}

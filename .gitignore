@@ -1,0 +1,12 @@
+# Server state (jobs, queues, trusted records, logs): local runtime data, never versioned
+/durum/
+# The office's own settings (projects, vault path): personal; ofis.example.json is the versioned template
+/ofis.json
+# Claude Code local caches and personal settings
+/.claude/tsc-cache/
+/.claude/settings.local.json
+# Python
+__pycache__/
+*.pyc
+# macOS
+.DS_Store

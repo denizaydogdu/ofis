@@ -1,0 +1,10 @@
+# Metadata only. Ofis is not installed as a package: run it from the repository (python3 bin/server.py).
+# No [build-system] on purpose; nothing in the repository reads this file.
+[project]
+name = "ofis"
+version = "0.1.0"
+description = "A local AI office: a CEO Claude Code session turns requests into verified jobs run by Claude Code sessions, with reviews and Obsidian notes."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+dependencies = []

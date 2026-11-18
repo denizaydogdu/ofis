@@ -1,0 +1,184 @@
+{
+  "ofis_adi": "Ofis",
+  "sahip_adi": "Sahip",
+  "ceo_session": "ofis-ceo",
+  "ceo_yenileme": {
+    "acik": true,
+    "baglam_esigi": 150000,
+    "soguk_esik": 60000,
+    "soguk_dk": 55,
+    "gunluk": true
+  },
+  "vault_ofis": "~/Documents/Obsidian Vault/OFIS",
+  "projects": {
+    "arge": {
+      "path": "~/ofis-arge",
+      "description": "Ar-Ge — ofisin araştırma masası: yeni modeller ve ücretsiz katmanlar, Claude Code / Codex / OpenCode yenilikleri, ofis projeleri için öneriler. Yalnız okuyan araştırma; ürün kodu yok.",
+      "notes": "Read-only research: never change, build or run anything in another project and never write outside this folder. Only the office projects' names and descriptions may leave this machine (web searches, outside services) — never code, file contents, paths or secrets. Every claim carries its source link; inventing facts, versions, prices or terms is forbidden — write 'bilinmiyor' instead. Every model suggestion states its license (commercial use) and its data terms."
+    }
+  },
+  "tiers": {
+    "planlama": {
+      "model": "fable",
+      "effort": "high",
+      "butce_usd": 3
+    },
+    "kod": {
+      "model": "opus",
+      "effort": "high",
+      "butce_usd": 6
+    },
+    "inceleme": {
+      "model": "opus",
+      "effort": "high",
+      "butce_usd": 1
+    },
+    "genel": {
+      "model": "sonnet",
+      "effort": "medium",
+      "butce_usd": 1.5
+    },
+    "kolay": {
+      "model": "haiku",
+      "effort": "low",
+      "butce_usd": 0.3
+    }
+  },
+  "default_tier": "genel",
+  "default_budget_usd": 3,
+  "default_max_calls": {
+    "kolay": 15,
+    "genel": 40,
+    "kod": 120,
+    "inceleme": 60,
+    "planlama": 60
+  },
+  "max_running": 3,
+  "max_running_per_project": 1,
+  "max_queued_per_project": 5,
+  "ladder": [
+    "kolay",
+    "genel",
+    "kod",
+    "planlama"
+  ],
+  "max_escalations": 2,
+  "kota_yedegi": {
+    "haiku": "sonnet",
+    "sonnet": "opus",
+    "opus": "sonnet",
+    "fable": "opus"
+  },
+  "denetciler": [
+    {
+      "ad": "codex",
+      "tur": "codex"
+    },
+    {
+      "ad": "deepseek",
+      "tur": "opencode",
+      "model": "opencode/deepseek-v4.1-flash-free"
+    },
+    {
+      "ad": "glm",
+      "tur": "opencode",
+      "model": "opencode/glm-5.3-flash-free"
+    },
+    {
+      "ad": "antigravity",
+      "tur": "agy",
+      "model": "gemini-3.8-flash-high"
+    }
+  ],
+  "ucretsiz_denetci_projeler": [],
+  "denetci_yeter_sayisi": {
+    "dusuk": 1,
+    "normal": 2,
+    "yuksek": 3
+  },
+  "hakem": {
+    "model": "sonnet",
+    "butce_usd": 0.15
+  },
+  "guvenlik_denetcisi": {
+    "model": "sonnet",
+    "butce_usd": 0.2,
+    "her_zaman": false
+  },
+  "mudur_karari": {
+    "acik": true,
+    "model": "sonnet",
+    "butce_usd": 0.15,
+    "timeout_s": 180
+  },
+  "gun_sonu": {
+    "acik": true,
+    "baslangic": "20:00",
+    "bitis": "24:00",
+    "butce_usd": 0.5
+  },
+  "hafiza_saglik": {
+    "acik": true,
+    "saat": "07:30",
+    "eski_gun": 30
+  },
+  "model_onerisi": {
+    "min_is": 5,
+    "asagi_ilk_tur": 0.9,
+    "asagi_yeniden_is": 0.1,
+    "yukari_ilk_tur": 0.6,
+    "yukari_yukseltme": 0.3,
+    "pilot_is": 3,
+    "yeniden_oneri_is": 10
+  },
+  "ofis_sahnesi": {
+    "ogle": "12:00-13:00"
+  },
+  "danisman_pilotu": {
+    "acik": false,
+    "model": "fable",
+    "is_sayisi": 10,
+    "katman": "kod"
+  },
+  "zor_is_danismani": {
+    "acik": true,
+    "model": "fable",
+    "katman": "kod"
+  },
+  "yakala": {
+    "acik": true,
+    "butce_usd": 0.5,
+    "saatlik_sinir": 10,
+    "dosya_mb": 2
+  },
+  "talimat_denetimi": {
+    "acik": true,
+    "katman": "genel",
+    "butce_usd": 1.5
+  },
+  "jarvis": {
+    "acik": false,
+    "kapsam": "durum-karar-is",
+    "dakika_sinir": 60,
+    "is_saatlik_sinir": 10
+  },
+  "limitler": {
+    "acik": true,
+    "uyari": [
+      80,
+      95
+    ]
+  },
+  "guvenlik": {
+    "yasak_yollar": [],
+    "ozel_klasorler": [],
+    "yasak_kelimeler": [
+      "sifre",
+      "şifre",
+      "parola",
+      "password",
+      "passwd",
+      "keychain"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(/durum/kontroller/**)",
+      "Edit(/durum/isler/**)",
+      "Edit(/durum/akislar/**)",
+      "Edit(/durum/zamanlanmis/**)",
+      "Edit(/durum/model_secimi/**)",
+      "Edit(/durum/duyurular/**)",
+      "Edit(/durum/sistem/**)",
+      "Edit(/durum/sunucu.json)",
+      "Bash(claude --bg:*)",
+      "Bash(claude --background:*)",
+      "mcp__serena",
+      "mcp__plugin_serena_serena",
+      "mcp__filesystem__write_file",
+      "mcp__filesystem__edit_file",
+      "mcp__filesystem__move_file",
+      "mcp__filesystem__create_directory",
+      "mcp__filesystem__read_file",
+      "mcp__filesystem__read_text_file",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__filesystem__read_media_file",
+      "mcp__filesystem__search_files",
+      "mcp__filesystem__directory_tree",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__create_branch",
+      "mcp__github__merge_pull_request",
+      "mcp__github__create_repository",
+      "mcp__github__fork_repository",
+      "mcp__postgres",
+      "mcp__postgresql-local"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|NotebookEdit|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/bin/guard.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

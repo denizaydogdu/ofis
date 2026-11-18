@@ -1,0 +1,65 @@
+{
+ "ad": "ui",
+ "baslik": "UI",
+ "yetkinlik": [
+  "Web arayüzü: sayfalar, bileşenler, stiller, erişilebilirlik ve duyarlı (responsive) düzen.",
+  "React, Vue, Svelte, HTML/CSS ve şablon dosyalarında hata ayıklama."
+ ],
+ "bilgi": [
+  "Önce projenin CLAUDE.md ve README dosyalarını okur.",
+  "Sonra işin dokunduğu sayfa, bileşen, stil ve şablon dosyalarını; varsa tasarım notlarını okur."
+ ],
+ "teslim": [
+  "Hangi ekranın ya da bileşenin nasıl değiştiğini tek paragrafta yazar.",
+  "Davranış değişikliği için bileşen ya da birim testi ekler ve test sonucunu rapora yazar."
+ ],
+ "dur_sor": [
+  "Tasarımı ya da ürünün görünümünü belirgin biçimde değiştiren bir kararda durur ve sorar.",
+  "Yeni bir bağımlılık ya da dış servis (yazı tipi, analitik, CDN) eklemeden önce durur ve sorar."
+ ],
+ "asla": [
+  "Kullanıcı verisini innerHTML gibi yollarla HTML olarak yorumlatmaz.",
+  "Gizli anahtarları ya da token'ları istemci koduna koymaz."
+ ],
+ "dosya_desenleri": [
+  "*.tsx",
+  "*.jsx",
+  "*.vue",
+  "*.svelte",
+  "*.css",
+  "*.scss",
+  "*.html",
+  "**/web/**",
+  "**/frontend/**",
+  "**/templates/**"
+ ],
+ "anahtar_kelimeler": [
+  "arayüz*",
+  "ui",
+  "ux",
+  "frontend*",
+  "ön yüz*",
+  "web sayfa*",
+  "css",
+  "html",
+  "react",
+  "vue",
+  "svelte",
+  "buton*",
+  "button*",
+  "tema",
+  "temayı",
+  "theme*",
+  "layout*",
+  "görünüm*",
+  "responsive",
+  "stil*",
+  "style*",
+  "menü*",
+  "modal*"
+ ],
+ "zayif_anahtar_kelimeler": [
+  "sayfa*",
+  "tasarım*"
+ ]
+}
