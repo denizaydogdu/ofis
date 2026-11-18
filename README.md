@@ -171,7 +171,9 @@ robot at a desk. Around it:
 - a decision bell, "who is working now", per-job progress lines;
 - tabs: **İşler** (job board), **Raporlar**, **Kalite** (the scorecard), **Zamanlanmış** (schedules), **Son olanlar**
   (event timeline) and **Ayarlar** (settings);
-- rooms for the server status ("Sunucu odası": computer load and your domains), Ar-Ge, and the reviewers.
+- rooms for the server status ("Sunucu odası": computer load and your domains), Ar-Ge, and the reviewers;
+- optionally (`npc_sohbet`, off by default), a question box on the staff cards: the character answers in its role's
+  voice from the office's own data, with one tool-less call to the Stajyer model.
 
 `?demo=1` shows a demo office with fake data, `?hafif=1` lowers the render quality for slower machines.
 
@@ -378,6 +380,7 @@ The main keys of `ofis.json`, as in [`ofis.example.json`](ofis.example.json):
 |---|---|
 | `ofis_adi` | the office's name on the page |
 | `sahip_adi` | your display name in every text the office writes |
+| `dil` | the page's and the CEO's language: `tr` (default) or `en` — English for the page's main views, server texts it shows and the CEO's replies (Ayarlar › Genel › Dil / Language) |
 | `ceo_session` | the CEO session's name (`ofis-ceo`) |
 | `ceo_yenileme` | when to start a fresh CEO session: context size, cold cache, a new day |
 | `vault_ofis` | the `OFIS` folder in your Obsidian vault |
@@ -401,6 +404,7 @@ The main keys of `ofis.json`, as in [`ofis.example.json`](ofis.example.json):
 | `ofis_sahnesi` | the scene's lunch hour and the office time zone (`saat_dilimi`, default: the system's) |
 | `danisman_pilotu`, `zor_is_danismani` | an advisor model for code jobs: an A/B pilot (off) and for hard jobs |
 | `yakala` | the Yakala inbox: on/off, budget per item, hourly limit, file size |
+| `npc_sohbet` | NPC chat: ask a staff character a short question from its card (off by default; on/off and hourly limit on the Ayarlar tab) |
 | `talimat_denetimi` | the prompt audit that runs when a tier's model changes |
 | `jarvis` | an optional local A2A gate for a voice / menu-bar client (off by default) |
 | `limitler` | the plan usage pill and its warning thresholds |

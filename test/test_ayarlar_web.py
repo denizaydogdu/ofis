@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -22,6 +23,7 @@ def run_a(expr):
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         shutil.copyfile(WEB / "ayarlar.js", Path(tmp) / "ayarlar.js")
+        webkopya.i18n_ekle(tmp)
         uri = json.dumps((Path(tmp) / "ayarlar.js").as_uri())
         code = (f"import * as a from {uri};\n{PRELUDE}\n"
                 f"process.stdout.write(JSON.stringify({expr}));")
@@ -210,6 +212,27 @@ class TextTest(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+class NpcSohbetTest(unittest.TestCase):
+    """The Genel section's NPC chat switch (bin/npc_sohbet.py dogrula, the same rule)."""
+
+    def test_the_body_and_its_check(self):
+        self.assertEqual(run_a("a.npcSohbetGovdesi(true, ' 7 ', K)"),
+                         {"govde": {"islem": "genel", "npc_sohbet": {"acik": True, "saatlik_sinir": 7}}})
+        self.assertEqual(run_a("a.npcSohbetGovdesi('x', 20, K)")["govde"]["npc_sohbet"]["acik"], False)
+        for bad in ("0", "201", "2.5", "", "abc", "-3"):
+            with self.subTest(bad=bad):
+                self.assertIn("NPC sohbeti", run_a(f"a.npcSohbetGovdesi(true, {json.dumps(bad)}, K)")["hata"])
+
+    def test_its_errors_and_result_line(self):
+        self.assertEqual(run_a("a.hataAlani('NPC sohbeti · saatlik sınır 1 ile 200 arasında bir tam sayı olmalı.')"),
+                         "npc_sohbet")
+        self.assertEqual(run_a("a.sonucMetni(200, { islem: 'genel', alanlar: ['npc_sohbet'] })"),
+                         "NPC sohbeti ayarı kaydedildi.")
+        self.assertEqual(run_a("a.sonucMetni(200, { islem: 'genel', alanlar: ['ofis_adi', 'sahip_adi'] })"),
+                         "Ofis adı kaydedildi.")
+
+
+@unittest.skipUnless(NODE, "node is not installed")
 class ProjeRengiTest(unittest.TestCase):
     """One colour per team in the scene and on the page (web/ofis-davranis.js projeRengi): indexed among the projects
     without the arge workspace, whatever form the list comes in."""
@@ -218,6 +241,7 @@ class ProjeRengiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
             shutil.copyfile(WEB / "ofis-davranis.js", Path(tmp) / "ofis-davranis.js")
+            webkopya.i18n_ekle(tmp)
             uri = json.dumps((Path(tmp) / "ofis-davranis.js").as_uri())
             proc = subprocess.run([NODE, "--input-type=module", "-e",
                                    f"import * as d from {uri};\nprocess.stdout.write(JSON.stringify({expr}));"],
@@ -255,8 +279,11 @@ class WiringTest(unittest.TestCase):
         for need in ('id="ayar-genel-form"', 'id="ayar-ofis-adi"', 'id="ayar-projeler"', 'id="ayar-proje-ekle"',
                      'id="ayar-proje-form"', 'id="ayar-f-ad"', 'id="ayar-f-path"', 'id="ayar-f-description"',
                      'id="ayar-f-notes"', 'id="ayar-f-hassas_yollar"', 'id="ayar-f-dur_sor"', 'id="ayar-f-asla"',
-                     'id="ayar-f-teslim"', 'id="ayar-f-domainler"'):
+                     'id="ayar-f-teslim"', 'id="ayar-f-domainler"', 'id="ayar-npc-form"', 'id="ayar-npc-acik"',
+                     'id="ayar-npc-sinir"', 'for="ayar-npc-acik"', 'for="ayar-npc-sinir"'):
             self.assertIn(need, html)
+        app = (WEB / "app.js").read_text(encoding="utf-8")
+        self.assertIn("npcSohbetGovdesi($('ayar-npc-acik').checked, $('ayar-npc-sinir').value", app)
         # every form field has a label
         for field in re.findall(r'id="(ayar-f-[a-z_]+)"', html):
             self.assertIn(f'for="{field}"', html, field)

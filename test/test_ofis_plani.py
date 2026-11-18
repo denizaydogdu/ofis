@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -44,6 +45,7 @@ def run_js(expr):
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         for name in ("ofis-davranis.js", "ofis-sahne.js", "demo.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, Path(tmp) / name)
+        webkopya.i18n_ekle(tmp)
         uri = lambda n: json.dumps((Path(tmp) / n).as_uri())  # noqa: E731
         code = (f"import * as d from {uri('ofis-davranis.js')};\nimport * as h from {uri('ofis-sahne.js')};\n"
                 f"import * as demo from {uri('demo.js')};\n{PRELUDE}\n"

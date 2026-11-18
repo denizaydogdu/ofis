@@ -5,8 +5,8 @@ channel.Channel with the CEO's file names: its full sessionId in durum/ceo.json,
 durum/ceo-queue.jsonl, ambiguous deliveries in durum/ceo-unconfirmed.jsonl and delivered keyed notices in
 durum/ceo-sent.txt. Unlike a project session, the CEO is started when it does not exist yet.
 See channel.py for the start / stop+resume / queue rules.
-Every message to the CEO ends with the reminder line "(<Owner>'e Türkçe ve sade yaz.)" (bin/sahip.py hatirlatma, with
-the owner's name from ofis.json sahip_adi): a resumed session does not re-read CLAUDE.md, and the CEO once answered a
+Every message to the CEO ends with the reminder line "(<Owner>'e Türkçe ve sade yaz.)" — with ofis.json dil "en"
+"(Reply to <Owner> in plain English.)" — (bin/sahip.py hatirlatma, with the owner's name from ofis.json sahip_adi): a resumed session does not re-read CLAUDE.md, and the CEO once answered a
 notice in English. The chat parser (transcript.py) hides that line again. A newly started CEO session also gets the
 owner's name in its system text (ceo_system_prompt).
 
@@ -50,11 +50,13 @@ import hashlib
 import json
 import os
 import secrets
+import tempfile
 import threading
 from datetime import datetime
 
 import claude_cli
 import devir
+import dil
 import model_durum
 import sahip
 import transcript
@@ -70,6 +72,26 @@ NEDEN_METNI = {"baglam": "bağlam eşiği aşıldı", "soguk": "önbellek soğum
 ZORLANMIS = ("elle", "talimat")  # forced reasons: rate-limited by ZORLA_ARALIK
 ZORLA_ARALIK = 600.0  # seconds after a successful forced rotation before the next forced one
 YENILE_DOSYASI = "ceo-yenile"  # durum/ceo-yenile: `ofis.py ceo-yenile` asks for one fresh CEO session (reason "elle")
+
+
+def yenile_iste(durum_dir, stamp):
+    """Writes the flag durum/ceo-yenile (the same file `ofis.py ceo-yenile` writes) unless it is there: the next
+    delivery to an idle or dormant CEO starts a fresh session. Used when the display language changes on the Ayarlar
+    tab (the system text and the reminder line follow ofis.json `dil`). -> True when it was written now."""
+    path = os.path.join(durum_dir, YENILE_DOSYASI)
+    if os.path.lexists(path):
+        return False
+    os.makedirs(durum_dir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".ceo-yenile.", suffix=".tmp", dir=durum_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"istendi": stamp, "neden": "dil"}, f)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return True
 
 
 def rotation_settings(cfg):
@@ -103,10 +125,21 @@ CeoUnavailable = ChannelUnavailable
 
 
 
-def ceo_system_prompt(name):
-    """The CEO's system text with the owner's name (ofis.json sahip_adi). Written in Turkish on purpose: the CEO
-    answered in English even with CLAUDE.md and a per-message reminder. A background session records its system prompt
-    at start and reuses it on every resume, so this only takes effect for a newly started CEO session."""
+def ceo_system_prompt(name, dil_kodu="tr"):
+    """The CEO's system text with the owner's name (ofis.json sahip_adi) in the display language (ofis.json dil).
+    The Turkish one is written in Turkish on purpose: the CEO answered in English even with CLAUDE.md and a
+    per-message reminder; likewise the English one is in English. A background session records its system prompt at
+    start and reuses it on every resume, so this only takes effect for a newly started CEO session (a language change
+    on the Ayarlar tab asks for one: yenile_iste)."""
+    if dil_kodu == "en":
+        return (
+            f"You are {name}'s Office CEO. The office owner's name is {name}; \"the owner\" in CLAUDE.md is {name}, "
+            f"address them by name. Every reply you write to {name} must be in English, without exception: also your "
+            f"replies to {name}'s messages (prompts starting with [Sahip · …]), to decision answers and to [Ofis · "
+            "sistem] notices. Write plainly and briefly; no jargon. The office's protocol words, notes, job briefs, "
+            "vault notes and commands stay as CLAUDE.md says (Turkish where it says so); only your replies to the owner "
+            "are English. Leave code, commands and file names as they are."
+        )
     return (
         f"Sen {sahip.ek(name, 'in')} Ofis CEO'susun. Ofisin sahibinin adı {name}; CLAUDE.md'deki \"the owner\" odur, "
         f"ona adıyla hitap et. {sahip.ek(name, 'e')} yazdığın her cevap Türkçe olmalı: {sahip.ek(name, 'in')} "
@@ -124,7 +157,7 @@ class CeoController(Channel):
                          unconfirmed_file=os.path.join(durum_dir, "ceo-unconfirmed.jsonl"),
                          sent_file=os.path.join(durum_dir, "ceo-sent.txt"),
                          allow_start=True, label="CEO", **kwargs)
-        self.start_args = ["--append-system-prompt", ceo_system_prompt(sahip.ad())]  # refreshed at every start
+        self.start_args = ["--append-system-prompt", ceo_system_prompt(sahip.ad(), dil.kod())]  # refreshed at every start
         self.yenile_dosyasi = os.path.join(durum_dir, YENILE_DOSYASI)
         self.ayarlar = None     # callable -> ofis.json as it is now (App.current_config); None = no rotation
         self.devir_notu = None  # callable(neden, kuyruk, kimlik) -> the handoff block (bin/devir.py); None = no rotation
@@ -280,8 +313,18 @@ class CeoController(Channel):
                 cfg = None
         return sahip.ad(cfg if isinstance(cfg, dict) else None)
 
+    def dil(self):
+        """The display language from the running settings (ofis.json dil; the file itself without `ayarlar`)."""
+        cfg = None
+        if self.ayarlar is not None:
+            try:
+                cfg = self.ayarlar()
+            except Exception:  # noqa: BLE001 — unreadable settings: the file's (or the default) language
+                cfg = None
+        return dil.kod(cfg if isinstance(cfg, dict) else None)
+
     def _start(self, text):
-        self.start_args = ["--append-system-prompt", ceo_system_prompt(self.sahip_adi())]
+        self.start_args = ["--append-system-prompt", ceo_system_prompt(self.sahip_adi(), self.dil())]
         before = self._read_record()
         ozet = talimat_ozeti(self.root)  # read before the start: the new session reads this CLAUDE.md (or a newer one)
         warning = super()._start(text)
@@ -409,15 +452,15 @@ class CeoController(Channel):
         return st
 
     def deliver(self, text):
-        return super().deliver(with_reminder(text, self.sahip_adi()))
+        return super().deliver(with_reminder(text, self.sahip_adi(), self.dil()))
 
     def enqueue(self, text, key):
-        return super().enqueue(with_reminder(text, self.sahip_adi()), key)
+        return super().enqueue(with_reminder(text, self.sahip_adi(), self.dil()), key)
 
 
-def with_reminder(text, name=None):
-    """text + newline + the reminder line with the owner's name (once: a reminder under any name already there is
-    kept). Anything that is not a non-empty string is left for the checks."""
+def with_reminder(text, name=None, dil_kodu="tr"):
+    """text + newline + the reminder line with the owner's name in the display language (once: a reminder under any
+    name, in either language, already there is kept). Anything that is not a non-empty string is left for the checks."""
     if not isinstance(text, str) or not text.strip() or sahip.hatirlatmayi_sil(text) != text:
         return text
-    return text.rstrip("\n") + "\n" + sahip.hatirlatma(name)
+    return text.rstrip("\n") + "\n" + sahip.hatirlatma(name, dil_kodu)

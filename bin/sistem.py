@@ -39,6 +39,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 
 import adimlar
+import dil
 import sahip
 
 TIMEOUT_SN = 3
@@ -55,7 +56,9 @@ BELLEK_BOS_ESIK = 10  # memory_pressure's free percentage under this: memory is 
 SARI, KIRMIZI = 0.7, 1.0  # load average (1 min) per core
 
 GRUPLAR = ("Java", "Node", "Python", "Docker", "Tarayıcılar", "Claude oturumları", "Codex/OpenCode", "Ofis sunucusu",
-           "Diğer")
+           "Diğer")  # internal keys; the display name is translated at the answer (GRUP_ADLARI, bin/dil.py)
+GRUP_ADLARI = {"Tarayıcılar": dil.N_("Tarayıcılar"), "Claude oturumları": dil.N_("Claude oturumları"),
+               "Ofis sunucusu": dil.N_("Ofis sunucusu"), "Diğer": dil.N_("Diğer")}
 TARAYICI = re.compile(r"^(?:google chrome|chromium|chrome|brave browser|safari|firefox|microsoft edge|"
                       r"com\.apple\.webkit\.|com\.apple\.safari|safariplatformsupport|plugin-container)", re.I)
 PYTHON = re.compile(r"^python(?:\d+(?:\.\d+)*)?$", re.I)
@@ -64,7 +67,7 @@ DOCKER = re.compile(r"^(?:com\.docker\.|docker|vpnkit|colima|limactl|orbstack)",
 # their virtual machines: counted as Docker only beside one of them (the Android emulator runs qemu-system too)
 VM = re.compile(r"^(?:com\.apple\.virtualization\.virtualmachine$|qemu-system)", re.I)
 
-YOK_METNI = "Domain listesi henüz yok — Ar-Ge ilk çalışmasında soracak"
+YOK_METNI = dil.N_("Domain listesi henüz yok — Ar-Ge ilk çalışmasında soracak")
 DOMAIN_ARALIK_SN = 6 * 3600  # "a few times a day": four checks
 SERTIFIKA_GUN = 14
 AG_TIMEOUT_SN = 5
@@ -157,9 +160,10 @@ def parse_pmset(text):
     if not m:
         return None
     state = m.group(2).strip().lower()
-    durum = {"charging": "şarj oluyor", "discharging": "pilde", "charged": "dolu", "finishing charge": "şarj oluyor",
-             "ac attached": "adaptörde"}.get(state, "bilinmiyor")
-    kaynak = "adaptör" if "AC Power" in (text or "") else "pil" if "Battery Power" in (text or "") else None
+    durum = {"charging": dil.N_("şarj oluyor"), "discharging": dil.N_("pilde"), "charged": dil.N_("dolu"),
+             "finishing charge": "şarj oluyor", "ac attached": dil.N_("adaptörde")}.get(state, "bilinmiyor")
+    kaynak = dil.N_("adaptör") if "AC Power" in (text or "") else dil.N_("pil") if "Battery Power" in (text or "") \
+        else None
     return {"yuzde": int(m.group(1)), "durum": durum, "kaynak": kaynak}
 
 
@@ -272,40 +276,50 @@ def _gb(mb):
     return f"{mb / 1024:.1f}".replace(".", ",") + " GB"
 
 
-def oneriler(s, gecmis, sayfa_acik):
+def oneriler(s, gecmis, sayfa_acik, dil_kodu="tr"):
     """Rule-based suggestions (text only; the office never acts on them). s: one sample, gecmis: the last samples'
-    {group: cpu} maps (oldest first, s included)."""
+    {group: cpu} maps (oldest first, s included). dil_kodu: the texts' language (ofis.json dil, bin/dil.py)."""
     out = []
+    karar = sahip.ek_dilde(sahip.ad(), "in", dil_kodu)
+
+    def gb(mb):
+        return _gb(mb).replace(",", ".") if dil_kodu == "en" else _gb(mb)
     g = {x["ad"]: x for x in s.get("gruplar") or []}
     dk = g.get("Docker")
     d = s.get("docker")
     if dk and dk["bellek_mb"] >= DOCKER_BOSTA_MB and (d is None or d["cpu"] < DOCKER_BOSTA_CPU) and \
             dk["cpu"] < 5 * DOCKER_BOSTA_CPU:
-        what = "hiç konteyner çalışmıyor" if not d or not d["konteyner"] else f"{d['konteyner']} konteyner boşta"
-        out.append({"tur": "docker-bosta", "metin": f"Docker {_gb(dk['bellek_mb'])} bellek tutuyor ama {what}. "
-                    f"Kullanmıyorsan Docker Desktop'ı kapatmak belleği rahatlatır (karar {sahip.in_()})."})
+        what = dil.t("hiç konteyner çalışmıyor", dil_kodu, sahip=karar) if not d or not d["konteyner"] else \
+            dil.t("{n} konteyner boşta", dil_kodu, sahip=karar, n=d["konteyner"])
+        out.append({"tur": "docker-bosta", "metin": dil.t("Docker {gb} bellek tutuyor ama {what}. Kullanmıyorsan Docker "
+                                                      "Desktop'ı kapatmak belleği rahatlatır (karar {sahip}).", dil_kodu, sahip=karar,
+                                                      gb=gb(dk["bellek_mb"]), what=what)})
     cl = g.get("Claude oturumları")
     if cl and cl.get("bosta", 0) >= COK_BOSTA_CLAUDE:
-        out.append({"tur": "claude-bosta", "metin": f"{cl['bosta']} Claude oturumu boşta duruyor "
-                    f"({_gb(cl['bellek_mb'])} bellek). İşi biten oturumları kapatmayı düşünebilirsin (karar {sahip.in_()})."})
+        out.append({"tur": "claude-bosta", "metin": dil.t("{n} Claude oturumu boşta duruyor ({gb} bellek). İşi biten "
+                                                      "oturumları kapatmayı düşünebilirsin (karar {sahip}).", dil_kodu, sahip=karar,
+                                                      n=cl["bosta"], gb=gb(cl["bellek_mb"]))})
     disk = s.get("disk")
     if disk and disk["dolu_yuzde"] > DISK_ESIK:
-        out.append({"tur": "disk", "metin": f"Disk %{disk['dolu_yuzde']} dolu ({_gb(disk['bos_gb'] * 1024)} boş). "
-                    f"Gereksiz büyük dosyaları temizlemeyi düşünebilirsin (karar {sahip.in_()})."})
+        out.append({"tur": "disk", "metin": dil.t("Disk %{yuzde} dolu ({gb} boş). Gereksiz büyük dosyaları temizlemeyi "
+                                              "düşünebilirsin (karar {sahip}).", dil_kodu, sahip=karar,
+                                              yuzde=disk["dolu_yuzde"], gb=gb(disk["bos_gb"] * 1024))})
     b = s.get("bellek") or {}
     if b.get("baski") in ("uyari", "kritik") or (b.get("bos_yuzde") is not None and b["bos_yuzde"] < BELLEK_BOS_ESIK):
-        out.append({"tur": "bellek", "metin": "Bellek sıkışık (macOS bellek baskısı "
-                    f"{'kritik' if b.get('baski') == 'kritik' else 'yüksek'}). En çok bellek tutan grubu kapatmak "
-                    f"bilgisayarı rahatlatır (karar {sahip.in_()})."})
+        out.append({"tur": "bellek", "metin": dil.t("Bellek sıkışık (macOS bellek baskısı {baski}). En çok bellek tutan "
+                                                "grubu kapatmak bilgisayarı rahatlatır (karar {sahip}).", dil_kodu, sahip=karar,
+                                                baski=dil.t("kritik" if b.get("baski") == "kritik" else "yüksek", dil_kodu))})
     if len(gecmis) >= GECMIS:
         for ad in GRUPLAR:
             if all(h.get(ad, 0) > YUKSEK_CPU for h in list(gecmis)[-GECMIS:]):
-                out.append({"tur": "cpu-yuksek", "metin": f"{ad} bir süredir %{round(g.get(ad, {}).get('cpu', 0))} "
-                            f"işlemci kullanıyor. Gerekmiyorsa kapatmayı düşünebilirsin (karar {sahip.in_()})."})
+                out.append({"tur": "cpu-yuksek", "metin": dil.t("{ad} bir süredir %{cpu} işlemci kullanıyor. Gerekmiyorsa "
+                                                            "kapatmayı düşünebilirsin (karar {sahip}).", dil_kodu, sahip=karar,
+                                                            ad=dil.t(GRUP_ADLARI.get(ad, ad), dil_kodu),
+                                                            cpu=round(g.get(ad, {}).get("cpu", 0)))})
     tr = g.get("Tarayıcılar")
     if sayfa_acik and tr and tr["cpu"] > TARAYICI_CPU:
-        out.append({"tur": "tarayici", "metin": f"Tarayıcılar %{round(tr['cpu'])} işlemci kullanıyor ve ofis sayfası "
-                    "açık. Sayfayı ?hafif=1 ile açmak bilgisayarı serinletir."})
+        out.append({"tur": "tarayici", "metin": dil.t("Tarayıcılar %{cpu} işlemci kullanıyor ve ofis sayfası açık. Sayfayı "
+                                                  "?hafif=1 ile açmak bilgisayarı serinletir.", dil_kodu, sahip=karar, cpu=round(tr["cpu"]))})
     return out
 
 
@@ -379,8 +393,17 @@ class Sistem:
         """The /api/sistem body: the last sample (fresh when older than CACHE_SN), its suggestions and the domains."""
         self._sayfa_acik = bool(sayfa_acik)
         s, gecmis = self._taze(force)
-        out = dict(s, oneriler=oneriler(s, gecmis, sayfa_acik))
-        out["domainler"] = domain_ozeti(self.durum_dir, self.cfg() if self.cfg else None) if self.durum_dir else None
+        cfg = self.cfg() if self.cfg else None
+        dil_kodu = dil.kod(cfg if isinstance(cfg, dict) else {})
+        out = dict(s, oneriler=oneriler(s, gecmis, sayfa_acik, dil_kodu))
+        # display names and words in the display language (the sample itself keeps the Turkish keys)
+        out["gruplar"] = [dict(g, ad=dil.t(GRUP_ADLARI.get(g["ad"], g["ad"]), dil_kodu)) for g in s.get("gruplar") or []]
+        pil = s.get("pil")
+        if isinstance(pil, dict):
+            out["pil"] = dict(pil, kaynak=dil.t(pil["kaynak"], dil_kodu) if pil.get("kaynak") else pil.get("kaynak"),
+                              durum=pil["durum"] if pil.get("durum") == "bilinmiyor"  # the card compares it
+                              else dil.t(pil.get("durum") or "", dil_kodu))
+        out["domainler"] = domain_ozeti(self.durum_dir, cfg) if self.durum_dir else None
         return temizle(out)
 
     def ozet(self):
@@ -435,7 +458,7 @@ def https_kontrol(domain, timeout=AG_TIMEOUT_SN):
     """A HEAD request to https://<domain>/ → {acildi, durum_kodu, gun, bitis, hata}. 5xx or no answer: not open.
     The name is resolved first with a timeout (the connection's own timeout does not cover the lookup)."""
     if not dns_kontrol(domain, timeout):
-        return {"acildi": False, "durum_kodu": None, "gun": None, "bitis": None, "hata": "adres çözülemedi"}
+        return {"acildi": False, "durum_kodu": None, "gun": None, "bitis": None, "hata": dil.N_("adres çözülemedi")}
     ctx = ssl.create_default_context()
     conn = http.client.HTTPSConnection(domain, 443, timeout=timeout, context=ctx)
     try:
@@ -443,10 +466,12 @@ def https_kontrol(domain, timeout=AG_TIMEOUT_SN):
         cert = conn.sock.getpeercert() if conn.sock else None
         code = conn.getresponse().status
     except ssl.SSLCertVerificationError:
-        return {"acildi": False, "durum_kodu": None, "gun": None, "bitis": None, "hata": "sertifika doğrulanamadı"}
+        return {"acildi": False, "durum_kodu": None, "gun": None, "bitis": None,
+                "hata": dil.N_("sertifika doğrulanamadı")}
     except (OSError, http.client.HTTPException) as e:
         return {"acildi": False, "durum_kodu": None, "gun": None, "bitis": None,
-                "hata": "zaman aşımı" if isinstance(e, (socket.timeout, TimeoutError)) else "bağlanılamadı"}
+                "hata": dil.N_("zaman aşımı") if isinstance(e, (socket.timeout, TimeoutError))
+                else dil.N_("bağlanılamadı")}
     finally:
         conn.close()
     bitis = (cert or {}).get("notAfter")
@@ -539,7 +564,8 @@ def _write_cache(durum_dir, data):
     os.replace(tmp, path)
 
 
-SORUN_METNI = {"acilmiyor": "açılmıyor", "sertifika": "sertifikası bitiyor", "dns": "DNS değişti"}
+SORUN_METNI = {"acilmiyor": dil.N_("açılmıyor"), "sertifika": dil.N_("sertifikası bitiyor"),
+               "dns": dil.N_("DNS değişti")}  # the card's words (dil.t where drawn)
 
 
 class DomainKontrol:
@@ -676,7 +702,7 @@ def domain_ozeti(durum_dir, cfg):
     False and YOK_METNI."""
     sites, mail = domain_listesi(cfg)
     if not sites and not mail:
-        return {"liste_var": False, "metin": YOK_METNI, "domainler": [], "eposta": [], "sorun_sayisi": 0,
+        return {"liste_var": False, "metin": dil.t(YOK_METNI, cfg), "domainler": [], "eposta": [], "sorun_sayisi": 0,
                 "son_kontrol": None}
     cache = _read_cache(durum_dir) if durum_dir else {}
     rows = cache.get("domainler") if isinstance(cache.get("domainler"), dict) else {}
@@ -689,15 +715,18 @@ def domain_ozeti(durum_dir, cfg):
             continue
         kinds = [k for k in ("acilmiyor", "sertifika", "dns") if k in (r.get("sorunlar") or {})]
         sorun += len(kinds)
-        out.append({"proje": proje, "domain": domain, "kontrol": r.get("kontrol"), "https": r.get("https"),
+        https = r.get("https")
+        if isinstance(https, dict) and isinstance(https.get("hata"), str):
+            https = dict(https, hata=dil.t(https["hata"], cfg))
+        out.append({"proje": proje, "domain": domain, "kontrol": r.get("kontrol"), "https": https,
                     "dns": {"ipler": r.get("ipler") or [], "bulundu": r.get("dns_bulundu"),
                             "cloudflare": r.get("cloudflare"), "cloudflare_bekleniyor": cf_expected,
                             "degisti": r.get("dns_degisti")},
-                    "sorunlar": [{"tur": k, "metin": SORUN_METNI[k]} for k in kinds]})
+                    "sorunlar": [{"tur": k, "metin": dil.t(SORUN_METNI[k], cfg)} for k in kinds]})
     eposta = []
     for proje, domain in mail:
         m = mx.get(domain) if isinstance(mx.get(domain), dict) else {}
         eposta.append({"proje": proje, "domain": domain,
-                       "mx": m.get("mx") if isinstance(m.get("mx"), list) else "bilinmiyor"})
+                       "mx": m.get("mx") if isinstance(m.get("mx"), list) else dil.t("bilinmiyor", cfg)})
     return {"liste_var": True, "metin": "", "domainler": out, "eposta": eposta, "sorun_sayisi": sorun,
             "son_kontrol": cache.get("son_kontrol")}

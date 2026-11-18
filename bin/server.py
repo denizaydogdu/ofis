@@ -12,7 +12,9 @@ refuse ~/Documents to a launchd-started python), one Turkish error line that `au
 Python standard library only. Binds 127.0.0.1. Every request must carry Host 127.0.0.1:<port> or localhost:<port>
 (DNS-rebinding guard). POST additionally needs the exact Origin, Content-Type application/json, a body of at most
 16 KB (POST /api/yakala: the file limit of ofis.json yakala in base64, bin/yakala.py govde_siniri) and the X-Ofis-Token header whose value is generated at startup and injected into the served index.html.
-No CORS headers are ever sent. The page's endpoints refuse an Authorization header. The Jarvis gate (bin/jarvis.py:
+No CORS headers are ever sent. The page's endpoints refuse an Authorization header. POST /api/npc-sohbet (bin/npc_sohbet.py:
+a staff character answers a short question from the office's own state with one tool-less `claude -p` call) is 409
+unless ofis.json npc_sohbet.acik is true. The Jarvis gate (bin/jarvis.py:
 GET /.well-known/agent-card.json, POST /a2a with its own bearer key, loopback only, no Origin) is 404 unless ofis.json
 jarvis.acik is true.
 """
@@ -42,6 +44,7 @@ import danisman  # noqa: E402
 import jarvis  # noqa: E402
 import denetci  # noqa: E402
 import devir  # noqa: E402
+import dil  # noqa: E402
 import duyuru  # noqa: E402
 import jobs  # noqa: E402
 import karne  # noqa: E402
@@ -58,6 +61,7 @@ import arge  # noqa: E402
 import gunsonu  # noqa: E402
 import talimat_denetimi  # noqa: E402
 import notyolu  # noqa: E402
+import npc_sohbet  # noqa: E402
 import postoffice as postoffice_mod  # noqa: E402
 import rapor  # noqa: E402
 import sahip  # noqa: E402
@@ -344,6 +348,10 @@ class App:
         self.sistem = sistem.Sistem(durum_dir=durum_dir, cfg=self.current_config)
         # the usage popup under the limit pill (GET /api/kullanim): who used the plan in the 5-hour / weekly window
         self.kullanim = kullanim.Kullanim(projects_dir, root, durum_dir, os.path.expanduser(cfg["vault_ofis"]))
+        # NPC chat (bin/npc_sohbet.py, ofis.json npc_sohbet): one tool-less model call per question, from the page's
+        # own state snapshot; one at a time, an hourly limit
+        self.npc_sohbet = npc_sohbet.Sohbet(durum_dir, self.cli, self.current_config,
+                                            lambda: self.hub.snapshot()[0])
         self.office.sistem = self.sistem
         self.vault_problem = None  # main(): the Obsidian access problem of this start (the İdari işler card)
         self.hub = Hub(self.office, root)
@@ -385,15 +393,25 @@ class App:
         (bin/ayarlar.py islem), the running cfg refreshed at once, the page refreshed, and a project change told to
         the CEO once."""
         if not self.config_path:
-            return 409, {"error": "Ayar dosyası bilinmiyor; ayarlar bu sunucudan değiştirilemez.",
-                         "hatalar": ["Ayar dosyası bilinmiyor; ayarlar bu sunucudan değiştirilemez."]}
+            m = dil.t("Ayar dosyası bilinmiyor; ayarlar bu sunucudan değiştirilemez.", self.cfg)
+            return 409, {"error": m, "hatalar": [m], "alanlar": [""]}
         try:
             sonuc = ayarlar.islem(self.config_path, self.office.durum_dir, govde)
         except ayarlar.Hata as e:
-            return e.durum, {"error": e.hatalar[0] if e.hatalar else "geçersiz istek", "hatalar": e.hatalar}
+            # each error in the display language with its form field ("" = the form as a whole; web/ayarlar.js)
+            hatalar = [dil.cevir(x, self.cfg) for x in e.hatalar]
+            return e.durum, {"error": hatalar[0] if hatalar else dil.t("geçersiz istek", self.cfg),
+                             "hatalar": hatalar, "alanlar": [getattr(x, "alan", "") for x in e.hatalar]}
         except (OSError, ValueError, jobs.JobError) as e:
-            return 500, {"error": f"ayarlar yazılamadı: {type(e).__name__}",
-                         "hatalar": [f"ayarlar yazılamadı: {type(e).__name__}"]}
+            m = dil.t("ayarlar yazılamadı: {tur}", self.cfg, tur=type(e).__name__)
+            return 500, {"error": m, "hatalar": [m], "alanlar": [""]}
+        if sonuc.pop("dil_degisti", False):
+            # the CEO's system text and reminder line follow the language: a fresh CEO session at the next delivery
+            # (the same flag as `ofis.py ceo-yenile`)
+            try:
+                ceo_mod.yenile_iste(self.office.durum_dir, datetime.now().isoformat(timespec="seconds"))
+            except OSError as e:
+                print(f"ofis: CEO yenileme isteği yazılamadı: {type(e).__name__}", file=sys.stderr)
         self.ayarlari_yenile(zorla=True)
         out = {"tamam": True, **sonuc, "guven": None, "ipucu": ""}
         entry = (self.cfg.get("projects") or {}).get(sonuc["ad"]) if sonuc["ad"] else None
@@ -686,6 +704,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_yakala(body)
         if path == "/api/ayarlar":  # the Ayarlar tab: add / change / remove a project, the office name
             return self._post_ayarlar(body)
+        if path == "/api/npc-sohbet":  # a staff character answers a short question (bin/npc_sohbet.py)
+            return self._post_npc_sohbet(body)
         return self._error(404, "not found")
 
     def _no_bearer(self):
@@ -808,14 +828,32 @@ class Handler(BaseHTTPRequestHandler):
 
     def _post_ayarlar(self, body):
         """{islem: proje-ekle|proje-guncelle|proje-sil|genel, …} (bin/ayarlar.py islem): 200 {tamam, islem, ad, guven,
-        ipucu, ayarlar}; 400 invalid (error + hatalar), 404 unknown project, 409 a delete that must wait / no config
+        ipucu, ayarlar}; 400 invalid (error + hatalar + alanlar: each error's form field), 404 unknown project, 409 a delete that must wait / no config
         file, 500 the file could not be written."""
         try:
             code, data = self.app.ayar_degistir(body)
         except Exception as e:  # noqa: BLE001 — do_POST has no catch-all: never drop the connection
             print(f"ofis: POST /api/ayarlar failed: {type(e).__name__}", file=sys.stderr)
-            code, data = 500, {"error": "internal error", "hatalar": ["internal error"]}
+            code, data = 500, {"error": "internal error", "hatalar": ["internal error"], "alanlar": [""]}
         self._json(code, data)
+
+    def _post_npc_sohbet(self, body):
+        """{npc: <role key>, soru: <text>}: one tool-less model call over the office's own state (bin/npc_sohbet.py).
+        200 {cevap, unvan, kullanim}; 400 bad role / question, 409 off or busy, 429 over the hourly limit (Retry-After),
+        502 the call failed. Blocks only this request's thread (the server is threaded) for at most ~60 s."""
+        try:
+            if body.get("soru") is not None and not isinstance(body.get("soru"), str):
+                return self._error(400, "soru must be a string")
+            result = self.app.npc_sohbet.sor(body.get("npc"), body.get("soru"))
+        except (npc_sohbet.Kapali, npc_sohbet.Gecersiz, npc_sohbet.Mesgul, npc_sohbet.Sinir,
+                npc_sohbet.CagriHatasi) as e:
+            code, data, extra = npc_sohbet.hata_json(e, self.app.cfg)
+            return self._send(code, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8",
+                              extra)
+        except Exception as e:  # noqa: BLE001 — do_POST has no catch-all: never drop the connection
+            print(f"ofis: POST /api/npc-sohbet failed: {type(e).__name__}", file=sys.stderr)
+            return self._error(500, "internal error")
+        self._json(200, result)
 
     def _post_yakala(self, body):
         """{url, not} or {dosya_adi, dosya (base64), not}: validated and stored under durum/yakala/<id>/, and its one

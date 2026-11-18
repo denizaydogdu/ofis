@@ -208,6 +208,14 @@ export const SENARYOLAR = {
       start: at(9, 30), end: at(10, 40), outcome: 'bitti', phases: [[at(10), at(10, 10), 'kontrolde'], [at(10, 30), at(10, 40), 'kontrolde']],
       sessionStatus: [[at(10), at(10, 10), 'idle'], [at(10, 30), at(10, 40), 'idle']], kontrol_deneme: [[at(10), 1], [at(10, 30), 2]] })],
   },
+  // 2026-11-18: a kod job whose session goes quiet 10:00-10:20 (the server's silent list from 10:02)
+  'sessiz-is': {
+    projects: ['vitrin'], ceo: { state: 'idle' },
+    jobs: [J({ note: '2026-11-12-093000-vitrin.md', project: 'vitrin', title: 'Sepet hesabı', tier: 'kod', model: 'opus',
+      start: at(9, 30), end: at(11), outcome: 'bitti', sessionStatus: [[at(10), at(10, 20), 'idle']] })],
+    silent: (ms) => (ms >= at(10, 2) && ms < at(10, 20) ? [{ is: '2026-11-12-093000-vitrin', oturum: 'ofis-vitrin-093000',
+      proje: 'vitrin', seconds: (ms - at(10)) / 1000 }] : []),
+  },
   'izin': {
     projects: ['vitrin'], ceo: { state: 'idle' },
     jobs: [J({ note: '2026-11-12-093000-vitrin.md', project: 'vitrin', title: 'Bildirim izinleri', tier: 'kod', model: 'opus',

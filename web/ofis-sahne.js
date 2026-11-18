@@ -12,8 +12,10 @@ import {
   VARDIYA_DK, nobetPlani, kimNerede, ekipVardiyasi, gunTuru, tatil, mesaiAraligi, MUDURLUKLER, mudurId, isDepartmani, planIsi, panelIncelemesi, GENEL_MUDUR,
   GUVENLIK, IT_EKIBI, testerUnvani, rolMetni, uzmanlikEki, UZMANLIK_BASLIK, UZMANLIK_SIRA, TESIS_PERSONELI, denetciListesi,
   DEKOR_EKIP, DEGERLENDIRME_EKIBI, degerlendirmeDurumu, ogunPencereleri, fazlaIsciSayisi, ARGE_PROJESI, sahip,
+  bakilacakIsler,
 } from './ofis-davranis.js';
 import { postofficeWarnings, stepText, tokenMetni, tokenSayisi, usdText } from './ofis-text.js';
+import { t as T } from './i18n.js'; // phase 1: only the NPC chat box's texts (npcSohbetKutusu, npcSohbetSonucu)
 
 // world units per second (defined in ofis-davranis.js, which times the duty trips with it); the 4-project floor is about
 // 144 x 93 units, so a walk across it takes about 40 s
@@ -1398,9 +1400,21 @@ export function hafizaMetni(hafiza, key) {
   return parts.join(' · ');
 }
 
+// The İK card's presence counts (owner decision 2026-11-18) from kimNerede: {ofiste (everyone in, also on shift and
+// not walking out), ajan (the CEO, the kadro, the auditors), personel (the rest in), nobette: ['Güvenlik · Ali', …] (the
+// shift teams' people on shift, short names), otelde, yolda (walking to the Otel)}; null when it cannot be read. Pure.
+export function ikVarligi(st, ms, aktorler = null) {
+  let k = null;
+  try { k = kimNerede(st && typeof st === 'object' ? st : {}, ms, aktorler); } catch (e) { return null; }
+  const ofiste = k.ofiste.filter((e) => e.durum !== 'cikiyor');
+  const ajan = ofiste.filter((e) => e.grup === 'ajan').length;
+  const nobette = ofiste.filter((e) => e.durum === 'nobette').map((e) => `${NOBET_KISA[e.ekip] || 'Nöbet'} · ${rolKisa(e.ad)}`);
+  return { ofiste: ofiste.length, ajan, personel: ofiste.length - ajan, nobette, otelde: k.evde.length,
+    yolda: k.ofiste.length - ofiste.length };
+}
 // İK sorumlusu ("çalışanlar"): the roster by role with each one's state, this month's performance per role, open kadro
 // proposals and running pilots (each pending card opens), the reviewers' scorecard in short.
-export function ikKarti(st, ms, veri = {}) {
+export function ikKarti(st, ms, veri = {}, aktorler = null) {
   const b = personelBaglami(st, ms);
   const satirlar = [];
   const eylemler = [];
@@ -1444,6 +1458,13 @@ export function ikKarti(st, ms, veri = {}) {
   for (const [i, x] of (k && Array.isArray(k.denetciler) ? k.denetciler : []).filter((x) => x && x.ad).entries()) {
     satirlar.push(satir(i ? '' : 'Denetçi karnesi', `${denetciAdi(x.ad)} · ${x.tur} tur${oran(x.gecerli, x.ciddi) ? ` · ciddi bulguların ${oran(x.gecerli, x.ciddi)} geçerli` : ''}`));
   }
+  // owner decision 2026-11-18: who is in now (kimNerede, the guard's card's source): in the office, on shift, at the Otel
+  const v = ikVarligi(st, ms, aktorler);
+  if (v) {
+    satirlar.push(satir('Ofiste', `${v.ofiste} kişi (${v.ajan} çalışan · ${v.personel} personel)`, { bolum: 'Şu an' }));
+    if (v.nobette.length) satirlar.push(satir('Nöbette', v.nobette.join(', '), { bolum: 'Şu an' }));
+    satirlar.push(satir('Otelde', `${v.otelde ? `${v.otelde} kişi` : 'kimse yok'}${v.yolda ? ` · ${v.yolda} kişi otele gidiyor` : ''}`, { bolum: 'Şu an' }));
+  }
   eylemler.push({ tur: 'kalite', metin: 'Kalite sekmesini aç' });
   return { satirlar, eylemler };
 }
@@ -1477,12 +1498,19 @@ export function doktorKarti(st, ms) {
     const dk = Math.max(2, Math.floor((Number(x.seconds) || 0) / 60));
     satirlar.push(satir(i ? '' : 'Oturumlar', `${x.proje || '—'} · ${x.izin ? `${dk} dakikadır izin bekliyor` : `${dk} dakikadır sessiz`}`));
   });
+  // owner decision 2026-11-18: the open jobs whose Kontrol failed (they are fixing it now), each opens
+  const kaldi = b.tasks.filter((t) => AKTIF_IS.has(t.status) && t.kontrol_sonuc === 'kaldi');
+  kaldi.slice(0, 4).forEach((t, i) => {
+    const n = Math.floor(Number(t.kontrol_deneme) || 0);
+    satirlar.push(satir(i ? '' : 'Kontrol\'ü geçmeyen', [t.project, isBasligi(t), n >= 2 ? `${n}. deneme` : 'düzeltiyor'].filter(Boolean).join(' · ')));
+    eylemler.push({ tur: 'is', note: String(t.note), metin: `İşi aç: ${kisa(isBasligi(t), 40)}` });
+  });
   const rows = modelSatirlari(st.modeller, ms, b.sahne).filter((r) => r.durum === 'hata');
   rows.forEach((r, i) => satirlar.push(satir(i ? '' : 'Hata veren', `${r.ad} · ${r.kisa}`)));
   const ol = Array.isArray(st.olaylar) ? st.olaylar.filter((x) => x && x.ileti) : [];
-  const sorun = takilan.length + sessiz.length + rows.length;
+  const sorun = takilan.length + sessiz.length + rows.length + kaldi.length;
   if (!sorun) {
-    const kontrol = ['takılan iş yok'];
+    const kontrol = ['takılan iş yok', 'Kontrol\'ü geçmeyen iş yok'];
     if (po) kontrol.push('sessiz oturum yok');
     if (Array.isArray(st.modeller)) kontrol.push('hata veren çalışan yok');
     satirlar.push(satir('Durum', 'Ofis sağlıklı'));
@@ -1995,6 +2023,11 @@ export function mudurKarti(st, ms, alan, aktorler = null, veri = {}) {
     });
     if (list.length > 4) satirlar.push(satir('', `+${list.length - 4} iş daha`));
   };
+  // owner decision 2026-11-18: the department's jobs that need a look (silent now, or stuck today), each opens
+  sorunluIsler(s, ms, alan).forEach(({ t, neden }, i) => {
+    satirlar.push(satir(i ? '' : 'Bakılması gereken', [t.project, isBasligi(t), neden].filter(Boolean).join(' · ')));
+    eylemler.push({ tur: 'is', note: String(t.note), metin: `İşi aç: ${kisa(isBasligi(t), 40)}` });
+  });
   if (alan === 'yazilim') {
     const projeler = (Array.isArray(s.projects) ? s.projects : []).map((p) => (p && p.name) || p).filter((p) => p && p !== ARGE_PROJESI);
     if (projeler.length) satirlar.push(satir('Proje ekipleri', projeler.join(', ')));
@@ -2028,6 +2061,24 @@ export function mudurKarti(st, ms, alan, aktorler = null, veri = {}) {
     } else satirlar.push(satir('Güvenlik bulguları', 'açık güvenlik bulgusu yok'));
   }
   return { satirlar, eylemler };
+}
+
+// A department's jobs that need a look now (owner decision 2026-11-18): the silent ones (the server's list) and the ones
+// stuck today, of the department `alan` (isDepartmani; the IT has none): [{t, neden: 'sessiz' | 'takıldı'}], at most
+// four, silent first. Pure.
+export function sorunluIsler(st, ms, alan) {
+  const s = st && typeof st === 'object' ? st : {};
+  if (!['yazilim', 'qa', 'analist'].includes(alan)) return [];
+  const b = personelBaglami(s, ms);
+  const neden = bakilacakIsler(s);
+  const out = [];
+  for (const t of b.tasks) {
+    const n = neden.get(notKoku(t.note));
+    if (!n || onayAdimi(t) || isDepartmani(t) !== alan) continue;
+    if (n === 'takildi' && !b.bugun(b.zaman(t.finished))) continue;
+    out.push({ t, neden: n === 'sessiz' ? 'sessiz' : 'takıldı' });
+  }
+  return out.sort((x, y) => (x.neden === y.neden ? 0 : x.neden === 'sessiz' ? -1 : 1)).slice(0, 4);
 }
 
 // The Yazılım Müdürü's people by specialisation (plan "Sonraki iş (9)" step 2): [[title, "ornek-uygulama Kıdemli, blog Stajyer"]]
@@ -2225,6 +2276,13 @@ export function dekorKarti(st, ms, a) {
     return { baslik: 'Analist ekibi', alt: 'görünüm amaçlı', satirlar: [ne,
       satir('Analist odası şu an', `${an.plan_inceleme.length} plan incelemesi`)], eylemler: [] };
   }
+  if (grup === 'ortak') { // the common areas' people (2026-11-18): where it is, and the office's real numbers now
+    const b = personelBaglami(s, ms);
+    const acik = b.tasks.filter((t) => AKTIF_BOLUM.has(t.status) && !onayAdimi(t)).length;
+    const yer = a.yuruyen ? 'koridorda yürüyor' : ODA_ADI[a.oda] || '';
+    return { baslik: 'Ofisten biri', alt: 'görünüm amaçlı', satirlar: [ne, ...(yer ? [satir('Nerede', yer)] : []),
+      satir('Ofiste şu an', `${acik} açık iş · ${b.kararlar.length} bekleyen soru`)], eylemler: [] };
+  }
   const p = String((a && a.proje) || '');
   const b = personelBaglami(s, ms);
   const c = b.tasks.filter((t) => t.project === p && AKTIF_BOLUM.has(t.status) && !onayAdimi(t)).length;
@@ -2294,6 +2352,41 @@ export function kartDuzeni(k) {
     }
   });
   return bolumler;
+}
+
+// NPC chat (owner decision 2026-11-18, "gerçekten akıllı NPC'ler"; bin/npc_sohbet.py): the role key POST /api/npc-sohbet
+// takes for a staff character, or null for one that stays plain (decor, tea, kitchen, masseur, social media, the
+// Değerlendirme ekibi, the kadro, jobs, the CEO). The server checks the key again against its own fixed set. Pure.
+const SOHBET_ROLLERI = new Set(['sekreter', 'muhasebe', 'idari', 'ik', 'psikolog', 'revir', 'sunucu', 'arge', 'guvenlik']);
+const SOHBET_MUDURLERI = new Set(['yazilim', 'qa', 'analist', 'it']);
+export const NPC_SORU_SINIRI = 500; // bin/npc_sohbet.py SORU_SINIRI
+export function npcSohbetRolu(a) {
+  if (!a || a.tur !== 'sus') return null;
+  const key = a.gorevli || String(a.id || '').replace(/^sus:/, '');
+  if (SOHBET_ROLLERI.has(key)) return key;
+  if (key === 'mudur' && SOHBET_MUDURLERI.has(a.alan)) return `mudur:${a.alan}`;
+  if (key === 'proje' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(String(a.proje || ''))) return `proje:${a.proje}`;
+  return null;
+}
+// The card's question box: {kutu: true} when the owner can ask, else {kutu: false, ipucu} — the one-line hint (off in
+// ofis.json npc_sohbet, or the demo). Pure.
+export function npcSohbetKutusu(st, demo = false) {
+  if (demo) return { kutu: false, ipucu: T('Soru sormak demo modunda çalışmaz.') };
+  const n = st && typeof st === 'object' ? st.npc_sohbet : null;
+  if (!n || n.acik !== true) return { kutu: false, ipucu: T('Bu karaktere soru sormak için Ayarlar › Genel’den NPC sohbetini aç.') };
+  return { kutu: true, ipucu: '' };
+}
+// The answer area after POST /api/npc-sohbet: {cevap, alt} on 200 (alt = the usage line, tokens first), else {hata}
+// in plain Turkish (the server's own message when it sent one). Text only: the page sets it with textContent. Pure.
+export function npcSohbetSonucu(status, data) {
+  const d = data && typeof data === 'object' ? data : {};
+  if (status === 200 && typeof d.cevap === 'string' && d.cevap.trim()) {
+    return { cevap: d.cevap.trim(), alt: typeof d.kullanim === 'string' && d.kullanim ? T('Kullanım: {kullanim}', { kullanim: d.kullanim }) : '' };
+  }
+  if (status === 0) return { hata: T('Sunucuya ulaşılamadı; biraz sonra yeniden dene.') };
+  if (status === 403) return { hata: T('İstek reddedildi; sayfayı yenileyip tekrar dene.') };
+  if (typeof d.error === 'string' && d.error) return { hata: d.error };
+  return { hata: T('Cevap alınamadı (hata {status}).', { status }) };
 }
 
 export function karakterKarti(actor, state, now, secenek = {}) {
@@ -2369,7 +2462,7 @@ export function karakterKarti(actor, state, now, secenek = {}) {
       : key === 'asci' ? yemekhaneKarti(st, ms, secenek.aktorler, 'asci')
       : key === 'muhasebe' ? muhasebeKarti(st, ms, veri.muhasebe)
       : key === 'idari' ? idariKarti(st, ms, veri.idari)
-      : key === 'ik' ? ikKarti(st, ms, veri)
+      : key === 'ik' ? ikKarti(st, ms, veri, secenek.aktorler)
       : key === 'revir' ? doktorKarti(st, ms)
       : key === 'sunucu' ? sistemKarti(st, ms, veri.sistem)
       : key === 'arge' ? argeKarti(st, ms, veri.arge, a)

@@ -1,6 +1,7 @@
 {
   "ofis_adi": "Ofis",
   "sahip_adi": "Sahip",
+  "dil": "tr",
   "ceo_session": "ofis-ceo",
   "ceo_yenileme": {
     "acik": true,
@@ -150,6 +151,10 @@
     "butce_usd": 0.5,
     "saatlik_sinir": 10,
     "dosya_mb": 2
+  },
+  "npc_sohbet": {
+    "acik": false,
+    "saatlik_sinir": 20
   },
   "talimat_denetimi": {
     "acik": true,

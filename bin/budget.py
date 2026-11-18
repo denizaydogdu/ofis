@@ -271,8 +271,27 @@ def token_text(value):
     return f"{_tenths(tenths) if tenths < 1000 else (n + 500_000) // 1_000_000} mn token"
 
 
-def spend_text(usd_value, tokens):
+def token_text_en(value):
+    """The English twin of token_text (ofis.json dil "en", the page's texts only): "850 tokens", "12.4k tokens",
+    "182k tokens", "1.2M tokens"; "" when unknown. The same rounding."""
+    n = token_count(value)
+    if n is None:
+        return ""
+    if n < 1000:
+        return "1 token" if n == 1 else f"{n} tokens"
+    if n < 999_500:
+        tenths = (n + 50) // 100
+        return f"{_tenths(tenths).replace(',', '.') if tenths < 1000 else (n + 500) // 1000}k tokens"
+    tenths = (n + 50_000) // 100_000
+    return f"{_tenths(tenths).replace(',', '.') if tenths < 1000 else (n + 500_000) // 1_000_000}M tokens"
+
+
+def spend_text(usd_value, tokens, dil_kodu="tr"):
     """"182 bin token · API karşılığı ~$0.41" (tokens first; the owner is on a subscription, the dollars are only the
-    API-price equivalent), or the dollars alone when the tokens are unknown."""
+    API-price equivalent), or the dollars alone when the tokens are unknown. dil_kodu "en" (the page's texts):
+    "182k tokens · API equivalent ~$0.41"."""
+    if dil_kodu == "en":
+        t = token_text_en(tokens)
+        return f"{t} · API equivalent ~${usd(usd_value)}" if t else f"API equivalent ~${usd(usd_value)}"
     t = token_text(tokens)
     return f"{t} · API karşılığı ~${usd(usd_value)}" if t else f"API karşılığı ~${usd(usd_value)}"

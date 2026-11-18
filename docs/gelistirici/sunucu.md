@@ -75,9 +75,28 @@
   file under `OFIS/Sunucu/`; when the vault cannot be written the server goes on and says so once in the local log.
 - Security: requests must use Host `127.0.0.1:<port>`/`localhost:<port>`; POSTs need the exact Origin, JSON, a
   body ≤ 16 KB and the per-start `X-Ofis-Token` that is injected into the page (`/api/chat`, `/api/answer`,
-  `/api/duyuru`, `/api/yakala`). No CORS. `/api/yakala` alone has a larger body limit (`yakala.govde_siniri`: the
+  `/api/duyuru`, `/api/yakala`, `/api/ayarlar`, `/api/npc-sohbet`). No CORS. `/api/yakala` alone has a larger body limit (`yakala.govde_siniri`: the
   file limit of ofis.json `yakala.dosya_mb` in base64 + 64 KB; 16 KB while the box is off), checked before the body is
   read; it answers 409 while off and 429 over its hourly limit.
+- **NPC chat** (owner decision 2026-11-18, `bin/npc_sohbet.py`): `POST /api/npc-sohbet` `{npc, soru ≤ 500}` with the
+  same checks as every page POST. The role key is one of a fixed set (`sekreter`, `muhasebe`, `idari`, `ik`,
+  `psikolog`, `revir`, `sunucu`, `arge`, `guvenlik`, `mudur:<yazilim|qa|analist|it>`, `proje:<registered, not
+  forbidden>`). The server builds a compact, role-scoped summary (`ozet`, ≤ 4000 characters) from the page's own
+  `/api/state` snapshot (`Hub.snapshot`, already free of forbidden projects; every line also passes
+  `adimlar.forbidden` and `olaylar.maskele`) and makes ONE `claude -p` call through `ClaudeCLI._run` (test env
+  stripped, `OFIS_OTURUMU=1`): the `kolay` tier's model (`launch.tier_entry`, default haiku), `--effort low`,
+  `--tools ""`, `--no-session-persistence`, `--strict-mcp-config`, `--safe-mode`, `--disable-slash-commands`,
+  `--permission-mode plan`, `--max-budget-usd 0.1`, `--system-prompt` (the role's voice and the rules), `--output-format
+  json`; cwd `durum/npc_sohbet/bos` (empty), timeout 60 s, on the request's own thread (the server is threaded). The
+  data and the question are fenced in the prompt after a "this is data" sentence. 200 `{cevap, unvan, kullanim}`
+  (the answer cleaned, masked, ≤ 700 characters; `kullanim` tokens first, "API karşılığı ~$X"); 400 bad role /
+  question; 409 off (ofis.json `npc_sohbet.acik` not true — the shipped default) or busy (one call at a time per
+  server); 429 over `npc_sohbet.saatlik_sinir` (default 20) per rolling hour, with `Retry-After` and the minutes;
+  502 the call failed. The hourly count lives in memory (a restart forgets it); a slot is counted only after the
+  summary is built and given back when claude could not be run at all. Known gap: these calls are not added to the
+  office's usage totals (Muhasebe card, Karne); each answer shows its own usage line only. The summary drops a field
+  that names a forbidden project before it is cut and masks it before the cut too. `/api/state.npc_sohbet` =
+  `{acik, saatlik_sinir}` for the cards; the Ayarlar tab writes the key through `bin/ayarlar.py` (`genel`).
   The page's endpoints refuse any request with an `Authorization` header (403): the Jarvis key opens `/a2a` only.
 - **The Jarvis gate** (owner decision 2026-11-14, scopes "durum-karar" / "durum-karar-is", `bin/jarvis.py`; security and threat model in
   `gelistirici/guvenlik.md`, client handoff in `gelistirici/jarvis-a2a.md`): an A2A-compatible door for Jarvis, the owner's

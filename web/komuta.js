@@ -5,8 +5,10 @@
 import { calisanIpucu, calisanRolu, calisanlarTablosu, rolAdi } from './ofis-sahne.js';
 import { harcamaText, stepText, workflowProgressText } from './ofis-text.js';
 import { sahip } from './ofis-davranis.js';
+import { t as T, N_ } from './i18n.js';
 
-export const HAZIR_SORULAR = ['Durum nedir?', 'Bugün ne bitti?', 'Bekleyen kararlar neler?'];
+// marked for translation: the page draws (and sends) T(q)
+export const HAZIR_SORULAR = [N_('Durum nedir?'), N_('Bugün ne bitti?'), N_('Bekleyen kararlar neler?')];
 export const BAGLAM_EN_COK = 5;
 
 const kok = (note) => String(note || '').replace(/\.md$/, '');
@@ -48,7 +50,7 @@ export function suAnGruplari(state, now) {
       continue;
     }
     // role only ("Kıdemli"); the model in the row's tooltip (calisan_ipucu)
-    grup(r.proje).isler.push({ id: r.id, baslik: (t && t.title) || bos(r.is) || kok(note) || 'iş', calisan:
+    grup(r.proje).isler.push({ id: r.id, baslik: (t && t.title) || bos(r.is) || kok(note) || T('iş'), calisan:
       calisanRolu(r.unvan, r.model), calisan_ipucu: calisanIpucu(r.unvan, r.model), katman: bos(r.katman),
       durum: r.durum, sure: bos(r.sure), harcama: bos(r.harcama), yardimci: bos(rolAdi(r.yardimci)),
       adim: t ? stepText(t) : '', note });
@@ -62,7 +64,7 @@ export function suAnGruplari(state, now) {
   }
   for (const w of Array.isArray(st.workflows) ? st.workflows : []) {
     if (!w || KAPALI_AKIS.has(w.durum)) continue;
-    grup(w.proje).akislar.push({ grup: w.grup || '', baslik: w.baslik || w.grup || 'akış', ilerleme: workflowProgressText(w) });
+    grup(w.proje).akislar.push({ grup: w.grup || '', baslik: w.baslik || w.grup || T('akış'), ilerleme: workflowProgressText(w) });
   }
   const list = [...projeler.values()].filter((g) => g.isler.length || g.sirada || g.akislar.length);
   return { projeler: list, denetim, bos: list.length === 0 && denetim.length === 0 };
@@ -71,9 +73,9 @@ export function suAnGruplari(state, now) {
 // "2 iş sırada · 1 bekletiliyor (the owner bırakınca başlar) · 1 onay birikişi nedeniyle bekliyor"; '' when nothing waits.
 export function siraMetni(g) {
   if (!g || !g.sirada) return '';
-  const parts = [`${g.sirada} iş sırada`];
-  if (g.bekletilen) parts.push(`${g.bekletilen} bekletiliyor (${sahip()} bırakınca başlar)`);
-  if (g.birikis) parts.push(`${g.birikis} onay birikişi nedeniyle bekliyor`);
+  const parts = [T('{n} iş sırada', { n: g.sirada })];
+  if (g.bekletilen) parts.push(T('{n} bekletiliyor ({sahip} bırakınca başlar)', { n: g.bekletilen, sahip: sahip() }));
+  if (g.birikis) parts.push(T('{n} onay birikişi nedeniyle bekliyor', { n: g.birikis }));
   return parts.join(' · ');
 }
 
@@ -97,7 +99,7 @@ export function baglamCikar(list, note) {
 // The chip's label: "İlgili: <title>" (shortened).
 export function baglamEtiketi(item) {
   const t = String((item && item.baslik) || (item && item.note) || '').replace(/\s+/g, ' ').trim();
-  return `İlgili: ${t.length > 40 ? `${t.slice(0, 39)}…` : t}`;
+  return T('İlgili: {baslik}', { baslik: t.length > 40 ? `${t.slice(0, 39)}…` : t });
 }
 
 // The message as sent: the owner's text, then one plain line "İlgili: [[a]], [[b]]" for the chips (the CEO opens the job
@@ -123,13 +125,16 @@ export function metinSiniri(chips) {
 
 // --- the CEO's steps and its header line ---
 
-const GECMIS = { Read: 'okudu', Edit: 'düzenledi', MultiEdit: 'düzenledi', Write: 'yazdı', NotebookEdit: 'düzenledi',
-  Bash: 'çalıştırdı', Grep: 'aradı', Glob: 'aradı', SendMessage: 'mesaj gönderdi', Agent: 'yardımcı çalıştırdı',
-  Task: 'yardımcı çalıştırdı', Skill: 'beceri kullandı', WebFetch: 'web sayfası okudu', WebSearch: "web'de aradı" };
-const SIMDI = { Read: 'okuyor', Edit: 'düzenliyor', MultiEdit: 'düzenliyor', Write: 'yazıyor', NotebookEdit: 'düzenliyor',
-  Bash: 'komut çalıştırıyor', Grep: 'arıyor', Glob: 'arıyor', SendMessage: 'mesaj gönderiyor',
-  Agent: 'yardımcı çalıştırıyor', Task: 'yardımcı çalıştırıyor', Skill: 'beceri kullanıyor',
-  WebFetch: 'web sayfası okuyor', WebSearch: "web'de arıyor" };
+// marked for translation (T() where drawn)
+const GECMIS = { Read: N_('okudu'), Edit: N_('düzenledi'), MultiEdit: N_('düzenledi'), Write: N_('yazdı'),
+  NotebookEdit: N_('düzenledi'), Bash: N_('çalıştırdı'), Grep: N_('aradı'), Glob: N_('aradı'),
+  SendMessage: N_('mesaj gönderdi'), Agent: N_('yardımcı çalıştırdı'), Task: N_('yardımcı çalıştırdı'),
+  Skill: N_('beceri kullandı'), WebFetch: N_('web sayfası okudu'), WebSearch: N_("web'de aradı") };
+const SIMDI = { Read: N_('okuyor'), Edit: N_('düzenliyor'), MultiEdit: N_('düzenliyor'), Write: N_('yazıyor'),
+  NotebookEdit: N_('düzenliyor'), Bash: N_('komut çalıştırıyor'), Grep: N_('arıyor'), Glob: N_('arıyor'),
+  SendMessage: N_('mesaj gönderiyor'), Agent: N_('yardımcı çalıştırıyor'), Task: N_('yardımcı çalıştırıyor'),
+  Skill: N_('beceri kullanıyor'), WebFetch: N_('web sayfası okuyor'), WebSearch: N_("web'de arıyor") };
+const cevir = (s) => (s ? T(s) : s);
 const kisalt = (s, n) => {
   const t = String(s || '').replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim();
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
@@ -139,7 +144,7 @@ const kisalt = (s, n) => {
 export function adimMetni(a) {
   if (!a || typeof a !== 'object') return '';
   const arac = kisalt(a.arac, 40);
-  const verb = kisalt(a.ozet, 40) || GECMIS[arac] || (arac ? `${arac} kullandı` : 'bir adım attı');
+  const verb = kisalt(a.ozet, 40) || cevir(GECMIS[arac]) || (arac ? T('{arac} kullandı', { arac }) : T('bir adım attı'));
   const hedef = kisalt(a.hedef, 48);
   return hedef ? `${verb}: ${hedef}` : verb;
 }
@@ -147,12 +152,13 @@ export function adimMetni(a) {
 // What the CEO does now, from arac_simdi or the state's current_tool ({name, target}): "komut çalıştırıyor: ofis.py".
 export function simdiMetni(aracSimdi, currentTool) {
   if (aracSimdi && aracSimdi.arac) {
-    const verb = kisalt(aracSimdi.ozet, 40) || SIMDI[aracSimdi.arac] || `${kisalt(aracSimdi.arac, 40)} kullanıyor`;
+    const verb = kisalt(aracSimdi.ozet, 40) || cevir(SIMDI[aracSimdi.arac])
+      || T('{arac} kullanıyor', { arac: kisalt(aracSimdi.arac, 40) });
     const hedef = kisalt(aracSimdi.hedef, 48);
     return hedef ? `${verb}: ${hedef}` : verb;
   }
   if (currentTool && currentTool.name) {
-    const verb = SIMDI[currentTool.name] || `${kisalt(currentTool.name, 40)} kullanıyor`;
+    const verb = cevir(SIMDI[currentTool.name]) || T('{arac} kullanıyor', { arac: kisalt(currentTool.name, 40) });
     const hedef = kisalt(currentTool.target, 48);
     return hedef ? `${verb}: ${hedef}` : verb;
   }
@@ -164,28 +170,28 @@ export function sureYazisi(sn) {
   const n = Number(sn);
   if (sn == null || sn === '' || !Number.isFinite(n) || n < 0) return '';
   const dk = Math.floor(n / 60);
-  if (dk < 1) return '<1 dk';
-  return dk < 60 ? `${dk} dk` : `${Math.floor(dk / 60)} sa ${dk % 60} dk`;
+  if (dk < 1) return T('<1 dk');
+  return dk < 60 ? T('{dk} dk', { dk }) : T('{sa} sa {dk} dk', { sa: Math.floor(dk / 60), dk: dk % 60 });
 }
 
-const CEO_DURUM = { busy: 'çalışıyor', idle: 'hazır', dormant: 'uyuyor', waiting: 'izin bekliyor', absent: 'başlamadı',
-  unknown: 'bilinmiyor' };
+const CEO_DURUM = { busy: N_('çalışıyor'), idle: N_('hazır'), dormant: N_('uyuyor'), waiting: N_('izin bekliyor'),
+  absent: N_('başlamadı'), unknown: N_('bilinmiyor') };
 
 // "CEO şu an: çalışıyor · komut çalıştırıyor: python3 ofis.py durum · 3 dk" / "CEO şu an: hazır · son işi 5 dk önce
 // bitti". `ceo` = state.ceo (the state is the fresher of the two), `adim` = GET /api/ceo/adimlar or null.
-export const CEO_KAPANIYOR = 'Cevap verdi · tur kapanıyor';
+export const CEO_KAPANIYOR = N_('Cevap verdi · tur kapanıyor'); // the page draws T(CEO_KAPANIYOR)
 export function ceoSimdiMetni(ceo, adim) {
   const c = ceo && typeof ceo === 'object' ? ceo : {};
   const durum = c.state || (adim && adim.durum) || 'unknown';
   // the reply is written and nothing runs; only Claude Code's turn-end record is still missing (state.ceo.tur_kapaniyor)
-  if (durum === 'busy' && c.tur_kapaniyor) return `CEO şu an: ${CEO_KAPANIYOR}`;
-  const parts = [`CEO şu an: ${CEO_DURUM[durum] || 'bilinmiyor'}`];
+  if (durum === 'busy' && c.tur_kapaniyor) return T('CEO şu an: {durum}', { durum: T(CEO_KAPANIYOR) });
+  const parts = [T('CEO şu an: {durum}', { durum: T(CEO_DURUM[durum] || CEO_DURUM.unknown) })];
   const sure = sureYazisi(adim && adim.sure_sn);
   if (durum === 'busy' || durum === 'waiting') {
-    parts.push(simdiMetni(adim && adim.arac_simdi, c.current_tool) || 'düşünüyor ya da cevap yazıyor');
+    parts.push(simdiMetni(adim && adim.arac_simdi, c.current_tool) || T('düşünüyor ya da cevap yazıyor'));
     if (sure) parts.push(sure);
   } else if (sure) {
-    parts.push(`son işi ${sure} önce bitti`);
+    parts.push(T('son işi {sure} önce bitti', { sure }));
   }
   return parts.join(' · ');
 }
@@ -203,12 +209,13 @@ export function turAltMetni(tur) {
   const paraSon = para && para !== '—' ? [para] : [];
   const isler = (Array.isArray(tur.isler) ? tur.isler : []).filter((j) => j && j.note).map((j) => {
     const kim = kisalt(j.unvan || j.katman || '', 30);
-    const akis = j.akis ? ` · akış${Number(j.adim_sayisi) > 0 ? `, ${Number(j.adim_sayisi)} adım` : ''}` : '';
-    return { note: String(j.note), metin: `İş açıldı: ${kisalt(j.baslik || kok(j.note), 80)}${kim ? ` → ${kim}` : ''}${akis}` };
+    const akis = j.akis ? ` · ${Number(j.adim_sayisi) > 0 ? T('akış, {n} adım', { n: Number(j.adim_sayisi) }) : T('akış')}` : '';
+    const baslik = T('İş açıldı: {baslik}', { baslik: kisalt(j.baslik || kok(j.note), 80) });
+    return { note: String(j.note), metin: `${baslik}${kim ? ` → ${kim}` : ''}${akis}` };
   });
-  if (isler.length) return { metin: [`${n} adım`, ...paraSon].join(' · '), isler };
-  const ilk = n ? ['CEO kendisi baktı', `${n} adım`] : ['CEO kendisi cevapladı'];
-  return { metin: [...ilk, 'iş açılmadı', ...paraSon].join(' · '), isler: [] };
+  if (isler.length) return { metin: [T('{n} adım', { n }), ...paraSon].join(' · '), isler };
+  const ilk = n ? [T('CEO kendisi baktı'), T('{n} adım', { n })] : [T('CEO kendisi cevapladı')];
+  return { metin: [...ilk, T('iş açılmadı'), ...paraSon].join(' · '), isler: [] };
 }
 
 // chat lines + turns -> {index of the chat line: turn}: each turn goes under its last CEO reply line (the line whose
@@ -231,9 +238,9 @@ export function turAltlari(chat, turlar) {
 export function siradaGostergesi(ceo) {
   const c = ceo && typeof ceo === 'object' ? ceo : {};
   const q = Number(c.queue) || 0;
-  if (q > 0) return `Mesajın sırada: CEO şu anki işini bitirince okuyacak (${q} mesaj bekliyor).`;
-  if (c.state === 'busy') return 'CEO çalışıyor; şimdi yazarsan mesajın sıraya girer.';
-  if (c.state === 'waiting') return 'CEO bir izin sorusunda bekliyor; mesajlar kuyrukta.';
+  if (q > 0) return T('Mesajın sırada: CEO şu anki işini bitirince okuyacak ({n} mesaj bekliyor).', { n: q });
+  if (c.state === 'busy') return T('CEO çalışıyor; şimdi yazarsan mesajın sıraya girer.');
+  if (c.state === 'waiting') return T('CEO bir izin sorusunda bekliyor; mesajlar kuyrukta.');
   return '';
 }
 
@@ -268,11 +275,11 @@ export const DUYURU_SURELERI = ['simdi', 'bugun', 'hafta', 'tarih'];
 // tarih (then tarih is the input's YYYY-MM-DD value).
 export function duyuruGovdesi(metin, secim, tarih = '') {
   const m = String(metin || '').trim();
-  if (!m) return { hata: 'Duyuru metni boş.' };
-  if (m.length > DUYURU_EN_COK) return { hata: `Duyuru en çok ${DUYURU_EN_COK} karakter olabilir.` };
-  if (!DUYURU_SURELERI.includes(secim)) return { hata: 'Süre seçilmedi.' };
+  if (!m) return { hata: T('Duyuru metni boş.') };
+  if (m.length > DUYURU_EN_COK) return { hata: T('Duyuru en çok {sinir} karakter olabilir.', { sinir: DUYURU_EN_COK }) };
+  if (!DUYURU_SURELERI.includes(secim)) return { hata: T('Süre seçilmedi.') };
   if (secim === 'tarih') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tarih || ''))) return { hata: 'Son günü seç.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tarih || ''))) return { hata: T('Son günü seç.') };
     return { govde: { metin: m, sure: tarih } };
   }
   return { govde: { metin: m, sure: secim } };
@@ -281,8 +288,8 @@ export function duyuruGovdesi(metin, secim, tarih = '') {
 // The line under the form after the server accepted it (202 {duyuru, hedef, bitis}).
 export function duyuruSonucu(data) {
   const n = Number(data && data.hedef) || 0;
-  const kime = n ? `${n} çalışan oturuma iletilecek` : 'şu an çalışan oturum yok';
+  const kime = n ? T('{n} çalışan oturuma iletilecek', { n }) : T('şu an çalışan oturum yok');
   const bitis = data && typeof data.bitis === 'string' && data.bitis
-    ? `; ${data.bitis.slice(0, 16).replace('T', ' ')} saatine kadar yeni işlere de eklenir` : '';
-  return `Duyuru kaydedildi: ${kime}${bitis}.`;
+    ? T('; {zaman} saatine kadar yeni işlere de eklenir', { zaman: data.bitis.slice(0, 16).replace('T', ' ') }) : '';
+  return T('Duyuru kaydedildi: {kime}{bitis}.', { kime, bitis });
 }

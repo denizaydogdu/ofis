@@ -18,10 +18,12 @@ the delete guard, the live refresh of the running server's cfg and the data of G
   not removed, a workflow not in akis.FINAL_STATES, a built-in project), else None. acik_is_engeli: the job and
   workflow part alone, which also blocks a folder change.
 - islem(config_path, durum_dir, govde): one POST /api/ayarlar body applied to the file (proje-ekle, proje-guncelle,
-  proje-sil, genel); a refusal raises Hata(status, errors) and writes nothing. Deleting never touches the vault notes.
+  proje-sil, genel: ofis_adi, sahip_adi, npc_sohbet, dil); a refusal raises Hata(status, errors) and writes nothing.
+  Errors are bin/dil.py Metin values: the Turkish text, its form field (`alan`) and its template, so the answer
+  carries the field with each error and the text in the display language (server.py). Deleting never touches the vault notes.
   A folder change is refused (409) under open work and drops the project from ucretsiz_denetci_projeler in the same
   write (ucretsiz_denetci_kaldirildi in the result).
-- Yenileyici: takes the file's projects, ucretsiz_denetci_projeler, ofis_adi and sahip_adi (and the advisor keys, bin/danisman.py
+- Yenileyici: takes the file's projects, ucretsiz_denetci_projeler, ofis_adi, sahip_adi, npc_sohbet and dil (and the advisor keys, bin/danisman.py
   refresh) into the running cfg — the one dict every server thread shares. cfg["projects"] is replaced by a new dict
   (one assignment), so a reader iterating the old one keeps a consistent view. A project removed from the file while
   it still has open work (proje_sil_engeli) is kept and logged once. mtime-gated; the post office calls it every
@@ -37,7 +39,11 @@ import threading
 
 import jobs
 import launch
+import dil
+import npc_sohbet
 import sahip
+
+M = dil.Metin  # a display error: Turkish template + values + its form field (translated at the answer)
 
 ROOT = launch.ROOT
 AD = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
@@ -57,9 +63,10 @@ ALANLAR = ("path", "description", "notes", "hassas_yollar", "sorumlu", "sistem")
 SORUMLU_ALANLARI = ("dur_sor", "asla", "teslim")
 SISTEM_ALANLARI = ("domainler", "eposta_domaini", "cloudflare")
 ISLEMLER = ("proje-ekle", "proje-guncelle", "proje-sil", "genel")
+GENEL_ALANLARI = ("ofis_adi", "sahip_adi", "npc_sohbet", "dil")
 ACIK_DURUMLAR = ("sirada",) + jobs.ACTIVE_STATUSES
 TUTULAN_TEKRAR_TIK = 20  # post-office ticks (3 s each, ~60 s) between re-reads of an unchanged file while one is held
-CANLI_ANAHTARLAR = ("ucretsiz_denetci_projeler", "ofis_adi", "sahip_adi")  # top-level keys the refresh takes along
+CANLI_ANAHTARLAR = ("ucretsiz_denetci_projeler", "ofis_adi", "sahip_adi", "npc_sohbet", "dil")  # top-level keys the refresh takes along
 # bin/sistem.py DOMAIN: a lower-case host name
 HOST = re.compile(r"(?=.{1,253}$)(?:(?!-)[a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}")
 KONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f  ‪-‮⁦-⁩]")
@@ -85,7 +92,7 @@ def yaz(config_path, degistir):
             raw = f.read()
         data = json.loads(raw)
         if not isinstance(data, dict):
-            raise Hata(409, ["ofis.json bir JSON nesnesi değil; ayarlar yazılmadı"])
+            raise Hata(409, [M("ofis.json bir JSON nesnesi değil; ayarlar yazılmadı")])
         degistir(data)
         text = json.dumps(data, ensure_ascii=False, indent=2) + ("\n" if raw.endswith("\n") else "")
         folder = os.path.dirname(os.path.abspath(config_path))
@@ -110,11 +117,11 @@ def ofis_adi(cfg):
 
 def ofis_adi_dogrula(value):
     if not isinstance(value, str) or not value.strip():
-        return ["Ofis adı boş olamaz."]
+        return [M("Ofis adı boş olamaz.", "ofis_adi")]
     if KONTROL.search(value) or SATIR.search(value):
-        return ["Ofis adı tek satırlık düz metin olmalı."]
+        return [M("Ofis adı tek satırlık düz metin olmalı.", "ofis_adi")]
     if len(value.strip()) > OFIS_ADI_SINIRI:
-        return [f"Ofis adı en çok {OFIS_ADI_SINIRI} karakter olabilir."]
+        return [M("Ofis adı en çok {sinir} karakter olabilir.", "ofis_adi", sinir=OFIS_ADI_SINIRI)]
     return []
 
 
@@ -198,48 +205,48 @@ def _kisisel_klasor(real):
 
 def _yol_hatalari(cfg, path, mevcut):
     if not isinstance(path, str) or not path.strip():
-        return ["Klasör yolu boş olamaz."]
+        return [M("Klasör yolu boş olamaz.", "path")]
     if len(path) > YOL_SINIRI or KONTROL.search(path) or SATIR.search(path):
-        return ["Klasör yolu geçersiz."]
+        return [M("Klasör yolu geçersiz.", "path")]
     expanded = os.path.expanduser(path.strip())
     if not os.path.isabs(expanded):
-        return ["Klasör yolu tam yol olmalı (/ ya da ~ ile başlamalı)."]
+        return [M("Klasör yolu tam yol olmalı (/ ya da ~ ile başlamalı).", "path")]
     real = os.path.realpath(expanded)
     if launch.is_forbidden_path(real) or launch.is_forbidden_path(expanded) or \
             launch.is_forbidden_path(_kanonik(real)):
-        return ["Bu klasör ofisin dışında tutulan bir yolda; proje olarak eklenemez."]
+        return [M("Bu klasör ofisin dışında tutulan bir yolda; proje olarak eklenemez.", "path")]
     if not os.path.isdir(real):
-        return [f"Klasör bulunamadı: {real}"]
+        return [M("Klasör bulunamadı: {yol}", "path", yol=real)]
     # by identity, both ways: the candidate inside the folder, and the folder inside the candidate
     root = os.path.realpath(ROOT)
     if _icinde(real, root) or _icinde(root, real):
-        return ["Proje klasörü Ofis'in kendi klasörü olamaz, onun içinde ya da üstünde olamaz."]
+        return [M("Proje klasörü Ofis'in kendi klasörü olamaz, onun içinde ya da üstünde olamaz.", "path")]
     vault = _vault_koku(cfg)
     if vault and (_icinde(real, vault) or _icinde(vault, real)):
-        return ["Proje klasörü Obsidian kasası olamaz, onun içinde ya da üstünde olamaz."]
+        return [M("Proje klasörü Obsidian kasası olamaz, onun içinde ya da üstünde olamaz.", "path")]
     if _kisisel_klasor(real):
-        return ["Bu klasör bilgisayarın kişisel ayar klasörlerinden biri (Library ya da ev klasöründeki gizli "
-                "klasörler, ör. .ssh, .claude); proje olarak eklenemez."]
+        return [M("Bu klasör bilgisayarın kişisel ayar klasörlerinden biri (Library ya da ev klasöründeki gizli "
+                  "klasörler, ör. .ssh, .claude); proje olarak eklenemez.", "path")]
     k = _kimlik(real)
     for name, entry in list(((cfg or {}).get("projects") or {}).items()):
         if name == mevcut or not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
             continue
         if _kimlik(_gercek(entry["path"])) == k:  # the same folder (nested ones stay allowed, as before)
-            return [f"Bu klasör zaten '{name}' projesinin klasörü."]
+            return [M("Bu klasör zaten '{ad}' projesinin klasörü.", "path", ad=name)]
     return []
 
 
-def _metin_listesi(value, sayi, sinir, ad):
+def _metin_listesi(value, sayi, sinir, ad, alan=""):
     """A list of one-line strings (or one string where allowed by the caller) -> errors."""
     if not isinstance(value, list):
-        return [f"{ad} bir liste olmalı."]
+        return [M("{ad} bir liste olmalı.", alan, ad=ad)]
     if len(value) > sayi:
-        return [f"{ad} en çok {sayi} satır olabilir."]
+        return [M("{ad} en çok {sayi} satır olabilir.", alan, ad=ad, sayi=sayi)]
     for item in value:
         if not isinstance(item, str):
-            return [f"{ad} yalnız metin satırlarından oluşmalı."]
+            return [M("{ad} yalnız metin satırlarından oluşmalı.", alan, ad=ad)]
         if len(item) > sinir or KONTROL.search(item) or SATIR.search(item):
-            return [f"{ad}: her satır en çok {sinir} karakterlik tek bir satır olmalı."]
+            return [M("{ad}: her satır en çok {sinir} karakterlik tek bir satır olmalı.", alan, ad=ad, sinir=sinir)]
     return []
 
 
@@ -247,58 +254,58 @@ def _alan_hatalari(alanlar, ekleniyor):
     errors = []
     unknown = sorted(k for k in alanlar if k not in ALANLAR)
     if unknown:
-        errors.append("Bilinmeyen alan: " + ", ".join(map(str, unknown)) +
-                      (" (model katmanları Ayarlar'dan değiştirilmez)" if "tiers" in unknown else ""))
+        errors.append(M("Bilinmeyen alan: {alanlar} (model katmanları Ayarlar'dan değiştirilmez)" if "tiers" in unknown
+                        else "Bilinmeyen alan: {alanlar}", alanlar=", ".join(map(str, unknown))))
     if ekleniyor or "description" in alanlar:
         d = alanlar.get("description")
         if not isinstance(d, str) or not d.strip():
-            errors.append("Açıklama zorunlu.")
+            errors.append(M("Açıklama zorunlu.", "description"))
         elif SATIR.search(d.strip()) or KONTROL.search(d):
-            errors.append("Açıklama tek satır olmalı.")
+            errors.append(M("Açıklama tek satır olmalı.", "description"))
         elif len(d.strip()) > ACIKLAMA_SINIRI:
-            errors.append(f"Açıklama en çok {ACIKLAMA_SINIRI} karakter olabilir.")
+            errors.append(M("Açıklama en çok {sinir} karakter olabilir.", "description", sinir=ACIKLAMA_SINIRI))
     if "notes" in alanlar:
         n = alanlar["notes"]
         if not isinstance(n, str):
-            errors.append("Proje kuralları metin olmalı.")
+            errors.append(M("Proje kuralları metin olmalı.", "notes"))
         elif len(n) > NOTLAR_SINIRI or KONTROL.search(n.replace("\t", " ")):
-            errors.append(f"Proje kuralları en çok {NOTLAR_SINIRI} karakterlik düz metin olabilir.")
+            errors.append(M("Proje kuralları en çok {sinir} karakterlik düz metin olabilir.", "notes", sinir=NOTLAR_SINIRI))
     if "hassas_yollar" in alanlar:
-        errors += _metin_listesi(alanlar["hassas_yollar"], HASSAS_SAYISI, HASSAS_SINIRI, "Hassas yollar")
+        errors += _metin_listesi(alanlar["hassas_yollar"], HASSAS_SAYISI, HASSAS_SINIRI, M("Hassas yollar"), "hassas_yollar")
     if "sorumlu" in alanlar:
         s = alanlar["sorumlu"]
         if not isinstance(s, dict):
-            errors.append("Sorumlu bölümü bir nesne olmalı (dur_sor, asla, teslim).")
+            errors.append(M("Sorumlu bölümü bir nesne olmalı (dur_sor, asla, teslim)."))
         else:
             extra = sorted(k for k in s if k not in SORUMLU_ALANLARI)
             if extra:
-                errors.append("Sorumlu bölümünde bilinmeyen alan: " + ", ".join(map(str, extra)))
+                errors.append(M("Sorumlu bölümünde bilinmeyen alan: {alanlar}", alanlar=", ".join(map(str, extra))))
             for key in SORUMLU_ALANLARI:
                 if key in s:
                     value = [s[key]] if isinstance(s[key], str) else s[key]
-                    errors += _metin_listesi(value, SORUMLU_SAYISI, SORUMLU_SINIRI, f"Sorumlu · {key}")
+                    errors += _metin_listesi(value, SORUMLU_SAYISI, SORUMLU_SINIRI, M("Sorumlu · {ad}", ad=key), key)
     if "sistem" in alanlar:
         s = alanlar["sistem"]
         if not isinstance(s, dict):
-            errors.append("Sistem bölümü bir nesne olmalı (domainler, eposta_domaini, cloudflare).")
+            errors.append(M("Sistem bölümü bir nesne olmalı (domainler, eposta_domaini, cloudflare)."))
         else:
             extra = sorted(k for k in s if k not in SISTEM_ALANLARI)
             if extra:
-                errors.append("Sistem bölümünde bilinmeyen alan: " + ", ".join(map(str, extra)))
+                errors.append(M("Sistem bölümünde bilinmeyen alan: {alanlar}", alanlar=", ".join(map(str, extra))))
             if "domainler" in s:
                 d = s["domainler"]
                 if not isinstance(d, list) or len(d) > DOMAIN_SAYISI:
-                    errors.append(f"Domainler en çok {DOMAIN_SAYISI} host adından oluşan bir liste olmalı.")
+                    errors.append(M("Domainler en çok {sayi} host adından oluşan bir liste olmalı.", "domainler", sayi=DOMAIN_SAYISI))
                 else:
                     bad = [x for x in d if not isinstance(x, str) or not HOST.fullmatch(x.strip().lower())]
                     if bad:
-                        errors.append("Domainler yalnız host adı olmalı (ornek.com gibi; https:// ya da yol yok): " +
-                                      ", ".join(str(x)[:60] for x in bad[:3]))
+                        errors.append(M("Domainler yalnız host adı olmalı (ornek.com gibi; https:// ya da yol yok): {liste}",
+                                        "domainler", liste=", ".join(str(x)[:60] for x in bad[:3])))
             e = s.get("eposta_domaini")
             if e not in (None, "") and (not isinstance(e, str) or not HOST.fullmatch(e.strip().lower())):
-                errors.append("E-posta domaini yalnız host adı olmalı (ornek.com gibi).")
+                errors.append(M("E-posta domaini yalnız host adı olmalı (ornek.com gibi).", "domainler"))
             if "cloudflare" in s and not isinstance(s["cloudflare"], bool):
-                errors.append("cloudflare true ya da false olmalı.")
+                errors.append(M("cloudflare true ya da false olmalı."))
     return errors
 
 
@@ -308,13 +315,13 @@ def proje_dogrula(cfg, ad, alanlar, mevcut=None):
     errors = []
     projects = (cfg or {}).get("projects") if isinstance((cfg or {}).get("projects"), dict) else {}
     if not isinstance(ad, str) or not AD.fullmatch(ad):
-        errors.append("Proje adı küçük harf, rakam ve tireden oluşmalı, harf ya da rakamla başlamalı (en çok 40).")
+        errors.append(M("Proje adı küçük harf, rakam ve tireden oluşmalı, harf ya da rakamla başlamalı (en çok 40).", "ad"))
     elif ad in AYRILMIS:
-        errors.append(f"'{ad}' adı ayrılmış; başka bir ad seçin.")
+        errors.append(M("'{ad}' adı ayrılmış; başka bir ad seçin.", "ad", ad=ad))
     elif mevcut is None and ad in projects:
-        errors.append(f"'{ad}' adında bir proje zaten var.")
+        errors.append(M("'{ad}' adında bir proje zaten var.", "ad", ad=ad))
     if not isinstance(alanlar, dict):
-        return errors + ["Proje alanları bir nesne olmalı."]
+        return errors + [M("Proje alanları bir nesne olmalı.")]
     errors += _alan_hatalari(alanlar, ekleniyor=mevcut is None)
     if mevcut is None or "path" in alanlar:
         errors += _yol_hatalari(cfg, alanlar.get("path"), mevcut)
@@ -384,19 +391,19 @@ def acik_is_engeli(cfg, ad, durum_dir=None):
     if isinstance(vault, str) and vault.strip():
         n = acik_is_sayilari(os.path.expanduser(vault)).get(ad, 0)
         if n:
-            return f"'{ad}' projesinin {n} açık işi var (sırada ya da çalışıyor); önce bitmeli ya da iptal edilmeli."
+            return M("'{ad}' projesinin {n} açık işi var (sırada ya da çalışıyor); önce bitmeli ya da iptal edilmeli.", ad=ad, n=n)
     if durum_dir:
         import akis  # lazy: akis imports danisman, which imports this module
         for state in akis.list_states(durum_dir):
             if state.get("proje") == ad and state.get("durum") not in akis.FINAL_STATES:
-                return f"'{ad}' projesinin açık bir akışı var ({state.get('grup')}); önce kapanmalı."
+                return M("'{ad}' projesinin açık bir akışı var ({grup}); önce kapanmalı.", ad=ad, grup=state.get("grup"))
     return None
 
 
 def proje_sil_engeli(cfg, ad, durum_dir=None):
     """Why project `ad` cannot be removed now (plain Turkish), or None."""
     if ad in YERLESIK:
-        return f"'{ad}' yerleşik bir proje; silinemez (klasörü değiştirilebilir)."
+        return M("'{ad}' yerleşik bir proje; silinemez (klasörü değiştirilebilir).", ad=ad)
     reason = acik_is_engeli(cfg, ad, durum_dir)
     if reason:
         return reason
@@ -405,8 +412,8 @@ def proje_sil_engeli(cfg, ad, durum_dir=None):
         for name in zamanla.names(durum_dir):
             defn = zamanla.load(durum_dir, name)
             if defn and defn.get("proje") == ad and defn.get("durum") != zamanla.REMOVED:
-                return (f"'{ad}' projesinin zamanlanmış işi var ({name}); önce zamanlanmış iş kaldırılmalı "
-                        "(duraklatılmış olsa da).")
+                return M("'{ad}' projesinin zamanlanmış işi var ({ad_zaman}); önce zamanlanmış iş kaldırılmalı "
+                         "(duraklatılmış olsa da).", ad=ad, ad_zaman=name)
     return None
 
 
@@ -415,27 +422,45 @@ def proje_sil_engeli(cfg, ad, durum_dir=None):
 def _anahtarlar(govde, izinli):
     extra = sorted(str(k) for k in govde if k not in izinli)
     if extra:
-        raise Hata(400, ["Bilinmeyen alan: " + ", ".join(extra)])
+        raise Hata(400, [M("Bilinmeyen alan: {alanlar}", alanlar=", ".join(extra))])
 
 
 def islem(config_path, durum_dir, govde):
     """Applies one POST /api/ayarlar body to ofis.json. Returns {islem, ad} (ad: the project, "" for genel).
     Raises Hata (nothing written)."""
     if not isinstance(govde, dict) or govde.get("islem") not in ISLEMLER:
-        raise Hata(400, ["islem şunlardan biri olmalı: " + ", ".join(ISLEMLER)])
+        raise Hata(400, [M("islem şunlardan biri olmalı: {liste}", liste=", ".join(ISLEMLER))])
     kind = govde["islem"]
     if kind == "genel":
-        # the office's name and the owner's name (bin/sahip.py); at least one, each validated, written together
-        _anahtarlar(govde, ("islem", "ofis_adi", "sahip_adi"))
-        if "ofis_adi" not in govde and "sahip_adi" not in govde:
-            raise Hata(400, ["Ofis adı ya da senin adın gönderilmeli."])
+        # the office's name, the owner's name (bin/sahip.py) and the NPC chat switch (bin/npc_sohbet.py); at least
+        # one, each validated, written together
+        _anahtarlar(govde, ("islem",) + GENEL_ALANLARI)
+        if not any(k in govde for k in GENEL_ALANLARI):
+            raise Hata(400, [M("Ofis adı ya da senin adın gönderilmeli.")])
         errors = (ofis_adi_dogrula(govde["ofis_adi"]) if "ofis_adi" in govde else []) + \
-            (sahip.dogrula(govde["sahip_adi"]) if "sahip_adi" in govde else [])
+            (sahip.dogrula(govde["sahip_adi"]) if "sahip_adi" in govde else []) + \
+            (npc_sohbet.dogrula(govde["npc_sohbet"]) if "npc_sohbet" in govde else []) + \
+            (dil.dogrula(govde["dil"]) if "dil" in govde else [])
         if errors:
             raise Hata(400, errors)
         values = {k: govde[k].strip() for k in ("ofis_adi", "sahip_adi") if k in govde}
-        yaz(config_path, lambda data: data.update(values))
-        return {"islem": kind, "ad": ""}
+        if "dil" in govde:
+            values["dil"] = govde["dil"]
+        onceki_dil = []
+
+        def degistir(data):
+            onceki_dil.append(dil.kod(data))
+            data.update(values)
+            if "npc_sohbet" in govde:  # a missing limit keeps the file's (or the default)
+                yeni = govde["npc_sohbet"]
+                data["npc_sohbet"] = {"acik": yeni["acik"], "saatlik_sinir": yeni.get(
+                    "saatlik_sinir", npc_sohbet.ayar(data)["saatlik_sinir"])}
+        yaz(config_path, degistir)
+        out = {"islem": kind, "ad": "", "alanlar": [k for k in GENEL_ALANLARI if k in govde]}
+        if "dil" in govde:
+            # a new language: the server asks for a fresh CEO session (its system text and reminder line change)
+            out["dil_degisti"] = bool(onceki_dil) and onceki_dil[0] != govde["dil"]
+        return out
     if kind == "proje-sil":
         _anahtarlar(govde, ("islem", "ad"))
         ad = govde.get("ad")
@@ -443,7 +468,7 @@ def islem(config_path, durum_dir, govde):
         def sil(data):
             projects = data.get("projects") if isinstance(data.get("projects"), dict) else {}
             if not isinstance(ad, str) or ad not in projects:
-                raise Hata(404, [f"'{ad}' adında bir proje yok."])
+                raise Hata(404, [M("'{ad}' adında bir proje yok.", ad=ad)])
             reason = proje_sil_engeli(data, ad, durum_dir)
             if reason:
                 raise Hata(409, [reason])
@@ -456,7 +481,7 @@ def islem(config_path, durum_dir, govde):
     _anahtarlar(govde, ("islem", "proje"))
     proje = govde.get("proje")
     if not isinstance(proje, dict):
-        raise Hata(400, ["proje bir nesne olmalı (ad, path, description, …)."])
+        raise Hata(400, [M("proje bir nesne olmalı (ad, path, description, …).")])
     ad = proje.get("ad")
     alanlar = {k: v for k, v in proje.items() if k != "ad"}
     ucretsiz_kaldirildi = []
@@ -464,10 +489,10 @@ def islem(config_path, durum_dir, govde):
     def ekle_ya_da_guncelle(data):
         projects = data.get("projects")
         if not isinstance(projects, dict):
-            raise Hata(409, ["ofis.json'da projects bölümü yok; ayarlar yazılmadı."])
+            raise Hata(409, [M("ofis.json'da projects bölümü yok; ayarlar yazılmadı.")])
         if kind == "proje-guncelle":
             if not isinstance(ad, str) or ad not in projects or not isinstance(projects[ad], dict):
-                raise Hata(404, [f"'{ad}' adında bir proje yok."])
+                raise Hata(404, [M("'{ad}' adında bir proje yok.", ad=ad)])
             errors = proje_dogrula(data, ad, alanlar, mevcut=ad)
             if errors:
                 raise Hata(400, errors)
@@ -478,7 +503,7 @@ def islem(config_path, durum_dir, govde):
                 # a new folder: never under open work (Kontrol and the workflow diffs use the folder)
                 reason = acik_is_engeli(data, ad, durum_dir)
                 if reason:
-                    raise Hata(409, ["Klasör şu an değiştirilemez: " + reason])
+                    raise Hata(409, [M("Klasör şu an değiştirilemez: {neden}", "path", neden=reason)])
                 # the free outside reviewers were the owner's decision for the old folder: off for the new one
                 free = data.get("ucretsiz_denetci_projeler")
                 if isinstance(free, list) and ad in free:
@@ -495,7 +520,7 @@ def islem(config_path, durum_dir, govde):
             else:
                 entry[key] = value
         if not entry.get("path") or not entry.get("description"):  # path and description stay required
-            raise Hata(400, ["Klasör yolu ve açıklama boş bırakılamaz."])
+            raise Hata(400, [M("Klasör yolu ve açıklama boş bırakılamaz.")])
         # the order of a new entry: path first, then the rest as written
         if kind == "proje-ekle":
             projects[ad] = {k: entry[k] for k in ALANLAR if k in entry}
@@ -539,10 +564,13 @@ def ozet(cfg, durum_dir=None):
             "sorumlu": dict(entry["sorumlu"]) if isinstance(entry.get("sorumlu"), dict) else {},
             "sistem": dict(entry["sistem"]) if isinstance(entry.get("sistem"), dict) else {},
             "yerlesik": ad in YERLESIK, "acik_is_sayisi": counts.get(ad, 0), "guven": trusted, "ipucu": hint})
-    return {"ofis_adi": ofis_adi(cfg), "sahip_adi": sahip.ad(cfg), "projeler": rows, "kurallar": {
+    return {"ofis_adi": ofis_adi(cfg), "sahip_adi": sahip.ad(cfg), "npc_sohbet": npc_sohbet.ayar(cfg),
+            "dil": dil.kod(cfg), "projeler": rows, "kurallar": {
+        "diller": list(dil.DILLER),
         "ad_regex": AD.pattern, "ayrilmis": list(AYRILMIS), "yerlesik": list(YERLESIK),
         "aciklama_siniri": ACIKLAMA_SINIRI, "notlar_siniri": NOTLAR_SINIRI, "ofis_adi_siniri": OFIS_ADI_SINIRI,
-        "sahip_adi_siniri": sahip.SINIR,
+        "sahip_adi_siniri": sahip.SINIR, "npc_saatlik_en_cok": npc_sohbet.EN_COK_SAATLIK,
+        "npc_saatlik_varsayilan": npc_sohbet.VARSAYILAN_SAATLIK,
         "hassas_sayisi": HASSAS_SAYISI, "sorumlu_alanlari": list(SORUMLU_ALANLARI),
         "sistem_alanlari": list(SISTEM_ALANLARI), "alanlar": list(ALANLAR), "islemler": list(ISLEMLER)}}
 

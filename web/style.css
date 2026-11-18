@@ -826,6 +826,18 @@ body.panel-acik .karakter-kart { display: none; }
 .kart-tablo th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
 .kart-tablo td { padding: 4px 6px; border-bottom: 1px solid var(--surface-2); overflow-wrap: anywhere; vertical-align: top; }
 .kart-tablo tr:last-child td { border-bottom: 0; }
+/* NPC chat (bin/npc_sohbet.py): a staff card's question box, its "Düşünüyor…" state, the answer and its usage line */
+.npc-sohbet-form { display: flex; gap: var(--s1); }
+.npc-sohbet-form[hidden] { display: none; }
+.npc-sohbet-form .input { flex: 1; min-width: 0; }
+.npc-sohbet-form .btn { padding: 6px 12px; font-size: 13px; flex: none; }
+.npc-sohbet-ipucu { margin: 0; font-size: 13px; color: var(--muted); }
+.npc-sohbet-cevap { margin: var(--s1) 0 0; padding: var(--s1) var(--s2); border-radius: var(--r-ctl);
+  background: var(--surface-2); color: var(--text); white-space: pre-line; overflow-wrap: anywhere; }
+.npc-sohbet-cevap.dusunuyor { color: var(--muted); font-style: italic; }
+.npc-sohbet-cevap.hata { color: #9B3434; }
+.npc-sohbet-alt { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.npc-sohbet-ipucu[hidden], .npc-sohbet-cevap[hidden], .npc-sohbet-alt[hidden] { display: none; }
 .karakter-kart-eylemler { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s3); }
 .karakter-kart-eylemler .btn { padding: 6px 12px; font-size: 13px; }
 @media (max-width: 600px) { /* phone: a 16px gutter (left fixed by kartGoster), the label above its value */
@@ -1025,6 +1037,12 @@ body.komuta-acik { overflow: hidden; } /* the page behind never scrolls (a phone
 .ayar-etiket { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: var(--text); }
 .ayar-istege { font-weight: 400; color: var(--muted); }
 .ayar-ipucu { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.ayar-npc { margin-top: var(--s2); }
+.ayar-etiket.ayar-secim { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.ayar-npc .ayar-satir { align-items: center; flex-wrap: wrap; }
+.ayar-npc .ayar-satir .ayar-etiket { margin: 0; }
+.ayar-npc .ayar-satir .ayar-ipucu { margin: 0; }
+.ayar-sayi { width: 6em; flex: none; }
 .ayar-hata { margin: 4px 0 0; font-size: 12px; font-weight: 500; color: #9B3434; }
 .ayar-satir { display: flex; gap: var(--s1); align-items: center; max-width: 480px; }
 .ayar-genel { margin-top: var(--s2); }

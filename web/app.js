@@ -4,7 +4,7 @@ import { Office } from './scene.js';
 import { createDemo } from './demo.js';
 import { tekrarla } from './sayfa-anahtari.js';
 import { dekorEkibi, denetciListesi, niyetler, ofisPlani, projeRengi, salonEkrani, sahip, sahipAyarla } from './ofis-davranis.js';
-import { CALISANLAR_BASLIK, CALISANLAR_BOS, KART_LISTE_SINIRI, calisanGruplari, calisanHucreleri, calisanIpucu, calisanlarTablosu, donusTusu, karakterKarti, kartDuzeni, kaydirmaTusu, mesaiDisiSatiri, modelOzeti, modelSatirlari, orgSemasi, zoomTusu } from './ofis-sahne.js';
+import { CALISANLAR_BASLIK, CALISANLAR_BOS, KART_LISTE_SINIRI, calisanGruplari, calisanHucreleri, calisanIpucu, calisanlarTablosu, donusTusu, karakterKarti, kartDuzeni, kaydirmaTusu, mesaiDisiSatiri, modelOzeti, modelSatirlari, NPC_SORU_SINIRI, npcSohbetKutusu, npcSohbetRolu, npcSohbetSonucu, orgSemasi, zoomTusu } from './ofis-sahne.js';
 import {
   answerResult,
   budgetText, escalationText, postofficeWarnings, queueText,
@@ -26,10 +26,11 @@ import {
   CEO_KAPANIYOR, turAltMetni, turAltlari,
 } from './komuta.js';
 import { yolCizgisi, yollariYenile } from './is-akisi.js';
+import { t as T, N_, aktifDil, ceviriUygula, dilAyarla, dilDinle, yerel } from './i18n.js';
 import { kullanimGorunumu, limitPill } from './limitler.js';
 import {
   GUVEN_IPUCU, SORUMLU, acikIsMetni, eklemeGovdesi, formDegerleri, guncellemeGovdesi, guvenRozeti, istemciHatalari,
-  kirli, genelGovdesi, ofisAdiKirli, silmeSorusu, sonucMetni, sunucuHatalari, bosForm, FORM_ALANLARI,
+  kirli, dilGovdesi, genelGovdesi, npcSohbetGovdesi, ofisAdiKirli, silmeSorusu, sonucMetni, sunucuHatalari, bosForm, FORM_ALANLARI,
 } from './ayarlar.js';
 
 const params = new URLSearchParams(location.search);
@@ -44,6 +45,13 @@ function h(tag, cls, text) {
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
   return e;
+}
+// A text of DOM built once (not redrawn by renderAll): the Turkish key goes into data-t (or data-t-<attr>), so
+// web/i18n.js ceviriUygula translates it again when the language changes. key: a Turkish literal marked with N_().
+function sabitMetin(el, key, attr = '') {
+  el.setAttribute(attr ? `data-t-${attr}` : 'data-t', key);
+  if (attr) el.setAttribute(attr, T(key)); else el.textContent = T(key);
+  return el;
 }
 
 // --- Obsidian links: every [[note]] the page shows opens that note in the Obsidian app (owner decision 2026-11-13) ---
@@ -65,17 +73,17 @@ function notHref(ad, tercih = '') {
 function notLinki(ad, gorunen, tercih = '', cls = 'obs-link') {
   const a = h('a', cls, gorunen || ad);
   const hint = tercih || notKlasoru(ad, '');
-  a.title = 'Obsidian\'da aç';
+  a.title = T('Obsidian\'da aç');
   notHref(ad, hint).then((href) => {
     if (href) a.setAttribute('href', href);
-    else { a.classList.add('is-missing'); a.title = 'Not Obsidian\'da bulunamadı'; }
+    else { a.classList.add('is-missing'); a.title = T('Not Obsidian\'da bulunamadı'); }
   });
   a.addEventListener('click', (e) => {
     e.stopPropagation();  // never also opens the card or row the link sits in
     if (a.getAttribute('href')) return;
     e.preventDefault();
     notHref(ad, hint).then((href) => {
-      if (href) { a.setAttribute('href', href); a.click(); } else toast('Bu not Obsidian\'da bulunamadı.');
+      if (href) { a.setAttribute('href', href); a.click(); } else toast(T('Bu not Obsidian\'da bulunamadı.'));
     });
   });
   return a;
@@ -95,8 +103,9 @@ const pad = (n) => String(n).padStart(2, '0');
 function fmtUsage(n) {
   n = Number(n) || 0;
   if (n < 1000) return String(n);
-  if (n < 1e6) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace('.', ',') + 'k';
-  return (n / 1e6).toFixed(1).replace('.', ',') + 'M';
+  const virgul = aktifDil() === 'en' ? '.' : ',';
+  if (n < 1e6) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace('.', virgul) + 'k';
+  return (n / 1e6).toFixed(1).replace('.', virgul) + 'M';
 }
 function parseTime(v) {
   if (!v) return null;
@@ -107,28 +116,30 @@ const hhmm = (d) => (d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '');
 function rel(d) {
   if (!d) return '';
   const s = (Date.now() - d.getTime()) / 1000;
-  if (s < 60) return 'şimdi';
-  if (s < 3600) return `${Math.floor(s / 60)} dk`;
-  if (s < 86400 && d.getDate() === new Date().getDate()) return `${Math.floor(s / 3600)} sa`;
+  if (s < 60) return T('şimdi');
+  if (s < 3600) return T('{n} dk', { n: Math.floor(s / 60) });
+  if (s < 86400 && d.getDate() === new Date().getDate()) return T('{n} sa', { n: Math.floor(s / 3600) });
   return hhmm(d);
 }
 const VERBS = {
-  Edit: 'yazıyor', Write: 'yazıyor', MultiEdit: 'yazıyor', NotebookEdit: 'yazıyor', Read: 'okuyor',
-  Bash: 'komut çalıştırıyor', Grep: 'arıyor', Glob: 'arıyor', SendMessage: 'mesaj gönderiyor', WebFetch: 'web okuyor',
-  WebSearch: 'web arıyor', Agent: 'yardımcı çalıştırıyor', Skill: 'beceri kullanıyor',
+  Edit: N_('yazıyor'), Write: N_('yazıyor'), MultiEdit: N_('yazıyor'), NotebookEdit: N_('yazıyor'), Read: N_('okuyor'),
+  Bash: N_('komut çalıştırıyor'), Grep: N_('arıyor'), Glob: N_('arıyor'), SendMessage: N_('mesaj gönderiyor'),
+  WebFetch: N_('web okuyor'), WebSearch: N_('web arıyor'), Agent: N_('yardımcı çalıştırıyor'), Skill: N_('beceri kullanıyor'),
 };
 function toolText(tool, fallback) {
   if (!tool) return fallback;
-  const verb = VERBS[tool.name] || `${tool.name} kullanıyor`;
+  const verb = VERBS[tool.name] ? T(VERBS[tool.name]) : T('{ad} kullanıyor', { ad: tool.name });
   return tool.target ? `${verb}: ${tool.target}` : verb;
 }
 const STATUS_TR = {
-  calisiyor: 'çalışıyor', bekliyor: 'cevap bekliyor', uyuyor: 'uyuyor', bitti: 'bitti', tikandi: 'takıldı',
-  basarisiz: 'başarısız', baslatiliyor: 'başlatılıyor', busy: 'çalışıyor', idle: 'hazır', dormant: 'uyuyor',
-  absent: 'başlamadı', unknown: 'bilinmiyor', waiting: 'izin bekliyor',
-  sirada: 'sırada', 'karar-bekliyor': 'karar bekliyor', incelemede: 'incelemede', iptal: 'iptal edildi',
-  kontrolde: 'kontrolde',
+  calisiyor: N_('çalışıyor'), bekliyor: N_('cevap bekliyor'), uyuyor: N_('uyuyor'), bitti: N_('bitti'),
+  tikandi: N_('takıldı'), basarisiz: N_('başarısız'), baslatiliyor: N_('başlatılıyor'), busy: N_('çalışıyor'),
+  idle: N_('hazır'), dormant: N_('uyuyor'), absent: N_('başlamadı'), unknown: N_('bilinmiyor'),
+  waiting: N_('izin bekliyor'), sirada: N_('sırada'), 'karar-bekliyor': N_('karar bekliyor'),
+  incelemede: N_('incelemede'), iptal: N_('iptal edildi'), kontrolde: N_('kontrolde'),
 };
+// a status code as a word in the display language (the code itself when unknown)
+const durumAdi = (s) => (STATUS_TR[s] ? T(STATUS_TR[s]) : s);
 
 // --- app state ---
 let state = null;
@@ -158,7 +169,7 @@ try {
     onActor: (a, at) => openActor(a, at) });
 } catch (e) {
   console.error('3D scene unavailable', e);
-  $('scene').appendChild(h('p', 'empty', '3D görünüm bu tarayıcıda açılamadı; diğer paneller çalışmaya devam ediyor.'));
+  $('scene').appendChild(sabitMetin(h('p', 'empty'), N_('3D görünüm bu tarayıcıda açılamadı; diğer paneller çalışmaya devam ediyor.')));
 }
 
 // The view controls (+ / − / ↺ / ↻ / ⟲) and the keys + / − / Q / E / 0 (not while typing, not with Ctrl/Meta/Alt, not
@@ -210,11 +221,11 @@ function kaydirIpucu() {
   const box = h('div', 'kaydir-ipucu');
   box.id = 'kaydir-ipucu';
   box.setAttribute('role', 'note');
-  box.appendChild(h('span', '', 'Sürükle ya da iki parmakla kaydır · Sıkıştırarak yakınlaştır · Sağ tık ya da ↺ ↻: döndür'));
+  box.appendChild(sabitMetin(h('span', ''), N_('Sürükle ya da iki parmakla kaydır · Sıkıştırarak yakınlaştır · Sağ tık ya da ↺ ↻: döndür')));
   const x = h('button', 'kaydir-ipucu-kapat', '×');
   x.type = 'button';
-  x.setAttribute('aria-label', 'İpucunu kapat');
-  x.title = 'Kapat';
+  sabitMetin(x, N_('İpucunu kapat'), 'aria-label');
+  sabitMetin(x, N_('Kapat'), 'title');
   x.addEventListener('click', () => {
     box.remove();
     try { window.localStorage.setItem(KEY, '1'); } catch (e) { /* not remembered */ }
@@ -321,27 +332,27 @@ function pushFeed(text, color, time = new Date(), detail = null, tur = 'sistem',
 function diffState(prev, cur) {
   if (!prev) {
     for (const t of cur.tasks.slice(0, 6).reverse()) {
-      feed.unshift({ text: `${t.project} · ${feedText(t.title, 80) || 'iş'} (${STATUS_TR[t.status] || t.status})`, color: dotColor(t.project), time: parseTime(t.started), detail: { kind: 'task', note: t.note },
+      feed.unshift({ text: `${t.project} · ${feedText(t.title, 80) || T('iş')} (${durumAdi(t.status)})`, color: dotColor(t.project), time: parseTime(t.started), detail: { kind: 'task', note: t.note },
         tur: t.status === 'bitti' ? 'is-bitti' : t.status === 'tikandi' || t.status === 'basarisiz' ? 'takildi' : 'is' });
     }
-    for (const d of cur.decisions) feed.unshift({ text: `${d.project} soru sordu: ${d.title}`, color: '#F2784B', time: parseTime(d.asked), detail: decisionDetail(d), tur: 'soru' });
+    for (const d of cur.decisions) feed.unshift({ text: T('{proje} soru sordu: {baslik}', { proje: d.project, baslik: d.title }), color: '#F2784B', time: parseTime(d.asked), detail: decisionDetail(d), tur: 'soru' });
     renderFeed();
     return;
   }
   const prevTasks = new Map(prev.tasks.map((t) => [t.note, t]));
   for (const t of [...cur.tasks].reverse()) {
     const before = prevTasks.get(t.note);
-    if (!before) pushFeed(`${t.project} işe başladı: ${feedText(t.title, 80) || 'yeni iş'}`, dotColor(t.project), new Date(), { kind: 'task', note: t.note }, 'is-basladi');
+    if (!before) pushFeed(T('{proje} işe başladı: {baslik}', { proje: t.project, baslik: feedText(t.title, 80) || T('yeni iş') }), dotColor(t.project), new Date(), { kind: 'task', note: t.note }, 'is-basladi');
     else if (before.status !== t.status) {
-      if (t.status === 'bitti') pushFeed(`${t.project} işi bitirdi: ${feedText(t.title, 80)}`, '#4E9F76', new Date(), { kind: 'task', note: t.note }, 'is-bitti');
-      else if (t.status === 'tikandi' || t.status === 'basarisiz') pushFeed(`${t.project} takıldı: ${feedText(t.title, 80)}`, '#C0504D', new Date(), { kind: 'task', note: t.note }, 'takildi');
+      if (t.status === 'bitti') pushFeed(T('{proje} işi bitirdi: {baslik}', { proje: t.project, baslik: feedText(t.title, 80) }), '#4E9F76', new Date(), { kind: 'task', note: t.note }, 'is-bitti');
+      else if (t.status === 'tikandi' || t.status === 'basarisiz') pushFeed(T('{proje} takıldı: {baslik}', { proje: t.project, baslik: feedText(t.title, 80) }), '#C0504D', new Date(), { kind: 'task', note: t.note }, 'takildi');
     }
   }
   const prevDec = new Set(prev.decisions.map((d) => d.note));
   const curDec = new Set(cur.decisions.map((d) => d.note));
-  for (const d of cur.decisions) if (!prevDec.has(d.note)) pushFeed(`${d.project} soru sordu: ${d.title}`, '#F2784B', new Date(), decisionDetail(d), 'soru');
+  for (const d of cur.decisions) if (!prevDec.has(d.note)) pushFeed(T('{proje} soru sordu: {baslik}', { proje: d.project, baslik: d.title }), '#F2784B', new Date(), decisionDetail(d), 'soru');
   for (const d of prev.decisions) {
-    if (!curDec.has(d.note)) { pushFeed(`${d.project} sorusu cevaplandı`, '#4E9F76', new Date(), null, 'cevaplandi'); sentLocal.delete(d.note); }
+    if (!curDec.has(d.note)) { pushFeed(T('{proje} sorusu cevaplandı', { proje: d.project }), '#4E9F76', new Date(), null, 'cevaplandi'); sentLocal.delete(d.note); }
   }
 }
 
@@ -385,7 +396,7 @@ function isToastlari(yeni) {
     makeClickable(text, () => toastAc(item));
     const close = h('button', 'icon-btn', '×');
     close.type = 'button';
-    close.setAttribute('aria-label', 'Kapat');
+    close.setAttribute('aria-label', T('Kapat'));
     close.addEventListener('click', () => toastKapat(item));
     el.append(text, close);
     item.el = el;
@@ -416,7 +427,7 @@ function renderCeoRozet() {
   const metin = okunmamisMetni(ceoOkunmamis);
   sayi.textContent = metin;
   sayi.hidden = !metin;
-  btn.setAttribute('aria-label', metin ? `CEO ile sohbet · ${ceoOkunmamis} okunmamış mesaj` : 'CEO ile sohbet');
+  btn.setAttribute('aria-label', metin ? T('CEO ile sohbet · {n} okunmamış mesaj', { n: ceoOkunmamis }) : T('CEO ile sohbet'));
   renderSekmeBasligi();
 }
 // A click on a "CEO yazdı" toast: open the chat scrolled to that line.
@@ -443,16 +454,16 @@ function applyChat(messages) {
     for (const m of fresh) {
       const when = parseTime(m.time) || new Date();
       if (m.role === 'ceo') {
-        pushFeed(`CEO: ${feedText(m.text)}`, '#F2784B', when, { kind: 'message', kicker: 'CEO', title: 'CEO mesajı', text: m.text, time: when }, 'ceo');
+        pushFeed(`CEO: ${feedText(m.text)}`, '#F2784B', when, { kind: 'message', kicker: 'CEO', title: T('CEO mesajı'), text: m.text, time: when }, 'ceo');
       } else if (m.role === 'system' && m.kind === 'notice') {
         const c = bildirimKarti(m.text);
-        pushFeed(`Ofis: ${feedText(c.baslik)}`, '#A79B8C', when,
-          { kind: 'message', kicker: `Ofis · ${c.etiket}`, title: c.baslik, text: c.ham || c.baslik, time: when }, 'bildirim', m);
+        pushFeed(T('Ofis: {metin}', { metin: feedText(c.baslik) }), '#A79B8C', when,
+          { kind: 'message', kicker: T('Ofis · {etiket}', { etiket: c.etiket }), title: c.baslik, text: c.ham || c.baslik, time: when }, 'bildirim', m);
       } else if (m.role === 'system' && m.from) {
         const r = parseRelay(m);
-        pushFeed(`${r.project} · ${r.label.toLocaleLowerCase('tr-TR')}: ${feedText(r.text)}`, '#A79B8C', when,
-          { kind: 'message', kicker: `${r.project} · ${r.label}`, title: `${r.project} mesajı`, text: r.text, time: when, session: m.from }, 'proje');
-      } else if (m.role === 'system') pushFeed(feedText(m.text, 120), '#A79B8C', when, { kind: 'message', kicker: 'Sistem', title: 'Sistem mesajı', text: m.text, time: when }, 'sistem');
+        pushFeed(`${r.project} · ${r.label.toLocaleLowerCase(yerel())}: ${feedText(r.text)}`, '#A79B8C', when,
+          { kind: 'message', kicker: `${r.project} · ${r.label}`, title: T('{proje} mesajı', { proje: r.project }), text: r.text, time: when, session: m.from }, 'proje');
+      } else if (m.role === 'system') pushFeed(feedText(m.text, 120), '#A79B8C', when, { kind: 'message', kicker: T('Sistem'), title: T('Sistem mesajı'), text: m.text, time: when }, 'sistem');
     }
   }
   if (chatSeeded) ceoYazdi(fresh);
@@ -506,6 +517,7 @@ function turAlti(tur) {
 
 // --- rendering ---
 function renderAll() {
+  renderDil();
   renderOfisAdi();
   renderSahipAdi();
   renderPostoffice();
@@ -522,6 +534,32 @@ function renderAll() {
   renderYakala();
   yollariYenile(document, stateTask);  // the jobs' progress lines under the CEO's "İş açıldı" lines
 }
+
+// The display language (/api/state.ofis.dil, ofis.json dil, the Ayarlar tab; web/i18n.js): a change re-translates the
+// static HTML (data-t) at once through the listener below; the rest follows from this renderAll. A state without it
+// (the demo, an older server) keeps the remembered language.
+function renderDil() {
+  const d = state && state.ofis && state.ofis.dil;
+  if (typeof d === 'string' && d !== aktifDil()) dilAyarla(d);
+}
+dilDinle(() => {
+  ceviriUygula(document); // the static HTML and the once-built DOM marked by sabitMetin
+  if ($('ayar-dil')) $('ayar-dil').value = aktifDil();
+  ofisAdi = null; // the title and the sign are drawn again
+  // the parts redrawn only when their key changes are drawn again by the renderAll that follows
+  schedKey = null; modelKey = null; kadroKey = null; calisanlarIds = null; semaKey = null; suAnKey = ''; chatRozetKey = '';
+  if ($('calisanlar-headrow')) $('calisanlar-headrow').replaceChildren();
+  if (kart) kart.anahtar = null;
+  // parts renderAll does not draw: the chat, the feed, the open usage popup and the open tabs
+  renderChat(false);
+  renderFeed();
+  if ($('limit-pill-detay') && !$('limit-pill-detay').hidden) renderKullanim();
+  if (!$('overlay-raporlar').hidden) loadReports();
+  if (!$('overlay-kalite').hidden) loadQuality();
+  if (!$('overlay-ayarlar').hidden && ayarlar) renderAyarlar(ayarlar);
+  if (komutaOpen()) renderAdimlar();
+});
+ceviriUygula(document); // the first paint in the remembered language (localStorage)
 
 // The office's name (/api/state.ofis.adi, ofis.json ofis_adi, the Ayarlar tab; default "Ofis"): the tab title, the
 // top bar and the scene's lobby sign / hall screen. Text only; redrawn only when it changes.
@@ -548,7 +586,7 @@ function renderSahipAdi() {
 }
 
 // "Yakala" (bin/yakala.py): shown only while ofis.json yakala.acik; the last few captures as text (textContent only)
-const YAKALA_DURUM = { bekliyor: 'sırada bekliyor', 'is-eklendi': 'Ar-Ge inceliyor', bitti: 'incelendi', kapandi: 'tamamlanamadı' };
+const YAKALA_DURUM = { bekliyor: N_('sırada bekliyor'), 'is-eklendi': N_('Ar-Ge inceliyor'), bitti: N_('incelendi'), kapandi: N_('tamamlanamadı') };
 function renderYakala() {
   const y = state && state.yakala && typeof state.yakala === 'object' ? state.yakala : null;
   $('yakala-yap').hidden = !(y && y.acik);
@@ -556,9 +594,9 @@ function renderYakala() {
   ul.textContent = '';
   for (const it of (y && Array.isArray(y.son) ? y.son : []).slice(0, 5)) {
     const li = document.createElement('li');
-    let t = `${String(it.baslik || '').slice(0, 60)} — ${YAKALA_DURUM[it.durum] || String(it.durum || '')}`;
-    if (it.oneri) t += ` · öneri: ${String(it.oneri).slice(0, 20)}`;
-    else if (it.hata) t += ' · iş eklenemedi, yeniden denenecek';
+    let t = `${String(it.baslik || '').slice(0, 60)} — ${YAKALA_DURUM[it.durum] ? T(YAKALA_DURUM[it.durum]) : String(it.durum || '')}`;
+    if (it.oneri) t += ` · ${T('öneri: {oneri}', { oneri: String(it.oneri).slice(0, 20) })}`;
+    else if (it.hata) t += ` · ${T('iş eklenemedi, yeniden denenecek')}`;
     li.textContent = t;
     ul.appendChild(li);
   }
@@ -582,7 +620,7 @@ function renderTop() {
   renderLimit();
   const pill = $('live-pill');
   pill.classList.toggle('is-down', !online);
-  if (!online) { $('live-text').textContent = 'Sunucu kapalı'; renderCalisanlar(); return; }
+  if (!online) { $('live-text').textContent = T('Sunucu kapalı'); renderCalisanlar(); return; }
   const n = state ? state.summary.working + (state.ceo.state === 'busy' ? 1 : 0) : 0;
   // one pill: who works, the running limit only at the limit, the approval backlog's hold (canliPill)
   const live = canliPill(state && state.summary, n);
@@ -591,14 +629,14 @@ function renderTop() {
   $('live-text').textContent = live.metin;
   $('live-count').textContent = String(n);
   pill.title = live.baslik;
-  pill.setAttribute('aria-label', `${live.metin} — şu an iş başında olanları göster`);
+  pill.setAttribute('aria-label', T('{metin} — şu an iş başında olanları göster', { metin: live.metin }));
   const birikti = onayBiriktiMetni(state && state.summary);
   const chip = $('onay-birikti');  // a top-bar chip (the owner, 2026-11-13: no longer a strip in the right panel)
   if (chip) {
     chip.hidden = !birikti;
     $('onay-birikti-text').textContent = birikti;
     const ob = state && state.summary && state.summary.onay_birikti;
-    $('onay-birikti-etiket').textContent = ob && ob.bekleyen ? `${ob.bekleyen} onay bekliyor` : 'Onay birikti';
+    $('onay-birikti-etiket').textContent = ob && ob.bekleyen ? T('{n} onay bekliyor', { n: ob.bekleyen }) : T('Onay birikti');
     chip.title = birikti;
     if (!birikti) uyariKapat('onay-birikti');
   }
@@ -616,7 +654,7 @@ function renderPostoffice() {
   const box = $('po-warn');
   if (!box) return;
   box.hidden = lines.length === 0;
-  $('po-warn-etiket').textContent = lines.length > 1 ? `İletişim uyarısı · ${lines.length}` : 'İletişim uyarısı';
+  $('po-warn-etiket').textContent = lines.length > 1 ? T('İletişim uyarısı · {n}', { n: lines.length }) : T('İletişim uyarısı');
   $('po-warn-list').replaceChildren(...lines.map((line) => h('li', null, line)));
   if (!lines.length) uyariKapat('po-warn');
 }
@@ -726,7 +764,7 @@ function renderSchedules() {
   $('sched-empty').hidden = rows.length > 0;
   $('sched-runs-title').hidden = rows.length === 0;
   $('sched-body').replaceChildren(...rows.map((r) => {
-    const tr = h('tr', r.durum === 'duraklatıldı' ? 'is-paused' : null);
+    const tr = h('tr', r.duraklatildi ? 'is-paused' : null);
     const ad = h('td');
     ad.append(notLinki(r.ad, r.ad, 'Zamanlanmis'), h('div', 'muted', r.baslik));
     const durum = h('td', null, r.durum);
@@ -741,12 +779,12 @@ function renderSchedules() {
   $('sched-runs').replaceChildren(...rows.map((r) => {
     const box = h('section', 'sched-run');
     box.append(h('h4', null, `${r.baslik} · ${r.proje}`));
-    if (!r.kosular.length) { box.append(h('p', 'muted', 'Henüz koşmadı.')); return box; }
+    if (!r.kosular.length) { box.append(h('p', 'muted', T('Henüz koşmadı.'))); return box; }
     const ul = h('ul', 'sched-run-list');
     for (const x of r.kosular) {
       const li = h('li');
       if (x.zaman) li.append(h('time', null, x.zaman));
-      li.append(notLinki(x.is, x.is, 'Isler'), h('span', `sched-sonuc sonuc-${x.sonuc === 'bitti' ? 'ok' : x.sonuc === 'sürüyor' ? 'acik' : 'kotu'}`, x.sonuc));
+      li.append(notLinki(x.is, x.is, 'Isler'), h('span', `sched-sonuc sonuc-${x.sonuc === T('bitti') ? 'ok' : x.sonuc === T('sürüyor') ? 'acik' : 'kotu'}`, x.sonuc));
       if (x.son_is) li.append(document.createTextNode(' → '), notLinki(x.son_is, x.son_is, 'Isler'));
       ul.append(li);
     }
@@ -781,10 +819,10 @@ function renderModels() {
 
 function greetingWord() {
   const hr = new Date().getHours();
-  if (hr >= 5 && hr < 11) return 'Günaydın.';
-  if (hr >= 11 && hr < 18) return 'İyi günler.';
-  if (hr >= 18 && hr < 23) return 'İyi akşamlar.';
-  return 'İyi geceler.';
+  if (hr >= 5 && hr < 11) return T('Günaydın.');
+  if (hr >= 11 && hr < 18) return T('İyi günler.');
+  if (hr >= 18 && hr < 23) return T('İyi akşamlar.');
+  return T('İyi geceler.');
 }
 
 // The greeting folds into a small pill a few seconds after load (it would cover the floor's top-left corner); a click
@@ -816,19 +854,19 @@ const SELAM_KEY = 'ofis.selam.acik';
 function renderGreeting() {
   $('greeting-title').textContent = greetingWord();
   if (!state) {
-    $('greeting-text').textContent = online ? 'Ofisin durumu yükleniyor…' : 'Sunucuya ulaşılamıyor. Sunucu çalışıyor mu? (python3 bin/server.py)';
+    $('greeting-text').textContent = online ? T('Ofisin durumu yükleniyor…') : T('Sunucuya ulaşılamıyor. Sunucu çalışıyor mu? (python3 bin/server.py)');
     return;
   }
   const s = state.summary;
-  const parts = [s.tasks_today > 0 ? `Bugün ${s.tasks_today} iş başladı.` : 'Bugün henüz yeni iş başlamadı.'];
-  const people = [`${s.working} ajan çalışıyor`];
-  if (s.waiting) people.push(`${s.waiting} ajan cevabını bekliyor`);
-  people.push(`${s.sleeping} ajan uyuyor`);
+  const parts = [s.tasks_today > 0 ? T('Bugün {n} iş başladı.', { n: s.tasks_today }) : T('Bugün henüz yeni iş başlamadı.')];
+  const people = [T('{n} ajan çalışıyor', { n: s.working })];
+  if (s.waiting) people.push(T('{n} ajan cevabını bekliyor', { n: s.waiting }));
+  people.push(T('{n} ajan uyuyor', { n: s.sleeping }));
   parts.push(people.join(', ') + '.');
-  parts.push(`Bugün toplam ${fmtUsage(s.usage_today)} token kullanıldı.`);
-  parts.push(s.pending_decisions ? `Seni bekleyen ${s.pending_decisions} soru var.` : 'Bekleyen soru yok.');
-  if (!online) parts.push('Sunucu şu an kapalı; son bilinen durum gösteriliyor.');
-  else if (state.agents_error) parts.push('Oturum listesi okunamadı; durumlar eksik olabilir.');
+  parts.push(T('Bugün toplam {token} token kullanıldı.', { token: fmtUsage(s.usage_today) }));
+  parts.push(s.pending_decisions ? T('Seni bekleyen {n} soru var.', { n: s.pending_decisions }) : T('Bekleyen soru yok.'));
+  if (!online) parts.push(T('Sunucu şu an kapalı; son bilinen durum gösteriliyor.'));
+  else if (state.agents_error) parts.push(T('Oturum listesi okunamadı; durumlar eksik olabilir.'));
   $('greeting-text').textContent = parts.join(' ');
 }
 
@@ -908,6 +946,7 @@ function openActor(a, at) {
 function kartKapat() {
   if (!kart) return;
   kart = null;
+  sohbet = null; // the question box and its answer go with the card
   const el = $('karakter-kart');
   if (el) el.hidden = true;
 }
@@ -918,7 +957,7 @@ function kartGoster(place = false) {
   kartVeriYukle(a);
   const k = karakterKarti(a, state, Date.now(), { aktorler: prevActors, veri: kartVeri });
   // rebuilt only when the card's content changed: a rebuild every second lost clicks on its buttons and the focus
-  const anahtar = JSON.stringify(k);
+  const anahtar = JSON.stringify([k, npcSohbetRolu(a) && npcSohbetKutusu(state, DEMO)]);
   let el = $('karakter-kart');
   if (el && !place && kart.anahtar === anahtar && !el.hidden) return;
   kart.anahtar = anahtar;
@@ -926,7 +965,7 @@ function kartGoster(place = false) {
     el = h('section', 'karakter-kart card');
     el.id = 'karakter-kart';
     el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-label', 'Karakter kartı');
+    el.setAttribute('aria-label', T('Karakter kartı'));
     document.body.appendChild(el);
   }
   const head = h('header', 'karakter-kart-head');
@@ -935,7 +974,7 @@ function kartGoster(place = false) {
   if (k.alt) titles.append(h('span', 'karakter-kart-alt', k.alt));
   const x = h('button', 'icon-btn', '×');
   x.type = 'button';
-  x.setAttribute('aria-label', 'Kapat');
+  x.setAttribute('aria-label', T('Kapat'));
   x.addEventListener('click', () => kartKapat());
   head.append(titles, x);
   // the folding parts (a group, a long list's rest) the viewer opened stay open when the card is rebuilt
@@ -948,7 +987,14 @@ function kartGoster(place = false) {
     b.addEventListener('click', () => kartEylem(e));
     acts.append(b);
   }
-  el.replaceChildren(head, ...(govde.childElementCount ? [govde] : []), ...(k.eylemler.length ? [acts] : []));
+  // the question box (NPC chat) stays in place across rebuilds — never removed and re-inserted — so typing, the focus
+  // and a pending answer survive
+  const soru = sohbetKutusu(a);
+  for (const c of [...el.children]) if (c !== soru) c.remove();
+  const once = [head, ...(govde.childElementCount ? [govde] : [])];
+  const sonra = k.eylemler.length ? [acts] : [];
+  if (soru && soru.parentNode === el) { soru.before(...once); soru.after(...sonra); }
+  else el.append(...once, ...(soru ? [soru] : []), ...sonra);
   el.hidden = false;
   if (!place) return;
   // near the click, kept inside the window
@@ -958,6 +1004,69 @@ function kartGoster(place = false) {
   el.style.left = `${left}px`;
   el.style.top = `${top}px`;
 }
+// NPC chat (owner decision 2026-11-18, "gerçekten akıllı NPC'ler"; bin/npc_sohbet.py): a staff card's question box. The
+// owner types a short question; POST /api/npc-sohbet answers in the role's voice from the office's own data. One box
+// per opened card (sohbet), kept across the card's rebuilds; the answer is set with textContent only, never as HTML.
+// Off in ofis.json (or the demo): only a one-line hint.
+let sohbet = null; // {id, rol, el, form, input, btn, ipucu, cevap, alt, bekliyor}
+function sohbetKutusu(a) {
+  const rol = npcSohbetRolu(a);
+  if (!rol) return null;
+  if (!sohbet || sohbet.id !== a.id || sohbet.rol !== rol) sohbet = sohbetYap(a.id, rol);
+  const k = npcSohbetKutusu(state, DEMO);
+  sohbet.form.hidden = !k.kutu;
+  sohbet.ipucu.textContent = k.ipucu;
+  sohbet.ipucu.hidden = !k.ipucu;
+  return sohbet.el;
+}
+function sohbetYap(id, rol) {
+  const el = h('section', 'kart-bolum npc-sohbet');
+  el.append(sabitMetin(h('h3', 'kart-bolum-baslik'), N_('Soru sor')));
+  const form = h('form', 'npc-sohbet-form');
+  form.noValidate = true;
+  form.setAttribute('autocomplete', 'off');
+  const input = h('input', 'input');
+  input.type = 'text';
+  input.maxLength = NPC_SORU_SINIRI;
+  sabitMetin(input, N_('Örn. Bugün ne oldu?'), 'placeholder');
+  sabitMetin(input, N_('Soru'), 'aria-label');
+  const btn = sabitMetin(h('button', 'btn btn-soft'), N_('Sor'));
+  btn.type = 'submit';
+  form.append(input, btn);
+  const ipucu = h('p', 'npc-sohbet-ipucu');
+  const cevap = h('p', 'npc-sohbet-cevap');
+  cevap.hidden = true;
+  cevap.setAttribute('aria-live', 'polite');
+  const alt = h('p', 'npc-sohbet-alt');
+  alt.hidden = true;
+  el.append(form, ipucu, cevap, alt);
+  const s = { id, rol, el, form, input, btn, ipucu, cevap, alt, bekliyor: false };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const soru = input.value.trim();
+    if (!soru || s.bekliyor) return;
+    s.bekliyor = true;
+    btn.disabled = true;
+    cevap.classList.remove('hata');
+    cevap.classList.add('dusunuyor');
+    cevap.textContent = T('Düşünüyor…');
+    cevap.hidden = false;
+    alt.hidden = true;
+    let r;
+    try { r = await post('/api/npc-sohbet', { npc: rol, soru }); } catch { r = { status: 0, data: {} }; }
+    s.bekliyor = false;
+    btn.disabled = false;
+    const out = npcSohbetSonucu(r.status, r.data);
+    cevap.classList.remove('dusunuyor');
+    cevap.classList.toggle('hata', !out.cevap);
+    cevap.textContent = out.cevap || out.hata;
+    alt.textContent = out.alt || '';
+    alt.hidden = !out.alt;
+    if (out.cevap) input.value = '';
+  });
+  return s;
+}
+
 // The one character card component (owner decision 2026-11-13, "kartlar okunaklı olsun"): every character's card — staff,
 // managers, kadro, jobs, reviewers, the CEO — is drawn here from kartDuzeni(k): titled sections; label / value rows (a
 // load or budget figure with a status bar); lists, folded after KART_LISTE_SINIRI - 1 lines into a details element; the
@@ -993,7 +1102,7 @@ function kartIcerigi(k, acik = new Set()) {
           fazla = h('details', 'kart-fazla');
           fazla.dataset.anahtar = `fazla:${b.baslik}`;
           if (acik.has(fazla.dataset.anahtar)) fazla.open = true;
-          fazla.append(h('summary', null, `${maddeler - KART_LISTE_SINIRI + 1} satır daha`));
+          fazla.append(h('summary', null, T('{n} satır daha', { n: maddeler - KART_LISTE_SINIRI + 1 })));
           sec.append(fazla);
           ul = null;
         }
@@ -1129,7 +1238,7 @@ function renderCalisanlar() {
   }
   const empty = $('calisanlar-empty');
   empty.hidden = rows.length > 0;
-  empty.textContent = online ? CALISANLAR_BOS : 'Sunucu kapalı; çalışanlar okunamıyor.';
+  empty.textContent = online ? CALISANLAR_BOS : T('Sunucu kapalı; çalışanlar okunamıyor.');
   if (!online) empty.hidden = false;
   const shown = online ? rows : [];
   calisanlarRows.clear();
@@ -1217,7 +1326,7 @@ document.addEventListener('keydown', (e) => {  // capture: Esc closes the popove
 let semaFrom = null;
 let semaKey = null;
 // 'kota': a reviewer stopped by its quota — not at the Otel (only staff who stay there show "otelde")
-const SEMA_YER = { ofiste: 'ofiste', nobette: 'nöbette', evde: 'otelde', kota: 'kota doldu', cikiyor: 'çıkıyor' };
+const SEMA_YER = { ofiste: N_('ofiste'), nobette: N_('nöbette'), evde: N_('otelde'), kota: N_('kota doldu'), cikiyor: N_('çıkıyor') };
 function semaOpen() { return !$('sema').hidden; }
 function semaDugumu(n) {
   const li = h('li', 'sema-dugum');
@@ -1227,7 +1336,7 @@ function semaDugumu(n) {
   el.append(h('b', null, n.ad));
   if (n.alt) el.append(h('span', 'sema-alt', n.alt));
   if (n.ekip) el.append(h('span', 'sema-ekip', n.ekip)); // a decorative group line ("QA ekibi: 3 kişi · görünüm amaçlı")
-  if (n.yer && SEMA_YER[n.yer]) el.append(h('span', 'sema-yer', SEMA_YER[n.yer]));
+  if (n.yer && SEMA_YER[n.yer]) el.append(h('span', 'sema-yer', T(SEMA_YER[n.yer])));
   if (n.durum) el.append(h('span', 'sema-durum', n.durum));
   if (kart) {
     el.addEventListener('click', () => {
@@ -1307,17 +1416,19 @@ function buildAsk(d) {
   const ta = h('textarea', 'input');
   ta.rows = 2;
   ta.maxLength = 4000;
-  ta.placeholder = 'Cevabın…';
-  ta.setAttribute('aria-label', `${d.project} sorusuna cevap`);
+  ta.placeholder = T('Cevabın…');
+  ta.setAttribute('aria-label', T('{proje} sorusuna cevap', { proje: d.project }));
   const evidence = h('div', 'ask-evidence');  // a workflow's approval card: evidence first, the summary last
   const quiz = h('div', 'ask-quiz');  // the optional "Kendini yokla": answers hidden behind "Cevabı göster"
   const secenekler = h('div', 'ask-secenekler');  // the CEO's own question (ceo-sorusu): one button per option
   secenekler.hidden = true;
   const actions = h('div', 'ask-actions');
-  const yes = h('button', 'btn btn-soft btn-sm', 'Onayla'); yes.type = 'button';
-  const no = h('button', 'btn btn-soft btn-sm', 'Reddet'); no.type = 'button';
-  const send = h('button', 'btn btn-primary btn-sm', 'Cevapla'); send.type = 'button';
-  const sent = h('span', 'ask-sent', 'Cevap iletildi — CEO notu güncelleyecek.');
+  // the button texts follow the language (data-t); the answers they send ('Onaylıyorum', 'Hayır') stay Turkish:
+  // the CEO's `cevapla` reads a plain approval from them
+  const yes = sabitMetin(h('button', 'btn btn-soft btn-sm'), N_('Onayla')); yes.type = 'button';
+  const no = sabitMetin(h('button', 'btn btn-soft btn-sm'), N_('Reddet')); no.type = 'button';
+  const send = sabitMetin(h('button', 'btn btn-primary btn-sm'), N_('Cevapla')); send.type = 'button';
+  const sent = sabitMetin(h('span', 'ask-sent'), N_('Cevap iletildi — CEO notu güncelleyecek.'));
   actions.append(yes, no, send);
   card.append(meta, title, warn, mnot, q, evidence, quiz, secenekler, ta, actions, sent);
   const buttons = [yes, no, send];
@@ -1348,7 +1459,7 @@ function renderSecenekler(card, secim) {
     const b = h('button', 'btn btn-soft btn-sm ask-secenek');
     b.type = 'button';
     b.append(h('b', null, o.kod), document.createTextNode(` ${o.metin}`));
-    b.title = `${o.kod} seçeneğini cevap olarak gönder`;
+    b.title = T('{kod} seçeneğini cevap olarak gönder', { kod: o.kod });
     b.addEventListener('click', () => card.parts.submit(o.cevap));
     return b;
   }));
@@ -1360,12 +1471,12 @@ function renderQuiz(host, items) {
   const opened = new Set([...host.querySelectorAll('details[open]')].map((x) => x.dataset.key));
   host.hidden = items.length === 0;
   if (!items.length) { host.replaceChildren(); return; }
-  host.replaceChildren(h('div', 'ask-quiz-title', SINAV_BASLIGI), ...items.map((it) => {
+  host.replaceChildren(h('div', 'ask-quiz-title', T(SINAV_BASLIGI)), ...items.map((it) => {
     const row = h('div', 'ask-quiz-row');
     const toggle = h('details', 'ask-quiz-answer');
     toggle.dataset.key = it.baslik;
     toggle.open = opened.has(it.baslik);
-    toggle.append(h('summary', null, 'Cevabı göster'), h('p', null, it.cevap));
+    toggle.append(h('summary', null, T('Cevabı göster')), h('p', null, it.cevap));
     row.append(h('p', 'ask-quiz-q', `${it.baslik}. ${it.soru}`), toggle);
     return row;
   }));
@@ -1402,16 +1513,17 @@ function syncAsks(map, host, empty) {
     renderSecenekler(card, secim);
     card.parts.yes.hidden = !!mk || secim.length > 0;  // the options are the answers; a free text box stays
     card.parts.no.hidden = !!mk || secim.length > 0;
-    card.parts.ta.placeholder = mk ? mk.yer : 'Cevabın…';
+    card.parts.ta.placeholder = mk ? mk.yer : T('Cevabın…');
+    card.parts.ta.setAttribute('aria-label', T('{proje} sorusuna cevap', { proje: d.project }));
     card.parts.yes.classList.toggle('is-secondary', !!isaret.uyari);
-    const ev = mk ? (mk.cevap ? [{ title: 'Müdürün cevabı', text: mk.cevap }] : []) : kartBolumleri(d.evidence);
+    const ev = mk ? (mk.cevap ? [{ title: T('Müdürün cevabı'), text: mk.cevap }] : []) : kartBolumleri(d.evidence);
     const opened = new Set([...card.parts.evidence.querySelectorAll('details[open]')].map((x) => x.dataset.key));
     const ilk = mk && card.dataset.mudurCevap !== mk.cevap;  // the manager's answer opens once when it arrives
     if (mk) card.dataset.mudurCevap = mk.cevap;
     card.parts.evidence.replaceChildren(...ev.map((e) => {
       const box = h('details', 'ask-ev');
       box.dataset.key = e.title;
-      box.open = opened.has(e.title) || (ilk && e.title === 'Müdürün cevabı');
+      box.open = opened.has(e.title) || (ilk && e.title === T('Müdürün cevabı'));
       box.append(h('summary', null, e.title), linkli('pre', 'proof-text', e.text));
       return box;
     }));
@@ -1476,7 +1588,7 @@ function renderKararBildirimi() {
   $('karar-bildirim-sayi').textContent = info.sayi ? String(info.sayi) : '';
   $('karar-bildirim-metin').textContent = info.metin;
   bell.title = info.baslik;
-  bell.setAttribute('aria-label', info.baslik || 'Bekleyen karar yok');
+  bell.setAttribute('aria-label', info.baslik || T('Bekleyen karar yok'));
   bell.dataset.note = info.enEski || '';
   kararSayisi = info.sayi;
   renderSekmeBasligi();
@@ -1507,7 +1619,7 @@ function renderFeed() {
 function renderOlaylar() {
   const box = $('olay-akisi');
   if (!box || $('overlay-olaylar').hidden) return;
-  if (!feed.length) { box.replaceChildren(h('li', 'empty', 'Bu sayfa açıldığından beri bir şey olmadı.')); return; }
+  if (!feed.length) { box.replaceChildren(h('li', 'empty', T('Bu sayfa açıldığından beri bir şey olmadı.'))); return; }
   box.replaceChildren(...feed.map((item) => {
     const li = h('li', 'olay');
     const once = rel(item.time);
@@ -1528,7 +1640,7 @@ function renderOlaylar() {
 function fillFeed(ul, max) {
   if (!ul) return;
   ul.replaceChildren();
-  if (!feed.length) { ul.appendChild(h('li', 'muted', 'Henüz bir şey olmadı.')); return; }
+  if (!feed.length) { ul.appendChild(h('li', 'muted', T('Henüz bir şey olmadı.'))); return; }
   for (const item of feed.slice(0, max)) {
     const li = h('li');
     const dot = h('span', 'dot');
@@ -1542,7 +1654,7 @@ setInterval(renderFeed, 30000);
 
 // --- İşler board (phase 7): Sıradakiler / Devam edenler / Bitenler; a workflow is one card with its steps ---
 const BOARD_COLS = ['sirada', 'devam', 'biten'];
-const BOARD_EMPTY = { sirada: 'Sırada iş yok.', devam: 'Şu an çalışan iş yok.', biten: 'Henüz biten iş yok.' };
+const BOARD_EMPTY = { sirada: N_('Sırada iş yok.'), devam: N_('Şu an çalışan iş yok.'), biten: N_('Henüz biten iş yok.') };
 
 function renderTasks() {
   const tasks = state ? (state.board || state.tasks) : [];
@@ -1551,24 +1663,24 @@ function renderTasks() {
     const items = cols[col];
     $(`board-${col}`).replaceChildren(...(items.length
       ? items.map((it) => (it.kind === 'task' ? boardCard(it.task) : workflowCard(it)))
-      : [h('p', 'empty', BOARD_EMPTY[col])]));
+      : [h('p', 'empty', T(BOARD_EMPTY[col]))]));
     $(`board-count-${col}`).textContent = items.length ? String(items.length) : '';
   }
   $('board-more').hidden = cols.bitenGizli === 0;
-  $('board-more').textContent = `Daha eski ${cols.bitenGizli} biten iş Obsidian'da (OFIS/Isler/Bitenler).`;
+  $('board-more').textContent = T('Daha eski {n} biten iş Obsidian\'da (OFIS/Isler/Bitenler).', { n: cols.bitenGizli });
 }
 
 // One job card: title, project, tier/model, status, budget bars, queue state, escalation mark, workflow step.
 function boardCard(t, inWorkflow = false) {
   const card = h('article', inWorkflow ? 'bcard bstep' : 'bcard');
   const head = h('div', 'bcard-head');
-  if (inWorkflow) head.append(h('span', 'bcard-step', stepText(t) || 'adım'));
+  if (inWorkflow) head.append(h('span', 'bcard-step', stepText(t) || T('adım')));
   else {
     const dot = h('span', 'avatar-dot');
     dot.style.background = dotColor(t.project);
     head.append(dot, h('span', 'bcard-project', t.project || '—'));
   }
-  head.append(h('span', `badge ${t.status}`, STATUS_TR[t.status] || t.status));
+  head.append(h('span', `badge ${t.status}`, durumAdi(t.status)));
   const title = h('div', 'bcard-title', feedText(t.title, 120) || t.note);
   const esc = escalationText(t);
   if (esc) title.append(h('span', 'esc-mark', esc));
@@ -1588,7 +1700,7 @@ function boardCard(t, inWorkflow = false) {
   if (t.status === 'sirada') {
     // nothing spent yet: the limits as one line instead of two empty bars
     const lim = budgetBar(t);
-    const text = lim && [lim.money && `kullanım sınırı ${usdText(t.budget)}`, lim.calls && `en çok ${t.max_calls} çağrı`]
+    const text = lim && [lim.money && T('kullanım sınırı {usd}', { usd: usdText(t.budget) }), lim.calls && T('en çok {n} çağrı', { n: t.max_calls })]
       .filter(Boolean).join(' · ');
     if (text) card.append(h('small', 'task-queue', text));
   } else {
@@ -1605,7 +1717,7 @@ function workflowCard(g) {
   const head = h('div', 'bcard-head');
   const dot = h('span', 'avatar-dot');
   dot.style.background = dotColor(first.project);
-  head.append(dot, h('span', 'bcard-project', `${first.project || '—'} · akış`));
+  head.append(dot, h('span', 'bcard-project', `${first.project || '—'} · ${T('akış')}`));
   card.append(head, h('div', 'bcard-title', feedText(g.title, 120)));
   if (g.progress) card.append(h('small', 'task-queue', g.progress));
   const steps = h('div', 'bflow-steps');
@@ -1618,7 +1730,7 @@ function workflowCard(g) {
 function budgetBars(bar) {
   if (!bar) return null;
   const box = h('div', 'bbars');
-  for (const [label, part] of [['Kullanım sınırı', bar.money], ['Çağrı', bar.calls]]) {
+  for (const [label, part] of [[T('Kullanım sınırı'), bar.money], [T('Çağrı'), bar.calls]]) {
     if (!part) continue;
     const row = h('div', part.over ? 'bbar is-over' : 'bbar');
     row.title = `${label}: ${part.text}`;
@@ -1635,15 +1747,15 @@ function budgetBars(bar) {
 // --- Raporlar (phase 7): GET /api/raporlar, one report through the detail modal ---
 function fmtDay(v) {
   const d = parseTime(v);
-  return d ? `${d.toLocaleDateString('tr-TR')} ${hhmm(d)}` : '';
+  return d ? `${d.toLocaleDateString(yerel())} ${hhmm(d)}` : '';
 }
 
 async function loadReports() {
   const list = $('report-list');
-  if (!list.childElementCount) list.replaceChildren(h('p', 'muted', 'Raporlar okunuyor…'));
+  if (!list.childElementCount) list.replaceChildren(h('p', 'muted', T('Raporlar okunuyor…')));
   const res = await getJson('/api/raporlar');
   if (res.status !== 200 || !res.data) {
-    list.replaceChildren(h('p', 'empty', res.status === 0 ? 'Sunucu kapalı.' : 'Raporlar okunamadı.'));
+    list.replaceChildren(h('p', 'empty', res.status === 0 ? T('Sunucu kapalı.') : T('Raporlar okunamadı.')));
     $('report-empty').hidden = true;
     return;
   }
@@ -1654,23 +1766,23 @@ async function loadReports() {
 
 function reportCard(r) {
   const card = h('article', 'rcard');
-  const kicker = [r.proje, fmtDay(r.bitis || r.yazildi), r.tur === 'akis' ? 'akış' : 'grup',
-    r.surum > 1 ? `sürüm ${r.surum}` : ''].filter(Boolean).join(' · ');
+  const kicker = [r.proje, fmtDay(r.bitis || r.yazildi), r.tur === 'akis' ? T('akış') : T('grup'),
+    r.surum > 1 ? T('sürüm {n}', { n: r.surum }) : ''].filter(Boolean).join(' · ');
   card.append(h('p', 'rcard-kicker', kicker), h('div', 'bcard-title', r.baslik || r.grup),
     h('p', 'rcard-line', reportSummaryText(r)),
-    h('p', 'rcard-line', `Toplam kullanım: ${reportCostText(r)} · Doğrulanmış iş başına: ${reportVerifiedText(r)}`));
-  if (r.acik) card.append(h('p', 'rcard-line rcard-open', `Açık kalan: ${r.acik}`));
+    h('p', 'rcard-line', T('Toplam kullanım: {toplam} · Doğrulanmış iş başına: {is_basina}', { toplam: reportCostText(r), is_basina: reportVerifiedText(r) })));
+  if (r.acik) card.append(h('p', 'rcard-line rcard-open', T('Açık kalan: {acik}', { acik: r.acik })));
   makeClickable(card, () => openDetail({ kind: 'report', grup: r.grup }));
   return card;
 }
 
 async function renderReport(grup) {
   const seq = ++detailSeq;
-  showDetail('Rapor', 'Yükleniyor…', [h('p', 'empty-note', 'Rapor okunuyor…')]);
+  showDetail(T('Rapor'), T('Yükleniyor…'), [h('p', 'empty-note', T('Rapor okunuyor…'))]);
   const res = await getJson(`/api/rapor?grup=${encodeURIComponent(grup)}`);
   if (seq !== detailSeq) return;
   const r = res.status === 200 ? res.data : null;
-  if (!r) { showDetail('Rapor', 'Rapor bulunamadı', [h('p', 'empty-note', 'Bu rapor okunamadı ya da silinmiş.')]); return; }
+  if (!r) { showDetail(T('Rapor'), T('Rapor bulunamadı'), [h('p', 'empty-note', T('Bu rapor okunamadı ya da silinmiş.'))]); return; }
   const nodes = [];
   let skippedTitle = false;
   for (const b of reportBlocks(r.metin)) {
@@ -1684,7 +1796,7 @@ async function renderReport(grup) {
       nodes.push(ul);
     } else if (b.type === 'table') nodes.push(reportTable(b));
   }
-  showDetail([document.createTextNode(`${r.proje || 'rapor'} · ${r.grup}`)], r.baslik || r.grup, nodes);
+  showDetail([document.createTextNode(`${r.proje || T('rapor')} · ${r.grup}`)], r.baslik || r.grup, nodes);
 }
 
 function reportTable(b) {
@@ -1721,14 +1833,14 @@ async function loadQuality() {
   const q = res.status === 200 && res.data ? res.data : null;
   const stats = $('quality-stats');
   if (!q) {
-    stats.replaceChildren(h('p', 'empty', res.status === 0 ? 'Sunucu kapalı.' : 'Karne okunamadı.'));
+    stats.replaceChildren(h('p', 'empty', res.status === 0 ? T('Sunucu kapalı.') : T('Karne okunamadı.')));
     return;
   }
   const t = q.toplam;
   $('quality-empty').hidden = !!t;
   stats.replaceChildren(...kaliteKutulari(t).map((k) => statTile(k.etiket, k.deger, k.ipucu, k.ana)));
-  fillQualityTable($('quality-head'), $('quality-body'), QUALITY_HEAD, (q.satirlar || []).map(qualityCells), MAIN_COL);
-  fillQualityTable($('quality-model-head'), $('quality-models'), QUALITY_HEAD.slice(2),
+  fillQualityTable($('quality-head'), $('quality-body'), QUALITY_HEAD.map((x) => T(x)), (q.satirlar || []).map(qualityCells), MAIN_COL);
+  fillQualityTable($('quality-model-head'), $('quality-models'), QUALITY_HEAD.map((x) => T(x)).slice(2),
     (q.modeller || []).map((m) => qualityCells({ ...m, proje: '', katman: '' }).slice(2)), MAIN_COL - 2);
   renderModelChoice(q.model_secimi || {});
 }
@@ -1738,8 +1850,8 @@ function renderModelChoice(ms) {
   const items = [...(ms.oneriler || []).map(modelCardText), ...(ms.pilotlar || []).map(pilotText),
     ...danismanPilotuSatirlari(ms.danisman)];  // the advisor pilot (bin/danisman.py)
   $('model-cards').replaceChildren(...(items.length ? items.map((t) => h('li', null, t))
-    : [h('li', 'muted', 'Açık kadro önerisi ya da deneme yok.')]));
-  fillQualityTable($('mapping-head'), $('mapping-body'), MAPPING_HEAD, (ms.eslesme || []).map(mappingCells), -1);
+    : [h('li', 'muted', T('Açık kadro önerisi ya da deneme yok.'))]));
+  fillQualityTable($('mapping-head'), $('mapping-body'), MAPPING_HEAD.map((x) => T(x)), (ms.eslesme || []).map(mappingCells), -1);
 }
 
 function statTile(label, value, hint, main = false) {
@@ -1749,7 +1861,7 @@ function statTile(label, value, hint, main = false) {
 }
 
 function fillQualityTable(headRow, body, head, rows, mainCol) {
-  headRow.replaceChildren(...head.map((c, i) => h('th', i === mainCol ? 'is-main' : null, c)));
+  headRow.replaceChildren(...head.map((c, i) => h('th', i === mainCol ? 'is-main' : null, T(c))));
   body.replaceChildren(...rows.map((cells) => {
     const tr = h('tr');
     tr.append(...cells.map((c, i) => h('td', i === mainCol ? 'is-main' : null, c)));
@@ -1773,22 +1885,22 @@ function renderRoomCard() {
     $('room-dot').style.background = '#F2784B';
     $('room-name').textContent = 'CEO';
     $('room-status').className = `badge ${c.state}`;
-    $('room-status').textContent = STATUS_TR[c.state] || c.state;
+    $('room-status').textContent = durumAdi(c.state);
     $('room-tool').textContent = toolText(c.current_tool, '—');
     $('room-tokens').textContent = `${fmtUsage(c.usage_today)} token · ~${fmtUsd(c.cost_today || 0)}`;
-    $('room-sessions').textContent = c.queue ? `sırada ${c.queue} mesaj` : (c.session_id ? c.session_id.slice(0, 8) : '—');
-    tasksUl.appendChild(h('li', 'muted', 'CEO işleri dağıtır, soruları sana getirir.'));
+    $('room-sessions').textContent = c.queue ? T('sırada {n} mesaj', { n: c.queue }) : (c.session_id ? c.session_id.slice(0, 8) : '—');
+    tasksUl.appendChild(h('li', 'muted', T('CEO işleri dağıtır, soruları sana getirir.')));
   } else {
     const p = state.projects.find((x) => x.name === selected);
     if (!p) { card.hidden = true; return; }
     $('room-dot').style.background = dotColor(p.name);
     $('room-name').textContent = p.name;
     $('room-status').className = `badge ${p.status}`;
-    $('room-status').textContent = STATUS_TR[p.status] || p.status;
+    $('room-status').textContent = durumAdi(p.status);
     $('room-tool').textContent = p.last_tool ? `${p.last_tool.name}${p.last_tool.target ? ' · ' + p.last_tool.target : ''}` : '—';
     $('room-tokens').textContent = `${fmtUsage(p.usage_today)} token · ~${fmtUsd(p.cost_today || 0)}`;
-    $('room-sessions').textContent = p.sessions ? `${p.sessions} açık oturum` : 'açık oturum yok';
-    if (!p.tasks.length) tasksUl.appendChild(h('li', 'muted', 'Bu projede henüz iş yok.'));
+    $('room-sessions').textContent = p.sessions ? T('{n} açık oturum', { n: p.sessions }) : T('açık oturum yok');
+    if (!p.tasks.length) tasksUl.appendChild(h('li', 'muted', T('Bu projede henüz iş yok.')));
     for (const t of p.tasks) {
       const li = h('li');
       const label = h('span', null, feedText(t.title, 70) || t.note);
@@ -1800,7 +1912,7 @@ function renderRoomCard() {
       if (queue) label.append(h('small', 'task-queue', queue));
       const held = onayBekletmeMetni(t);
       if (held) label.append(h('small', 'task-queue is-held', held));
-      li.append(label, h('span', `badge ${t.status}`, STATUS_TR[t.status] || t.status));
+      li.append(label, h('span', `badge ${t.status}`, durumAdi(t.status)));
       makeClickable(li, () => openDetail({ kind: 'task', note: t.note }));
       tasksUl.appendChild(li);
     }
@@ -1815,14 +1927,14 @@ function renderChatMeta() {
   const c = state.ceo;
   const kapaniyor = c.state === 'busy' && !!c.tur_kapaniyor;
   $('typing').hidden = c.state !== 'busy' || kapaniyor;
-  $('queue-note').textContent = c.queue ? `sırada: ${c.queue} mesaj` : '';
-  const bits = [`CEO · ${kapaniyor ? CEO_KAPANIYOR : (STATUS_TR[c.state] || c.state)}`, `bugün ${fmtUsage(c.usage_today)} token`];
-  if (c.state === 'busy' && !kapaniyor && c.current_tool) bits.push(`şu an: ${c.current_tool.name}`);
+  $('queue-note').textContent = c.queue ? T('sırada: {n} mesaj', { n: c.queue }) : '';
+  const bits = [`CEO · ${kapaniyor ? T(CEO_KAPANIYOR) : (durumAdi(c.state))}`, T('bugün {token} token', { token: fmtUsage(c.usage_today) })];
+  if (c.state === 'busy' && !kapaniyor && c.current_tool) bits.push(T('şu an: {arac}', { arac: c.current_tool.name }));
   const ceoKey = `${c.state}|${kapaniyor}`;
   if (ceoKey !== turCeoKey) { turCeoKey = ceoKey; loadTurlar(); }
-  if (c.last_error) bits.push('son hata: ' + c.last_error.slice(0, 80));
+  if (c.last_error) bits.push(T('son hata: {hata}', { hata: c.last_error.slice(0, 80) }));
   $('drawer-sub').textContent = bits.join(' · ');
-  $('komuta-queue-note').textContent = c.queue ? `sırada: ${c.queue} mesaj` : '';
+  $('komuta-queue-note').textContent = c.queue ? T('sırada: {n} mesaj', { n: c.queue }) : '';
 }
 
 // Minimal, safe Markdown for CEO replies: **bold**, `code`, "- " bullets, blank-line paragraphs.
@@ -1864,19 +1976,20 @@ function mdBlock(text) {
 }
 
 // A project session's message relayed into the CEO conversation ("[ornek-uygulama] DONE: ..."), shown as a card.
-const RELAY_KIND = { DONE: ['Bitti', 'done'], 'BİTTİ': ['Bitti', 'done'], BITTI: ['Bitti', 'done'],
-  BLOCKED: ['Tıkandı', 'blocked'], 'TIKANDI': ['Tıkandı', 'blocked'] };
+// (the keys are what the projects write; the labels are display texts, translated where they are drawn)
+const RELAY_KIND = { DONE: [N_('Bitti'), 'done'], 'BİTTİ': [N_('Bitti'), 'done'], BITTI: [N_('Bitti'), 'done'],
+  BLOCKED: [N_('Tıkandı'), 'blocked'], 'TIKANDI': [N_('Tıkandı'), 'blocked'] };
 const expandedRelays = new Set();  // survives re-renders: renderChat rebuilds the list every time
 
 function parseRelay(m) {
   const body = (m.text || '').replace(/^[^:\n]+:\s*/, '');  // drop "ofis-ornek-uygulama-...: "
   const match = body.match(/^\[([^\]\n]{1,40})\]\s*(?:([A-Za-zİıŞşÇçĞğÖöÜü]+):)?\s*([\s\S]*)$/);
-  if (!match) return { project: m.from || 'proje', label: 'Mesaj', tone: 'info', text: body };
+  if (!match) return { project: m.from || T('proje'), label: T('Mesaj'), tone: 'info', text: body };
   const [, project, kindWord, rest] = match;
   const kind = kindWord && RELAY_KIND[kindWord.toLocaleUpperCase('tr-TR')];
-  if (kind) return { project, label: kind[0], tone: kind[1], text: rest };
+  if (kind) return { project, label: T(kind[0]), tone: kind[1], text: rest };
   const text = kindWord ? `${kindWord}: ${rest}` : rest;
-  return { project, label: /\?\s*$/.test(text.split('\n')[0]) ? 'Soru' : 'Mesaj', tone: 'info', text };
+  return { project, label: /\?\s*$/.test(text.split('\n')[0]) ? T('Soru') : T('Mesaj'), tone: 'info', text };
 }
 
 function relayCard(m) {
@@ -1893,7 +2006,7 @@ function relayCard(m) {
   if (long && !expandedRelays.has(key)) body.classList.add('is-clamped');
   card.appendChild(body);
   if (long) {
-    const more = h('button', 'relay-more', expandedRelays.has(key) ? 'Daha az göster' : 'Devamını göster');
+    const more = h('button', 'relay-more', expandedRelays.has(key) ? T('Daha az göster') : T('Devamını göster'));
     more.type = 'button';
     more.addEventListener('click', () => {
       if (expandedRelays.has(key)) expandedRelays.delete(key); else expandedRelays.add(key);
@@ -1917,7 +2030,7 @@ function noticeCard(m) {
   const head = h('div', 'relay-head');
   const badge = h('span', `relay-badge ${c.tone}`);
   badge.append(h('span', 'notice-icon', c.ikon), document.createTextNode(` ${c.etiket}`));
-  head.append(h('span', 'relay-project', 'Ofis'), badge, h('time', null, hhmm(parseTime(m.time))));
+  head.append(h('span', 'relay-project', T('Ofis')), badge, h('time', null, hhmm(parseTime(m.time))));
   card.append(head, linkli('div', 'notice-title', c.baslik, c.klasor));
   if (c.satirlar.length) {
     const facts = h('dl', 'notice-facts');
@@ -1939,7 +2052,7 @@ function noticeCard(m) {
     const raw = h('details', 'notice-raw');
     raw.open = openRaw.has(key);
     raw.addEventListener('toggle', () => { if (raw.open) openRaw.add(key); else openRaw.delete(key); });
-    raw.append(h('summary', null, 'Ayrıntı'), linkli('pre', 'notice-raw-text', c.ham, c.klasor));
+    raw.append(h('summary', null, T('Ayrıntı')), linkli('pre', 'notice-raw-text', c.ham, c.klasor));
     card.appendChild(raw);
   }
   return card;
@@ -1954,19 +2067,19 @@ function noticeActions(m, c) {
     state ? [...(state.board || []), ...state.tasks] : []);
   const row = h('div', 'notice-actions');
   if (e.karar) {
-    const reply = h('button', 'btn btn-primary btn-sm', 'Cevapla');
+    const reply = h('button', 'btn btn-primary btn-sm', T('Cevapla'));
     reply.type = 'button';
     reply.addEventListener('click', () => { if (!komutaOpen()) openKomuta(); focusDecision(e.karar); });
     row.appendChild(reply);
   }
   const job = e.is || (c.is ? `${c.is}.md` : '');
   if (job) {
-    const open = h('button', 'btn btn-soft btn-sm', 'İşi aç');
+    const open = h('button', 'btn btn-soft btn-sm', T('İşi aç'));
     open.type = 'button';
     open.addEventListener('click', () => openDetail({ kind: 'task', note: job }));
     row.appendChild(open);
   }
-  if (c.not) row.appendChild(notLinki(c.not, 'Notu aç', c.klasor, 'btn btn-soft btn-sm obs-link'));
+  if (c.not) row.appendChild(notLinki(c.not, T('Notu aç'), c.klasor, 'btn btn-soft btn-sm obs-link'));
   row.hidden = !row.childElementCount;
   return row;
 }
@@ -1980,7 +2093,7 @@ function renderChatBox(box, grew, eylemli) {
   const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   const keepScroll = box.scrollTop;
   box.replaceChildren();
-  if (!chat.length && !optimistic.length) box.appendChild(h('p', 'msg system', 'Henüz konuşma yok. CEO\'ya ilk mesajını yaz.'));
+  if (!chat.length && !optimistic.length) box.appendChild(h('p', 'msg system', T('Henüz konuşma yok. CEO\'ya ilk mesajını yaz.')));
   const altlar = turAltlari(chat, turlar);
   const rozetler = cevapBekleyenRozetleri(chat, rozetKararlari());
   chat.forEach((m, i) => {
@@ -1989,15 +2102,15 @@ function renderChatBox(box, grew, eylemli) {
     const role = sahipSatiri(m) ? 'sahip' : m.role === 'ceo' ? 'ceo' : 'system';
     const b = h('div', `msg ${role}`);
     if (role === 'ceo') b.dataset.anahtar = chatKey(m);
-    if (m.note) b.appendChild(h('span', 'note-ref', `Karar cevabı · ${m.note}`));
+    if (m.note) b.appendChild(h('span', 'note-ref', T('Karar cevabı · {not}', { not: m.note })));
     // a request the owner spoke to Jarvis (bin/jarvis.py is-ekle): his own line, marked with the channel
     if (m.kanal) b.appendChild(h('span', 'note-ref', m.proje ? `${m.kanal} · ${m.proje}` : m.kanal));
     b.appendChild(role === 'ceo' ? mdBlock(m.text) : document.createTextNode(m.text || ''));
     for (const r of role === 'ceo' ? rozetler[i] || [] : []) {
       // amber "cevap bekliyor": opens the card in the Komuta masası's Kararlar column (like the bell)
-      const rz = h('button', 'msg-bekliyor', 'cevap bekliyor');
+      const rz = h('button', 'msg-bekliyor', T('cevap bekliyor'));
       rz.type = 'button';
-      rz.title = `Kararını kartta bekliyor: ${r.baslik}`;
+      rz.title = T('Kararını kartta bekliyor: {baslik}', { baslik: r.baslik });
       rz.addEventListener('click', (e) => { openKomuta(e.currentTarget); setTimeout(() => focusDecision(r.note), 80); });
       b.appendChild(rz);
     }
@@ -2009,7 +2122,7 @@ function renderChatBox(box, grew, eylemli) {
   for (const o of optimistic) {
     const b = h('div', 'msg sahip pending');
     b.appendChild(document.createTextNode(o.text));
-    b.appendChild(h('time', null, o.queued ? 'sırada' : 'iletildi'));
+    b.appendChild(h('time', null, o.queued ? T('sırada') : T('iletildi')));
     box.appendChild(b);
   }
   box.scrollTop = grew || nearBottom ? box.scrollHeight : keepScroll;
@@ -2040,22 +2153,22 @@ function toast(text) {
 }
 
 function explain(status, data) {
-  if (status === 409) return 'CEO\'ya ulaşılamadı. ' + (data.error || '');
-  if (status === 403) return 'İstek reddedildi; sayfayı yenile.';
-  if (status === 0) return 'Sunucu kapalı.';
-  return data.error || `Hata (${status}).`;
+  if (status === 409) return T('CEO\'ya ulaşılamadı. {hata}', { hata: data.error || '' }).trim();
+  if (status === 403) return T('İstek reddedildi; sayfayı yenile.');
+  if (status === 0) return T('Sunucu kapalı.');
+  return data.error || T('Hata ({durum}).', { durum: status });
 }
 
 async function sendChat(text) {
   text = text.trim();
   if (!text) return false;
-  if (text.length > 4000) { toast('Mesaj en fazla 4000 karakter olabilir.'); return false; }
+  if (text.length > 4000) { toast(T('Mesaj en fazla 4000 karakter olabilir.')); return false; }
   let res;
   try { res = await post('/api/chat', { text }); } catch { res = { status: 0, data: {} }; }
   if (res.status !== 202) { toast(explain(res.status, res.data)); return false; }
   const queued = res.data.status === 'queued';
   if (!demo) optimistic.push({ text, queued });
-  if (queued) toast('CEO meşgul; mesajın sıraya alındı.');
+  if (queued) toast(T('CEO meşgul; mesajın sıraya alındı.'));
   renderChat(true);
   return true;
 }
@@ -2142,7 +2255,7 @@ async function loadAdimlar() {
 
 function renderAdimlar() {
   const c = state ? state.ceo : null;
-  $('ceo-simdi').textContent = online ? ceoSimdiMetni(c, adim) : 'CEO şu an: sunucu kapalı';
+  $('ceo-simdi').textContent = online ? ceoSimdiMetni(c, adim) : T('CEO şu an: sunucu kapalı');
   $('ceo-simdi').classList.toggle('is-busy', !!c && c.state === 'busy');
   const list = adim ? adim.adimlar : [];
   $('ceo-adimlar-sayi').textContent = list.length ? `(${list.length})` : '';
@@ -2150,7 +2263,7 @@ function renderAdimlar() {
     const li = h('li');
     li.append(h('time', null, hhmm(parseTime(a.zaman))), h('span', null, adimMetni(a)));
     return li;
-  }) : [h('li', 'muted', adim ? 'Henüz bir adım yok.' : 'Adımlar okunuyor…')]));
+  }) : [h('li', 'muted', adim ? T('Henüz bir adım yok.') : T('Adımlar okunuyor…'))]));
 }
 
 // "Şu an": per project the active jobs, workflow progress and the queue; reviewers and the hakem apart. Rebuilt only
@@ -2171,15 +2284,15 @@ function renderSuAn() {
     const sira = siraMetni(p);
     if (sira) head.append(h('small', 'suan-sira', sira));
     box.appendChild(head);
-    for (const w of p.akislar) box.appendChild(h('p', 'suan-akis', `Akış: ${feedText(w.baslik, 60)} · ${w.ilerleme || 'sürüyor'}`));
+    for (const w of p.akislar) box.appendChild(h('p', 'suan-akis', T('Akış: {baslik} · {ilerleme}', { baslik: feedText(w.baslik, 60), ilerleme: w.ilerleme || T('sürüyor') })));
     for (const it of p.isler) box.appendChild(suAnRow(it));
     nodes.push(box);
   }
   if (g.denetim.length) {
     const box = h('section', 'suan-proje suan-denetim');
-    box.appendChild(h('div', 'suan-proje-head', 'Denetim'));
+    box.appendChild(h('div', 'suan-proje-head', T('Denetim')));
     for (const d of g.denetim) {
-      box.appendChild(suAnRow({ id: d.id, baslik: d.is || 'inceleme', calisan: d.calisan, durum: d.durum, sure: d.sure,
+      box.appendChild(suAnRow({ id: d.id, baslik: d.is || T('inceleme'), calisan: d.calisan, durum: d.durum, sure: d.sure,
         calisan_ipucu: d.calisan_ipucu, harcama: '', yardimci: '', adim: '', note: d.note }));
     }
     nodes.push(box);
@@ -2197,7 +2310,7 @@ function suAnRow(it) {
   row.dataset.suan = it.id;
   row.append(h('div', 'suan-is-title', feedText(it.baslik, 90)));
   row.append(h('div', 'suan-is-meta', [it.calisan, it.durum, it.sure].filter(Boolean).join(' · ')));
-  row.title = [it.calisan_ipucu, it.note ? 'Ayrıntıyı aç ve mesaja bağlam olarak ekle' : ''].filter(Boolean).join(' — ');
+  row.title = [it.calisan_ipucu, it.note ? T('Ayrıntıyı aç ve mesaja bağlam olarak ekle') : ''].filter(Boolean).join(' — ');
   const extra = [it.adim, it.harcama, it.yardimci].filter(Boolean).join(' · ');
   if (extra) row.append(h('div', 'suan-is-extra', extra));
   if (it.note) {
@@ -2216,7 +2329,7 @@ function renderBaglam() {
     const chip = h('button', 'baglam-chip');
     chip.type = 'button';
     chip.append(h('span', null, baglamEtiketi(c)), h('span', 'baglam-x', '×'));
-    chip.setAttribute('aria-label', `${baglamEtiketi(c)} — bağlamdan çıkar`);
+    chip.setAttribute('aria-label', T('{etiket} — bağlamdan çıkar', { etiket: baglamEtiketi(c) }));
     chip.addEventListener('click', () => { baglam = baglamCikar(baglam, c.note); renderBaglam(); $('komuta-input').focus(); });
     return chip;
   }));
@@ -2233,14 +2346,14 @@ function renderKomuta() {
   $('komuta-sirada').textContent = sira;
   $('komuta-sirada').hidden = !sira;
   $('komuta-harcama').textContent = state ? bugunkuHarcama(state) : '—';
-  $('komuta-harcama').title = 'API fiyatıyla karşılığı; abonelikte para ödenmez';
+  $('komuta-harcama').title = T('API fiyatıyla karşılığı; abonelikte para ödenmez');
 }
 
 // "Cevapla" on a notice: the decision's card in the right column (the Kararlar tab on a narrow screen), its box focused.
 function focusDecision(note) {
   setKomutaSekme('kararlar');
   const card = askCards.komuta.get(note);
-  if (!card) { toast('Bu karar artık beklemiyor.'); return; }
+  if (!card) { toast(T('Bu karar artık beklemiyor.')); return; }
   card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   card.classList.add('is-flash');
   setTimeout(() => card.classList.remove('is-flash'), 1600);
@@ -2271,10 +2384,11 @@ for (const b of document.querySelectorAll('.komuta-tab')) {
 }
 
 // quick questions go into the composer (the owner sends them himself: a click never costs a CEO turn by accident)
+// (q: komuta.js's Turkish key; the button follows the language through data-t, the composer gets the current text)
 $('hazir-sorular').replaceChildren(...HAZIR_SORULAR.map((q) => {
-  const b = h('button', 'hazir-soru', q);
+  const b = sabitMetin(h('button', 'hazir-soru'), q);
   b.type = 'button';
-  b.addEventListener('click', () => { const ta = $('komuta-input'); ta.value = q; ta.focus(); });
+  b.addEventListener('click', () => { const ta = $('komuta-input'); ta.value = T(q); ta.focus(); });
   return b;
 }));
 renderBaglam();
@@ -2285,7 +2399,7 @@ $('komuta-form').addEventListener('submit', async (e) => {
   const btn = e.target.querySelector('button[type=submit]');
   const text = mesajMetni(ta.value, baglam);
   if (!text) { ta.focus(); return; }
-  if (text.length > 4000) { toast('Mesaj, bağlam satırıyla birlikte en çok 4000 karakter olabilir.'); return; }
+  if (text.length > 4000) { toast(T('Mesaj, bağlam satırıyla birlikte en çok 4000 karakter olabilir.')); return; }
   btn.disabled = true;
   if (await sendChat(text)) { ta.value = ''; baglam = []; renderBaglam(); }
   btn.disabled = false;
@@ -2311,7 +2425,7 @@ $('duyuru-form').addEventListener('submit', async (e) => {
     ta.value = '';
     $('duyuru-durum').textContent = duyuruSonucu(r.data);
   } else {
-    toast((r.data && r.data.error) || 'Duyuru gönderilemedi.');
+    toast((r.data && r.data.error) || T('Duyuru gönderilemedi.'));
   }
 });
 // "Yakala": a link (http/https; the host punycoded by URL) or one small file (base64) -> POST /api/yakala
@@ -2329,17 +2443,17 @@ $('yakala-form').addEventListener('submit', async (e) => {
   const url = $('yakala-url').value.trim();
   const file = $('yakala-dosya').files && $('yakala-dosya').files[0];
   const govde = { not: $('yakala-not').value.trim().slice(0, 300) };
-  if (!!url === !!file) { toast('Ya bir bağlantı ya da bir dosya ver (ikisinden biri).'); return; }
+  if (!!url === !!file) { toast(T('Ya bir bağlantı ya da bir dosya ver (ikisinden biri).')); return; }
   if (url) {
     let u;
     try { u = new URL(url); } catch { u = null; }
-    if (!u || !['http:', 'https:'].includes(u.protocol)) { toast('Yalnız http ve https bağlantıları yakalanır.'); return; }
+    if (!u || !['http:', 'https:'].includes(u.protocol)) { toast(T('Yalnız http ve https bağlantıları yakalanır.')); return; }
     govde.url = u.href;
   } else {
     const mb = Number(y.dosya_mb) || 2;
-    if (file.size > mb * 1024 * 1024) { toast(`Dosya en çok ${mb} MB olabilir.`); return; }
-    if (!/\.(txt|md|markdown|pdf)$/i.test(file.name)) { toast('Yalnız .txt, .md ve .pdf dosyaları yakalanır.'); return; }
-    try { govde.dosya = await dosyaBase64(file); } catch { toast('Dosya okunamadı.'); return; }
+    if (file.size > mb * 1024 * 1024) { toast(T('Dosya en çok {mb} MB olabilir.', { mb })); return; }
+    if (!/\.(txt|md|markdown|pdf)$/i.test(file.name)) { toast(T('Yalnız .txt, .md ve .pdf dosyaları yakalanır.')); return; }
+    try { govde.dosya = await dosyaBase64(file); } catch { toast(T('Dosya okunamadı.')); return; }
     govde.dosya_adi = file.name.slice(0, 200);
   }
   const btn = $('yakala-gonder');
@@ -2352,11 +2466,11 @@ $('yakala-form').addEventListener('submit', async (e) => {
     $('yakala-not').value = '';
     $('yakala-dosya').value = '';
     const d = r.data || {};
-    $('yakala-durum').textContent = d.tekrar ? 'Bu bağlantı zaten yakalanmıştı; Ar-Ge ona bakıyor.'
-      : d.is ? 'Yakalandı: Ar-Ge uzmanına iş olarak verildi. Sonucu CEO söyleyecek.'
-        : 'Yakalandı; Ar-Ge kuyruğu dolu, iş birazdan eklenecek.';
+    $('yakala-durum').textContent = d.tekrar ? T('Bu bağlantı zaten yakalanmıştı; Ar-Ge ona bakıyor.')
+      : d.is ? T('Yakalandı: Ar-Ge uzmanına iş olarak verildi. Sonucu CEO söyleyecek.')
+        : T('Yakalandı; Ar-Ge kuyruğu dolu, iş birazdan eklenecek.');
   } else {
-    toast(r.status === 429 ? ((r.data && r.data.error) || 'Saatlik sınır doldu.') : explain(r.status, r.data || {}));
+    toast(r.status === 429 ? ((r.data && r.data.error) || T('Saatlik sınır doldu.')) : explain(r.status, r.data || {}));
   }
 });
 // A typed draft moves with the switch (joined to a draft already there) and the source is cleared, so an old draft
@@ -2418,6 +2532,7 @@ let ayarlar = null;  // the last GET /api/ayarlar body
 let ayarForm = null; // {mod: 'ekle' | 'duzenle', proje (the row being edited), baslangic (form values at open), donus}
 let ayarGenelBaslangic = null; // the office name field's value when the tab was drawn
 let ayarSahipBaslangic = null; // the owner's name field's value when the tab was drawn
+let ayarNpcKirli = false; // the NPC chat switch or its limit edited and not saved yet
 
 function ayarAlani(alan) { return $(`ayar-f-${alan}`); }
 function ayarDegerleri() {
@@ -2457,10 +2572,10 @@ function ayarHatalariGoster(hatalar) {
 }
 
 async function loadAyarlar() {
-  ayarDurum('Yükleniyor…');
+  ayarDurum(T('Yükleniyor…'));
   const r = await getJson('/api/ayarlar');
   if (r.status !== 200 || !r.data) {
-    ayarDurum(r.status === 0 ? 'Sunucuya ulaşılamadı.' : 'Ayarlar okunamadı.');
+    ayarDurum(r.status === 0 ? T('Sunucuya ulaşılamadı.') : T('Ayarlar okunamadı.'));
     return;
   }
   ayarDurum('');
@@ -2486,6 +2601,15 @@ function renderAyarlar(data) {
     $('ayar-sahip-adi-hata').hidden = true;
     $('ayar-sahip-adi').removeAttribute('aria-invalid');
   }
+  // the display language (bin/dil.py; saved at once on change, so never dirty)
+  $('ayar-dil').value = data.dil === 'en' ? 'en' : 'tr';
+  // the NPC chat switch (bin/npc_sohbet.py ayar): drawn from the server's values; an unsaved edit is kept
+  const npc = data.npc_sohbet && typeof data.npc_sohbet === 'object' ? data.npc_sohbet : { acik: false, saatlik_sinir: 20 };
+  $('ayar-npc-sinir').max = String(Number(data.kurallar && data.kurallar.npc_saatlik_en_cok) || 200);
+  if (!ayarNpcKirli) {
+    $('ayar-npc-acik').checked = npc.acik === true;
+    $('ayar-npc-sinir').value = String(npc.saatlik_sinir || 20);
+  }
   const list = $('ayar-projeler');
   const rows = Array.isArray(data.projeler) ? data.projeler : [];
   list.replaceChildren(...rows.map(ayarKarti));
@@ -2499,7 +2623,7 @@ function ayarKarti(p) {
   const dot = h('span', 'avatar-dot');
   dot.style.background = dotColor(p.ad);
   head.append(dot, h('strong', 'ayar-kart-ad', p.ad));
-  if (p.yerlesik) head.append(h('span', 'badge ayar-rozet', 'Yerleşik'));
+  if (p.yerlesik) head.append(h('span', 'badge ayar-rozet', T('Yerleşik')));
   const g = guvenRozeti(p.guven);
   head.append(h('span', `badge ayar-rozet guven-${g.ton}`, g.metin));
   card.append(head);
@@ -2511,37 +2635,37 @@ function ayarKarti(p) {
   card.append(facts);
   if (p.guven === false && p.ipucu) {
     const box = h('div', 'ayar-ipucu-kutu');
-    box.append(h('p', 'ayar-ipucu', GUVEN_IPUCU));
+    box.append(h('p', 'ayar-ipucu', T(GUVEN_IPUCU)));
     const row = h('div', 'ayar-komut');
     const code = h('code', null, p.ipucu);
-    const kopya = h('button', 'btn btn-soft btn-sm', 'Kopyala');
+    const kopya = h('button', 'btn btn-soft btn-sm', T('Kopyala'));
     kopya.type = 'button';
-    kopya.setAttribute('aria-label', `${p.ad} için güven komutunu kopyala`);
+    kopya.setAttribute('aria-label', T('{ad} için güven komutunu kopyala', { ad: p.ad }));
     kopya.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(p.ipucu); toast('Komut kopyalandı.'); } catch {
+      try { await navigator.clipboard.writeText(p.ipucu); toast(T('Komut kopyalandı.')); } catch {
         const sel = window.getSelection();
         const range = document.createRange();
         range.selectNodeContents(code);
         sel.removeAllRanges(); sel.addRange(range);
-        toast('Kopyalanamadı; komut seçildi, Cmd+C ile kopyala.');
+        toast(T('Kopyalanamadı; komut seçildi, Cmd+C ile kopyala.'));
       }
     });
     row.append(code, kopya);
     box.append(row);
     card.append(box);
   }
-  if (p.yerlesik) card.append(h('p', 'ayar-ipucu', 'Ar-Ge odasının çalışma klasörü; silinemez, yalnız klasörü değiştirilebilir.'));
+  if (p.yerlesik) card.append(h('p', 'ayar-ipucu', T('Ar-Ge odasının çalışma klasörü; silinemez, yalnız klasörü değiştirilebilir.')));
   const actions = h('div', 'ayar-kart-eylem');
-  const duzenle = h('button', 'btn btn-soft btn-sm', 'Düzenle');
+  const duzenle = h('button', 'btn btn-soft btn-sm', T('Düzenle'));
   duzenle.type = 'button';
   duzenle.dataset.eylem = 'duzenle';
-  duzenle.setAttribute('aria-label', `${p.ad} projesini düzenle`);
+  duzenle.setAttribute('aria-label', T('{ad} projesini düzenle', { ad: p.ad }));
   duzenle.addEventListener('click', () => ayarFormAc('duzenle', p, duzenle));
   actions.append(duzenle);
   if (!p.yerlesik) {
-    const sil = h('button', 'btn btn-danger btn-sm', 'Sil');
+    const sil = h('button', 'btn btn-danger btn-sm', T('Sil'));
     sil.type = 'button';
-    sil.setAttribute('aria-label', `${p.ad} projesini sil`);
+    sil.setAttribute('aria-label', T('{ad} projesini sil', { ad: p.ad }));
     sil.addEventListener('click', () => ayarSil(p, sil));
     actions.append(sil);
   }
@@ -2550,16 +2674,16 @@ function ayarKarti(p) {
 }
 
 function ayarFormAc(mod, proje, donus) {
-  if (ayarForm && ayarlarKirli() && !confirm('Açık formdaki kaydedilmemiş değişiklikler silinsin mi?')) return;
+  if (ayarForm && ayarlarKirli() && !confirm(T('Açık formdaki kaydedilmemiş değişiklikler silinsin mi?'))) return;
   const degerler = mod === 'duzenle' ? formDegerleri(proje) : bosForm();
   for (const k of FORM_ALANLARI) ayarAlani(k).value = degerler[k];
   const k = (ayarlar && ayarlar.kurallar) || {};
   ayarAlani('description').maxLength = Number(k.aciklama_siniri) || 300;
   ayarAlani('notes').maxLength = Number(k.notlar_siniri) || 2000;
   ayarAlani('ad').disabled = mod === 'duzenle';
-  $('ayar-f-ad-ipucu').textContent = mod === 'duzenle' ? 'Proje adı değiştirilemez.'
-    : 'Küçük harf, rakam ve tire (ör. musteri-paneli). Sonradan değiştirilemez.';
-  $('ayar-form-baslik').textContent = mod === 'duzenle' ? `${proje.ad} projesini düzenle` : 'Yeni proje';
+  $('ayar-f-ad-ipucu').textContent = mod === 'duzenle' ? T('Proje adı değiştirilemez.')
+    : T('Küçük harf, rakam ve tire (ör. musteri-paneli). Sonradan değiştirilemez.');
+  $('ayar-form-baslik').textContent = mod === 'duzenle' ? T('{ad} projesini düzenle', { ad: proje.ad }) : T('Yeni proje');
   // the advanced section opens by itself when it already holds something
   $('ayar-gelismis').open = ['hassas_yollar', ...SORUMLU, 'domainler'].some((x) => degerler[x]);
   ayarForm = { mod, proje: mod === 'duzenle' ? proje : null, baslangic: degerler, donus };
@@ -2588,13 +2712,13 @@ function ayarFormKapat(odak) {
 
 // One POST /api/ayarlar: the demo saves nothing; a refusal keeps what was typed.
 async function ayarGonder(govde) {
-  if (demo) return { status: -1, data: { error: 'Demo modunda kaydedilmez.' } };
+  if (demo) return { status: -1, data: { error: T('Demo modunda kaydedilmez.') } };
   try { return await post('/api/ayarlar', govde); } catch { return { status: 0, data: {} }; }
 }
 
 $('ayar-proje-ekle').addEventListener('click', (e) => ayarFormAc('ekle', null, e.currentTarget));
 $('ayar-form-vazgec').addEventListener('click', () => {
-  if (ayarlarKirli() && !confirm('Kaydedilmemiş değişiklikler silinsin mi?')) return;
+  if (ayarlarKirli() && !confirm(T('Kaydedilmemiş değişiklikler silinsin mi?'))) return;
   ayarFormKapat();
 });
 $('ayar-proje-form').addEventListener('submit', async (e) => {
@@ -2605,7 +2729,7 @@ $('ayar-proje-form').addEventListener('submit', async (e) => {
   const yerel = istemciHatalari(degerler, (ayarlar && ayarlar.kurallar) || {}, { duzenleme });
   if (yerel.length) { ayarHatalariGoster(yerel); return; }
   const govde = duzenleme ? guncellemeGovdesi(ayarForm.proje, degerler) : eklemeGovdesi(degerler);
-  if (!govde) { ayarFormKapat(); ayarDurum('Değişiklik yok; bir şey kaydedilmedi.'); return; }
+  if (!govde) { ayarFormKapat(); ayarDurum(T('Değişiklik yok; bir şey kaydedilmedi.')); return; }
   const btn = $('ayar-form-kaydet');
   btn.disabled = true;
   const r = await ayarGonder(govde);
@@ -2637,7 +2761,7 @@ async function ayarSil(p, btn) {
   }
   // 409: the server's reason (an open job, a schedule, a workflow, a built-in project)
   const metin = (sunucuHatalari(r.data)[0] || {}).metin || sonucMetni(r.status, r.data);
-  ayarDurum(`Silinemedi: ${metin}`);
+  ayarDurum(T('Silinemedi: {metin}', { metin }));
   btn.focus();
 }
 
@@ -2676,14 +2800,71 @@ $('ayar-genel-form').addEventListener('submit', async (e) => {
   $(alanlar[alan][0]).focus();
 });
 
+// The Genel section's NPC chat switch (bin/npc_sohbet.py): its own small form, POST {islem: 'genel', npc_sohbet: {acik,
+// saatlik_sinir}} through bin/ayarlar.py (the one writer). The cards show the question box from the next state push.
+$('ayar-npc-acik').addEventListener('change', () => { ayarNpcKirli = true; });
+$('ayar-npc-sinir').addEventListener('input', () => { ayarNpcKirli = true; });
+$('ayar-npc-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const hata = $('ayar-npc-hata');
+  const goster = (m) => {
+    hata.textContent = m; hata.hidden = !m;
+    if (m) $('ayar-npc-sinir').setAttribute('aria-invalid', 'true'); else $('ayar-npc-sinir').removeAttribute('aria-invalid');
+  };
+  const g = npcSohbetGovdesi($('ayar-npc-acik').checked, $('ayar-npc-sinir').value, (ayarlar && ayarlar.kurallar) || {});
+  goster('');
+  if (g.hata) { goster(g.hata); $('ayar-npc-sinir').focus(); return; }
+  const btn = $('ayar-npc-kaydet');
+  btn.disabled = true;
+  const r = await ayarGonder(g.govde);
+  btn.disabled = false;
+  if (r.status === 200) {
+    ayarNpcKirli = false;
+    if (r.data && r.data.ayarlar) ayarlar = r.data.ayarlar;
+    if (state) state = { ...state, npc_sohbet: { ...g.govde.npc_sohbet } }; // the cards follow at once
+    if (kart) kartGoster(false);
+    ayarDurum(sonucMetni(200, r.data));
+    return;
+  }
+  const ilk = sunucuHatalari(r.data)[0] || {};
+  goster(r.status === 400 ? (ilk.metin || sonucMetni(r.status, r.data)) : sonucMetni(r.status, r.data));
+});
+
+// The language switch (bin/dil.py): saved at once on change (POST {islem: 'genel', dil}); the page switches at once,
+// the server asks for a fresh CEO session (its replies follow from then on).
+$('ayar-dil-form').addEventListener('submit', (e) => e.preventDefault());
+$('ayar-dil').addEventListener('change', async () => {
+  const sel = $('ayar-dil');
+  const hata = $('ayar-dil-hata');
+  hata.textContent = ''; hata.hidden = true;
+  const g = dilGovdesi(sel.value, (ayarlar && ayarlar.kurallar) || {});
+  if (g.hata) { hata.textContent = g.hata; hata.hidden = false; return; }
+  sel.disabled = true;
+  const r = await ayarGonder(g.govde);
+  sel.disabled = false;
+  if (r.status === 200) {
+    if (r.data && r.data.ayarlar) ayarlar = r.data.ayarlar;
+    if (state) state = { ...state, ofis: { ...(state.ofis || {}), dil: g.govde.dil } };
+    dilAyarla(g.govde.dil);
+    if (state) renderAll();
+    ayarDurum(sonucMetni(200, r.data));
+    return;
+  }
+  sel.value = aktifDil();
+  const ilk = sunucuHatalari(r.data)[0] || {};
+  hata.textContent = r.status === 400 ? (ilk.metin || sonucMetni(r.status, r.data)) : sonucMetni(r.status, r.data);
+  hata.hidden = false;
+});
+
 // Leaving the tab with unsaved edits asks first (a click outside, Esc, another tab). Yes: the edits are dropped.
 // The project form is closed either way, so the tab opens on the list next time.
 function ayarlardanCikilsinMi() {
   if ($('overlay-ayarlar').hidden) return true;
-  if (ayarlarKirli() && !confirm('Ayarlar\'da kaydedilmemiş değişiklikler var. Yine de kapatılsın mı?')) return false;
+  if (ayarlarKirli() && !confirm(T('Ayarlar\'da kaydedilmemiş değişiklikler var. Yine de kapatılsın mı?'))) return false;
   if (ayarForm) ayarFormKapat(false);
   ayarGenelBaslangic = null;
   ayarSahipBaslangic = null;
+  ayarNpcKirli = false;
   return true;
 }
 
@@ -2764,7 +2945,7 @@ function questionBody(d) {
 }
 
 function decisionDetail(d) {
-  return { kind: 'message', kicker: `${d.project} · Soru`, title: d.title || 'Soru', text: questionBody(d), time: parseTime(d.asked) };
+  return { kind: 'message', kicker: `${d.project} · ${T('Soru')}`, title: d.title || T('Soru'), text: questionBody(d), time: parseTime(d.asked) };
 }
 
 let detailReturnFocus = null;
@@ -2792,13 +2973,13 @@ function closeDetail() {
 
 function section(heading, content) {
   const nodes = [h('h3', null, heading)];
-  nodes.push(content && content.trim() ? mdBlock(content) : h('p', 'empty-note', 'Henüz yazılmamış.'));
+  nodes.push(content && content.trim() ? mdBlock(content) : h('p', 'empty-note', T('Henüz yazılmamış.')));
   return nodes;
 }
 
 function fmtWhen(v) {
   const d = v instanceof Date ? v : parseTime(v);
-  return d ? `${d.toLocaleDateString('tr-TR')} ${hhmm(d)}` : (v || '—');
+  return d ? `${d.toLocaleDateString(yerel())} ${hhmm(d)}` : (v || '—');
 }
 
 // A job of the live state (board first: it has every open job), for its progress line; null when not listed.
@@ -2848,97 +3029,97 @@ async function renderDetail(detail) {
     const kicker = [document.createTextNode(detail.kicker || '')];
     if (detail.time) kicker.push(h('span', null, `· ${fmtWhen(detail.time)}`));
     const nodes = [mdBlock(detail.text || '')];
-    if (detail.session) nodes.push(h('p', 'empty-note', `Oturum: ${detail.session}`));
+    if (detail.session) nodes.push(h('p', 'empty-note', T('Oturum: {oturum}', { oturum: detail.session })));
     showDetail(kicker, detail.title, nodes);
     return;
   }
   const seq = ++detailSeq;
-  showDetail('İş', 'Yükleniyor…', [h('p', 'empty-note', 'İş notu okunuyor…')]);
+  showDetail(T('İş'), T('Yükleniyor…'), [h('p', 'empty-note', T('İş notu okunuyor…'))]);
   let t = null;
   try { t = await fetchTask(detail.note); } catch { t = null; }
   if (seq !== detailSeq) return;  // closed or another detail opened meanwhile
-  if (!t) { showDetail('İş', 'İş notu bulunamadı', [h('p', 'empty-note', 'Bu iş notu okunamadı ya da silinmiş.')]); return; }
-  const kicker = [document.createTextNode(t.project || 'iş'), h('span', `badge ${t.status}`, STATUS_TR[t.status] || t.status)];
+  if (!t) { showDetail(T('İş'), T('İş notu bulunamadı'), [h('p', 'empty-note', T('Bu iş notu okunamadı ya da silinmiş.'))]); return; }
+  const kicker = [document.createTextNode(t.project || T('iş')), h('span', `badge ${t.status}`, durumAdi(t.status))];
   const meta = h('dl', 'meta-grid');
-  for (const [k, v] of [['Başladı', fmtWhen(t.started)], ['Bitti', t.finished ? fmtWhen(t.finished) : '—'],
-    ['Oturum', t.session || '—'], ['Not', t.note]]) {
+  for (const [k, v] of [[T('Başladı'), fmtWhen(t.started)], [T('Bitti'), t.finished ? fmtWhen(t.finished) : '—'],
+    [T('Oturum'), t.session || '—'], [T('Not'), t.note]]) {
     meta.append(h('dt', null, k), h('dd', null, v));
   }
   const spend = budgetText(t);
-  if (spend) meta.append(h('dt', null, 'Kullanım sınırı'), h('dd', null, spend));
-  else if (harcamaText(t.spent, t.tokens) !== '—') meta.append(h('dt', null, 'Kullanım'), h('dd', null, harcamaText(t.spent, t.tokens)));
+  if (spend) meta.append(h('dt', null, T('Kullanım sınırı')), h('dd', null, spend));
+  else if (harcamaText(t.spent, t.tokens) !== '—') meta.append(h('dt', null, T('Kullanım')), h('dd', null, harcamaText(t.spent, t.tokens)));
   // an escalated job and the job it replaced link each other (escalation ladder)
-  for (const [label, prefix, link] of [[escalationText(t), 'önceki deneme: ', t.escalated_from],
-    ['Yeni deneme', 'bir üst katmanda: ', t.escalated_to]]) {
+  for (const [label, metin, link] of [[escalationText(t), N_('önceki deneme: {not}'), t.escalated_from],
+    [T('Yeni deneme'), N_('bir üst katmanda: {not}'), t.escalated_to]]) {
     if (!link) continue;
-    const a = h('span', 'link', prefix + link.replace(/\.md$/, ''));
+    const a = h('span', 'link', T(metin, { not: link.replace(/\.md$/, '') }));
     makeClickable(a, () => openDetail({ kind: 'task', note: link }));
     const dd = h('dd');
     dd.appendChild(a);
     meta.append(h('dt', null, label), dd);
   }
-  const nodes = [meta, ...section('Görev', t.task), ...section('Sonuç', t.result)];
+  const nodes = [meta, ...section(T('Görev'), t.task), ...section(T('Sonuç'), t.result)];
   const yol = yolCizgisi(stateTask(t.note), { onNote: (n) => openDetail({ kind: 'task', note: n }) });
   if (yol) nodes.splice(1, 0, yol);
   if (t.workflow) {
     // phase 4: the step's workflow, its verdict, findings and review rounds (from the server's workflow state)
     const w = t.workflow;
     const box = h('div', 'proof');
-    box.appendChild(h('h3', null, `Akış: ${w.baslik}`));
-    box.appendChild(h('p', 'empty-note', `${w.sablon} · adım ${w.adim}/${w.toplam} · ${stepText({ step: w.adim, step_kind: w.tur })}`));
+    box.appendChild(h('h3', null, T('Akış: {baslik}', { baslik: w.baslik })));
+    box.appendChild(h('p', 'empty-note', `${w.sablon} · ${T('adım {adim}/{toplam}', { adim: w.adim, toplam: w.toplam })} · ${stepText({ step: w.adim, step_kind: w.tur })}`));
     box.appendChild(h('p', null, verdictText(w)));
     if (w.inceleme_turu > 1 || w.plan_turu > 1) {
-      box.appendChild(h('p', 'empty-note', `Plan turu: ${w.plan_turu || 0} · inceleme turu: ${w.inceleme_turu || 0}`));
+      box.appendChild(h('p', 'empty-note', T('Plan turu: {plan} · inceleme turu: {inceleme}', { plan: w.plan_turu || 0, inceleme: w.inceleme_turu || 0 })));
     }
     if (w.bulgular && w.bulgular.length) box.appendChild(linkli('pre', 'proof-text', w.bulgular.join('\n')));
-    if (w.deniz) box.appendChild(h('p', 'empty-note', `Akış durduğunda ${sahip()} devam dedi; bu adım geçmiş sayıldı.`));
-    if (w.durma_nedeni) box.appendChild(h('p', 'empty-note', `Akış durdu: ${w.durma_nedeni}`));
+    if (w.deniz) box.appendChild(h('p', 'empty-note', T('Akış durduğunda {sahip} devam dedi; bu adım geçmiş sayıldı.', { sahip: sahip() })));
+    if (w.durma_nedeni) box.appendChild(h('p', 'empty-note', T('Akış durdu: {neden}', { neden: w.durma_nedeni })));
     nodes.push(box);
   }
   for (const k of t.kontrol || []) {
     // the server-run Kontrol: the proof that the job is done (a project's own "bitti" is not)
     const box = h('div', 'proof');
-    box.appendChild(h('h3', null, k.title || 'Kontrol (kanıt)'));
+    box.appendChild(h('h3', null, k.title || T('Kontrol (kanıt)')));
     const facts = h('dl', 'meta-grid');
-    facts.append(h('dt', null, 'Çıkış kodu'), h('dd', null, k.exit_code || '—'),
-      h('dt', null, 'Süre'), h('dd', null, k.duration || '—'));
-    box.append(h('p', 'empty-note', 'Komut'), h('pre', 'proof-text', k.command || '—'), facts,
-      h('p', 'empty-note', 'Çıktının sonu'), h('pre', 'proof-text', k.output || '(çıktı yok)'));
+    facts.append(h('dt', null, T('Çıkış kodu')), h('dd', null, k.exit_code || '—'),
+      h('dt', null, T('Süre')), h('dd', null, k.duration || '—'));
+    box.append(h('p', 'empty-note', T('Komut')), h('pre', 'proof-text', k.command || '—'), facts,
+      h('p', 'empty-note', T('Çıktının sonu')), h('pre', 'proof-text', k.output || T('(çıktı yok)')));
     nodes.push(box);
   }
   if (t.decisions && t.decisions.length) {
-    nodes.push(h('h3', null, 'İlgili kararlar'));
+    nodes.push(h('h3', null, T('İlgili kararlar')));
     for (const d of t.decisions) {
       const box = h('div', 'decision');
       box.appendChild(h('strong', null, d.title));
-      box.appendChild(mdBlock(`Soru: ${d.question || '—'}`));
-      box.appendChild(mdBlock(`Cevap: ${d.answer || (d.status === 'bekliyor' ? 'bekliyor' : '—')}`));
+      box.appendChild(mdBlock(T('Soru: {soru}', { soru: d.question || '—' })));
+      box.appendChild(mdBlock(T('Cevap: {cevap}', { cevap: d.answer || (d.status === 'bekliyor' ? T('bekliyor') : '—') })));
       nodes.push(box);
     }
   }
-  showDetail(kicker, t.title || 'İş', nodes);
+  showDetail(kicker, t.title || T('İş'), nodes);
 }
 
 // --- token breakdown for one room ---
 const USAGE_LABELS = [
-  ['cache_read_input_tokens', 'Önbellekten okunan', 'Her adımda yeniden okunan bağlam (kurallar, önceki mesajlar). Çok ucuz, ama toplamın büyük kısmı budur.'],
-  ['cache_creation_input_tokens', 'Önbelleğe yazılan', 'Bağlamın ilk kez önbelleğe alınması.'],
-  ['input_tokens', 'Yeni girdi', 'Önbellekte olmayan yeni metin.'],
-  ['output_tokens', 'Üretilen', 'Çalışanın yazdığı cevaplar ve araç çağrıları.'],
+  ['cache_read_input_tokens', N_('Önbellekten okunan'), N_('Her adımda yeniden okunan bağlam (kurallar, önceki mesajlar). Çok ucuz, ama toplamın büyük kısmı budur.')],
+  ['cache_creation_input_tokens', N_('Önbelleğe yazılan'), N_('Bağlamın ilk kez önbelleğe alınması.')],
+  ['input_tokens', N_('Yeni girdi'), N_('Önbellekte olmayan yeni metin.')],
+  ['output_tokens', N_('Üretilen'), N_('Çalışanın yazdığı cevaplar ve araç çağrıları.')],
 ];
 
 // "claude-opus-5-5" -> "Opus 5.5"; unknown ids are shown as they are.
 function modelName(id) {
   const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?/.exec(id || '');
-  if (!m) return id || 'bilinmiyor';
+  if (!m) return id || T('bilinmiyor');
   return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? '.' + m[3] : ''}`;
 }
 
-// List-price estimate in USD, Turkish number format ("$1,25"); tiny amounts read "<$0,01".
+// List-price estimate in USD, in the display language's number format ("$1,25" / "$1.25"); tiny amounts read "<$0,01".
 function fmtUsd(v) {
-  if (v == null) return 'fiyat bilinmiyor';
-  if (v > 0 && v < 0.01) return '<$0,01';
-  return '$' + v.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (v == null) return T('fiyat bilinmiyor');
+  if (v > 0 && v < 0.01) return aktifDil() === 'en' ? '<$0.01' : '<$0,01';
+  return '$' + v.toLocaleString(yerel(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function bar(label, value, max, hint, cost) {
@@ -2960,7 +3141,8 @@ function bar(label, value, max, hint, cost) {
 async function renderUsage(project) {
   const seq = ++detailSeq;
   const name = project === 'ceo' ? 'CEO' : project;
-  showDetail(`${name} · bugün`, 'Token dökümü', [h('p', 'empty-note', 'Hesaplanıyor…')]);
+  const ust = T('{ad} · bugün', { ad: name });
+  showDetail(ust, T('Token dökümü'), [h('p', 'empty-note', T('Hesaplanıyor…'))]);
   let d = null;
   if (!demo) {
     try {
@@ -2969,27 +3151,27 @@ async function renderUsage(project) {
     } catch { d = null; }
   }
   if (seq !== detailSeq) return;
-  if (!d) { showDetail(`${name} · bugün`, 'Token dökümü', [h('p', 'empty-note', demo ? 'Demo modunda döküm yok.' : 'Döküm alınamadı.')]); return; }
+  if (!d) { showDetail(ust, T('Token dökümü'), [h('p', 'empty-note', demo ? T('Demo modunda döküm yok.') : T('Döküm alınamadı.'))]); return; }
   const cost = d.cost || {};
-  const nodes = [h('p', 'usage-total', `Bugün toplam ${fmtUsage(d.total)} token · yaklaşık ${fmtUsd(cost.total)}`)];
-  nodes.push(h('p', 'usage-hint', `Tutarlar Anthropic liste fiyatıyla tahmindir (fiyatlar: ${d.prices_as_of || '—'}). `
-    + 'Abonelikte token başına fatura yok; kullanım limitinden düşer.'
-    + (d.unpriced_calls ? ` ${d.unpriced_calls} çağrının fiyatı bilinmiyor, tutara katılmadı.` : '')));
+  const nodes = [h('p', 'usage-total', T('Bugün toplam {token} token · yaklaşık {usd}', { token: fmtUsage(d.total), usd: fmtUsd(cost.total) }))];
+  nodes.push(h('p', 'usage-hint', [T('Tutarlar Anthropic liste fiyatıyla tahmindir (fiyatlar: {tarih}).', { tarih: d.prices_as_of || '—' }),
+    T('Abonelikte token başına fatura yok; kullanım limitinden düşer.'),
+    d.unpriced_calls ? T('{n} çağrının fiyatı bilinmiyor, tutara katılmadı.', { n: d.unpriced_calls }) : ''].filter(Boolean).join(' ')));
   if (!d.total) {
-    nodes.push(h('p', 'empty-note', 'Bugün bu odada token kullanılmadı.'));
-    showDetail(`${name} · bugün`, 'Token dökümü', nodes);
+    nodes.push(h('p', 'empty-note', T('Bugün bu odada token kullanılmadı.')));
+    showDetail(ust, T('Token dökümü'), nodes);
     return;
   }
-  nodes.push(h('h3', null, 'Türüne göre'));
+  nodes.push(h('h3', null, T('Türüne göre')));
   const maxField = Math.max(...USAGE_LABELS.map(([k]) => d.fields[k] || 0));
-  for (const [k, label, hint] of USAGE_LABELS) nodes.push(bar(label, d.fields[k] || 0, maxField, hint, cost[k] || 0));
+  for (const [k, label, hint] of USAGE_LABELS) nodes.push(bar(T(label), d.fields[k] || 0, maxField, T(hint), cost[k] || 0));
   const models = Object.entries(d.by_model || {}).sort((a, b) => b[1].total - a[1].total);
   if (models.length) {
-    nodes.push(h('h3', null, 'Unvana göre'));
+    nodes.push(h('h3', null, T('Unvana göre')));
     const maxModel = Math.max(...models.map(([, v]) => v.total), 1);
-    for (const [id, v] of models) nodes.push(bar(`${calisanMetni(id) || modelName(id)} · ${v.calls} çağrı`, v.total, maxModel, null, v.cost));
+    for (const [id, v] of models) nodes.push(bar(`${calisanMetni(id) || modelName(id)} · ${T('{n} çağrı', { n: v.calls })}`, v.total, maxModel, null, v.cost));
   }
-  nodes.push(h('h3', null, d.sessions.length > 1 ? 'Oturumlara göre' : 'Oturum'));
+  nodes.push(h('h3', null, d.sessions.length > 1 ? T('Oturumlara göre') : T('Oturum')));
   for (const sess of d.sessions) {
     const box = h('div', 'decision usage-session');
     const head = h('div', 'usage-head');
@@ -2998,21 +3180,21 @@ async function renderUsage(project) {
     head.append(h('strong', null, sess.task ? feedText(sess.task, 70) : sess.name), amount);
     box.appendChild(head);
     const sessModels = Object.keys(sess.by_model || {}).map(modelName).join(', ');
-    box.appendChild(h('p', 'usage-hint', `${sess.name} · ${sess.calls} çağrı${sessModels ? ' · ' + sessModels : ''}`));
+    box.appendChild(h('p', 'usage-hint', `${sess.name} · ${T('{n} çağrı', { n: sess.calls })}${sessModels ? ' · ' + sessModels : ''}`));
     const toolCost = sess.cost_by_tool || {};
     const tools = Object.entries(sess.by_tool).sort((a, b) => b[1] - a[1]).map(([t, v]) => [t, v, toolCost[t]]);
-    if (sess.other) tools.push(['Cevap / düşünme', sess.other, sess.cost_other]);
+    if (sess.other) tools.push([T('Cevap / düşünme'), sess.other, sess.cost_other]);
     const maxTool = Math.max(...tools.map(([, v]) => v), 1);
     for (const [tool, v, c] of tools.slice(0, 8)) box.appendChild(bar(tool, v, maxTool, null, c === undefined ? null : c));
     if (sess.note) makeClickable(box, () => openDetail({ kind: 'task', note: sess.note }));
     nodes.push(box);
   }
-  nodes.push(h('p', 'usage-hint', 'Araç satırı, o aracı kullanan çağrıların tokenidir (yaklaşık).'));
-  showDetail(`${name} · bugün`, 'Token dökümü', nodes);
+  nodes.push(h('p', 'usage-hint', T('Araç satırı, o aracı kullanan çağrıların tokenidir (yaklaşık).')));
+  showDetail(ust, T('Token dökümü'), nodes);
 }
 
 makeClickable($('room-tokens'), () => { if (selected) openUsage(selected === CEO ? 'ceo' : selected); });
-$('room-tokens').title = 'Tokenin nereye gittiğini göster';
+sabitMetin($('room-tokens'), N_('Tokenin nereye gittiğini göster'), 'title');
 
 $('detail-close').addEventListener('click', closeDetail);
 $('detail-back').addEventListener('click', detailBack);

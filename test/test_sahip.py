@@ -9,6 +9,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin"))
 import hafiza  # noqa: E402
 import mudur  # noqa: E402
@@ -23,9 +27,10 @@ def run_js(expr, env=None):
     """Evaluates `expr` with web/ofis-text.js imported as `t` (the same way test/test_web.py does: a .mjs copy, with
     its import of ./ofis-davranis.js copied along); returns the JSON-decoded result."""
     with tempfile.TemporaryDirectory() as tmp:
-        shutil.copyfile(WEB / "ofis-davranis.js", Path(tmp) / "ofis-davranis.mjs")
-        text = (WEB / "ofis-text.js").read_text(encoding="utf-8").replace("'./ofis-davranis.js'",
-                                                                          "'./ofis-davranis.mjs'")
+        (Path(tmp) / "ofis-davranis.mjs").write_text(
+            webkopya.mjs_yap((WEB / "ofis-davranis.js").read_text(encoding="utf-8")), encoding="utf-8")
+        webkopya.i18n_ekle(tmp, mjs=True)
+        text = webkopya.mjs_yap((WEB / "ofis-text.js").read_text(encoding="utf-8"))
         module = Path(tmp) / "ofis-text.mjs"
         module.write_text(text, encoding="utf-8")
         code = (f"import * as t from {json.dumps(module.as_uri())};\n"

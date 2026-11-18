@@ -172,7 +172,9 @@ masada çalışan bir robottur. Çevresinde:
 - **CEO sohbeti** ve CEO'nun adımlarını, karar kartlarını ve duyuruları gösteren **Komuta masası**;
 - karar zili, "şu an iş başında" listesi, her iş için bir ilerleme çizgisi;
 - sekmeler: **İşler**, **Raporlar**, **Kalite** (karne), **Zamanlanmış**, **Son olanlar** ve **Ayarlar**;
-- sunucunun durumu ("Sunucu odası": bilgisayarın yükü ve alan adların), Ar-Ge ve denetçiler için odalar.
+- sunucunun durumu ("Sunucu odası": bilgisayarın yükü ve alan adların), Ar-Ge ve denetçiler için odalar;
+- isteğe bağlı olarak (`npc_sohbet`, varsayılan kapalı) çalışan kartlarında bir soru kutusu: karakter, ofisin kendi
+  verisiyle ve rolünün sesiyle cevap verir; Stajyer modeline araçsız tek bir çağrı.
 
 `?demo=1` sahte verilerle bir demo ofis gösterir; `?hafif=1` yavaş makineler için görüntü kalitesini düşürür.
 
@@ -382,6 +384,7 @@ yalnız `ucretsiz_denetci_projeler` listesindeki projelerde çalışır.
 |---|---|
 | `ofis_adi` | sayfadaki ofis adı |
 | `sahip_adi` | ofisin yazdığı her metinde senin adın |
+| `dil` | sayfanın ve CEO'nun dili: `tr` (varsayılan) ya da `en` — İngilizcede sayfanın ana görünümleri, gösterdiği sunucu metinleri ve CEO'nun cevapları (Ayarlar › Genel › Dil / Language) |
 | `ceo_session` | CEO oturumunun adı (`ofis-ceo`) |
 | `ceo_yenileme` | yeni bir CEO oturumu ne zaman açılır: bağlam büyüklüğü, soğuk önbellek, yeni gün |
 | `vault_ofis` | Obsidian kasandaki `OFIS` klasörü |
@@ -405,6 +408,7 @@ yalnız `ucretsiz_denetci_projeler` listesindeki projelerde çalışır.
 | `ofis_sahnesi` | sahnedeki öğle arası ve ofisin saat dilimi (`saat_dilimi`, varsayılan: sistemin) |
 | `danisman_pilotu`, `zor_is_danismani` | kod işleri için danışman model: A/B denemesi (kapalı) ve zor işler için |
 | `yakala` | Yakala kutusu: açık/kapalı, öğe başına sınır, saatlik sınır, dosya boyutu |
+| `npc_sohbet` | NPC sohbeti: bir çalışanın kartından ona kısa bir soru sor (varsayılan kapalı; açık/kapalı ve saatlik sınır Ayarlar sekmesinde) |
 | `talimat_denetimi` | bir katmanın modeli değişince çalışan talimat denetimi |
 | `jarvis` | sesli / menü çubuğu istemcisi için isteğe bağlı yerel A2A kapısı (varsayılan kapalı) |
 | `limitler` | plan kullanım göstergesi ve uyarı eşikleri |

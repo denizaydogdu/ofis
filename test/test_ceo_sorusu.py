@@ -12,6 +12,10 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "bin"))
 sys.path.insert(0, HERE)
@@ -206,9 +210,10 @@ class ClaudeMdTest(unittest.TestCase):
 def run_js(expr):
     with tempfile.TemporaryDirectory() as tmp:
         module = Path(tmp) / "ofis-text.mjs"
-        shutil.copyfile(WEB / "ofis-davranis.js", Path(tmp) / "ofis-davranis.mjs")  # the owner's name helpers
-        module.write_text((WEB / "ofis-text.js").read_text(encoding="utf-8")
-                          .replace("'./ofis-davranis.js'", "'./ofis-davranis.mjs'"), encoding="utf-8")
+        (Path(tmp) / "ofis-davranis.mjs").write_text(  # the owner's name helpers
+            webkopya.mjs_yap((WEB / "ofis-davranis.js").read_text(encoding="utf-8")), encoding="utf-8")
+        webkopya.i18n_ekle(tmp, mjs=True)
+        module.write_text(webkopya.mjs_yap((WEB / "ofis-text.js").read_text(encoding="utf-8")), encoding="utf-8")
         code = (f"import * as t from {json.dumps(module.as_uri())};\n"
                 f"process.stdout.write(JSON.stringify({expr}));")
         proc = subprocess.run([NODE, "--input-type=module", "-e", code], capture_output=True, text=True, timeout=30)
@@ -264,7 +269,7 @@ class PageTest(unittest.TestCase):
         self.assertIn("renderSecenekler(card, secim)", app)
         self.assertIn("card.parts.submit(o.cevap)", app)
         self.assertIn("cevapBekleyenRozetleri(chat, rozetKararlari())", app)
-        self.assertIn("'msg-bekliyor', 'cevap bekliyor'", app)
+        self.assertIn("'msg-bekliyor', T('cevap bekliyor')", app)
         badge = app[app.index("function renderChatBox("):app.index("function openDrawer(")]
         self.assertNotIn("innerHTML", badge)
 

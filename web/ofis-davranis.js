@@ -31,6 +31,8 @@
 
 // --- the owner's name and its Turkish case suffixes ---
 export const SAHIP_VARSAYILAN = 'Sahip';
+import { aktifDil } from './i18n.js';
+
 export const SAHIP_HALLERI = ['e', 'in', 'den', 'i', 'de']; // dative, genitive, ablative, accusative, locative
 const SESLI = 'aeıioöuü';
 const KALIN = 'aıou';
@@ -46,6 +48,8 @@ const tabanHarf = (c) => (TURK_HARFLERI.includes(c) || !/\p{L}/u.test(c) ? c : c
 export function sahipEk(ad, hal) {
   if (!SAHIP_HALLERI.includes(hal)) throw new Error(`unknown case ${hal}`);
   const name = String(ad);
+  // English (ofis.json dil, web/i18n.js): the bare name, the genitive "Name's" (bin/sahip.py ek_dilde)
+  if (aktifDil() === 'en') return hal === 'in' ? `${name}'s` : name;
   const kucuk = name.replace(/I/g, 'ı').replace(/İ/g, 'i').toLowerCase().replace(/â/g, 'a').replace(/î/g, 'i').replace(/û/g, 'u');
   const harfler = [...[...kucuk].map(tabanHarf).join('')].filter((c) => /\p{L}/u.test(c));
   const sesliler = harfler.filter((c) => SESLI.includes(c));
@@ -774,6 +778,82 @@ export function mudurZiyareti(kararlar, key, ms, tz = DEFAULT_SAHNE.saat_dilimi,
   }
   return null;
 }
+// The jobs a manager walks over to look at (owner decision 2026-11-18, "daha mantıklı"): the server's silent list
+// (st.postoffice.silent: a working job's session idle over two minutes; a permission prompt is the owner's, not a
+// manager's) and the stuck jobs (tikandi). Map note -> 'sessiz' | 'takildi'. Pure; real state only.
+export function bakilacakIsler(st) {
+  const out = new Map();
+  const po = st && st.postoffice && typeof st.postoffice === 'object' ? st.postoffice : null;
+  for (const x of po && Array.isArray(po.silent) ? po.silent : []) if (x && x.is && !x.izin) out.set(notAdi(x.is), 'sessiz');
+  for (const t of Array.isArray(st && st.tasks) ? st.tasks : []) if (t && t.note && t.status === 'tikandi') out.set(notAdi(t.note), 'takildi');
+  return out;
+}
+export const BAKIS_METNI = { sessiz: 'sessiz işe bakıyor', takildi: 'takılan işe bakıyor' };
+
+// What a staff member at its desk says when it has no duty (owner decision 2026-11-18: real things, never filler): a
+// short "masasında · …" from the state — a manager its department's open work (the Yazılım Müdürü also the busiest
+// project), the doctor today's stuck jobs, the psychologist the jobs on a second Kontrol attempt, the İK the jobs at work,
+// the Muhasebeci today's finished jobs, the İdari işler the schedules, a project sorumlusu its project's open jobs.
+// `gorevli` as on the actor ('mudur' with `alan`, 'revir', 'psikolog', 'ik', 'muhasebe', 'idari', 'proje' with
+// `proje`); 'masasında' when there is nothing real to say. Pure.
+const ACIK_DURUMLAR = new Set(['baslatiliyor', 'calisiyor', 'kontrolde', 'incelemede', 'karar-bekliyor']);
+export function masaSozu(gorevli, st, ms, { alan = '', proje = '' } = {}) {
+  const s = st && typeof st === 'object' ? st : {};
+  const tasks = (Array.isArray(s.tasks) ? s.tasks : []).filter((t) => t && t.note);
+  const acik = tasks.filter((t) => ACIK_DURUMLAR.has(t.status) && !onayAdimi(t) && !argeIsi(t));
+  const m = (x) => (x ? `masasında · ${x}` : 'masasında');
+  if (gorevli === 'mudur') {
+    if (alan === 'it') {
+      const sv = s.sistem && typeof s.sistem === 'object' ? s.sistem : null;
+      const ad = sv && { yesil: 'sistem rahat', sari: 'sistem yoğun', kirmizi: 'sistem çok yoğun' }[sv.seviye];
+      return m(ad || '');
+    }
+    const is = acik.filter((t) => isDepartmani(t) === alan && (alan !== 'yazilim' || !planIsi(t)));
+    const ad = { yazilim: 'kod işi', qa: 'inceleme', analist: 'plan incelemesi' }[alan];
+    if (!ad) return m('');
+    if (!is.length) return m(`açık ${ad} yok`);
+    let ek = '';
+    if (alan === 'yazilim') { // the busiest project: the most open jobs, then the name
+      const say = new Map();
+      for (const t of is) if (t.project) say.set(t.project, (say.get(t.project) || 0) + 1);
+      const en = [...say].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+      if (en && say.size > 1) ek = ` · en yoğun: ${en[0]}`;
+    }
+    return m(`${is.length} ${ad} takipte${ek}`);
+  }
+  if (gorevli === 'revir') {
+    const sh = { ...DEFAULT_SAHNE, ...(s.sahne || {}) };
+    const ofset = Number.isFinite(sh.sunucu_utc_ofset_dk) ? sh.sunucu_utc_ofset_dk : null;
+    const gunOf = (t) => { const o = ofisSaati(t, sh.saat_dilimi); return `${o.yil}-${o.ay}-${o.gun}`; };
+    const gun = (v) => { const t = zamanMs(v, sh.saat_dilimi, ofset); return t === null ? '' : gunOf(t); };
+    const bugun = Number.isFinite(ms) ? gunOf(ms) : '';
+    const n = tasks.filter((t) => t.status === 'tikandi' && bugun && gun(t.finished) === bugun).length;
+    return m(n ? `bugün ${n} iş takıldı` : 'ofis sağlıklı');
+  }
+  if (gorevli === 'psikolog') {
+    const n = acik.filter((t) => Number(t.kontrol_deneme) >= 2).length;
+    return m(n ? `${n} iş ikinci Kontrol denemesinde` : '');
+  }
+  if (gorevli === 'ik') {
+    const n = acik.filter((t) => t.status === 'calisiyor').length;
+    return m(n ? `${n} iş üzerinde çalışılıyor` : 'şu an çalışan iş yok');
+  }
+  if (gorevli === 'muhasebe') {
+    const sum = s.summary && typeof s.summary === 'object' ? s.summary : {};
+    const n = Number.isFinite(sum.finished_today) && sum.finished_today >= 0 ? Math.floor(sum.finished_today) : null;
+    return m(n === null ? '' : n ? `bugün ${n} iş bitti` : 'bugün biten iş yok');
+  }
+  if (gorevli === 'idari') {
+    const n = (Array.isArray(s.schedules) ? s.schedules : []).filter((z) => z && !z.duraklatildi).length;
+    return m(n ? `${n} zamanlanmış iş` : '');
+  }
+  if (gorevli === 'proje') {
+    const n = acik.filter((t) => t.project === proje).length;
+    return m(n ? `${n} açık iş` : '');
+  }
+  return 'masasında';
+}
+
 export const MUDURLUK_ARA = 1.4; // the gap between the two offices of a cell (base units: 2.1 world, rooms never touch)
 export const mudurlukOdasi = (key) => `mudurluk-${key}`;
 export const mudurMasasi = (key) => `mudurluk-${key}-masa`;
@@ -2388,16 +2468,18 @@ export function personelSaati(id, now, sahne) {
 
 // --- decorative people (the owner, 2026-11-13: "QA odasında, analist odasında, proje ekiplerinde NPC yok; sırf görünüm için
 // olabilir") ---
-// Purely visual figures so the QA odası, the Analist odası and the project team bays look staffed. They are no actors:
-// no data, no walks, no labels, never in kimNerede, the Çalışanlar list or the org chart's people (the chart shows one
+// Purely visual figures so the QA odası, the Analist odası and the project team bays look staffed (since 2026-11-18 also
+// the common areas, with a few slow walkers: dekorOrtakYerleri, DEKOR_YURUYUSLER). They are no actors:
+// no data, no labels, never in kimNerede, the Çalışanlar list or the org chart's people (the chart shows one
 // group line per room: DEKOR_EKIP). The scene draws all of them as one instanced body mesh (+ one for the standing ones'
 // legs): two draw calls in total (web/scene.js setDekor). Each sits at a desk the real work leaves for last (the QA
 // odası: the second Kıdemli and the second Stajyer Tester desk; the Analist odası: its last two desks; a team bay: its
 // last two desks) or stands at the room's whiteboard; it gives its desk up (hidden) while an actor sits at or heads
 // for it, and is home (hidden, no lift walk) outside its own seeded office hours (personelSaati).
 export const DEKOR_EKIP = { qa: 3, analist: 3, proje: 2 }; // people per QA odası / Analist odası / team bay
-// The fixed seats of the decorative people in a plan: [{id, grup: 'qa' | 'analist' | 'proje', oda, proje, yer (the
-// desk node, null for one standing), x, z, aci, oturan}]. Pure; the same plan gives the same list.
+// The fixed seats of the decorative people in a plan: [{id, grup: 'qa' | 'analist' | 'proje' | 'ortak', oda, proje, yer
+// (the seat node, null for one standing at a whiteboard or walking), x, z, aci (null: as yuzAcisi), oturan, sit (the
+// seat kind), yuruyen + rota (a walker: dekorRotasi)}]. Pure; the same plan gives the same list.
 export function dekorYerleri(plan) {
   const nodes = (plan && plan.dugumler) || {};
   const out = [];
@@ -2420,7 +2502,96 @@ export function dekorYerleri(plan) {
       masalar.forEach((yer, i) => masada(`dekor:proje:${r.proje}:${i}`, 'proje', r.id, yer, r.proje));
     }
   }
+  // the common areas (owner decision 2026-11-18, "NPC'leri fazlalaştıralım"): seats the real actors use last
+  let i = 0;
+  for (const [yer, oturan] of dekorOrtakYerleri(plan)) {
+    const n = nodes[yer];
+    // aci null: the scene turns it like a real character on that spot (yuzAcisi); `sit` = the seat kind (its height)
+    out.push({ id: `dekor:ortak:${i++}`, grup: 'ortak', oda: n.oda, proje: '', yer, x: n.x, z: n.z, aci: null, oturan,
+      sit: oturan ? n.tur : '' });
+  }
+  // and a few who walk slowly along the plan's own walks (never through furniture), pausing at each stop
+  DEKOR_YURUYUSLER.forEach((duraklar, k) => {
+    const rota = dekorRotasi(plan, duraklar);
+    if (!rota) return;
+    const p = rota.bacaklar[0].pts[0];
+    out.push({ id: `dekor:yuruyen:${k}`, grup: 'ortak', oda: null, proje: '', yer: null, x: p[0], z: p[1], aci: 0,
+      oturan: false, yuruyen: true, rota });
+  });
   return out;
+}
+
+// The common-area seats of the decorative people: [[node, seated]], only the nodes the plan has. The Toplantı odası (a
+// meeting at its table: it stays empty of actors), the last table of the canteen (the chairs the agents take last), the
+// tea corner's last round table, one café table of the Ortak alan, the bean bag and one billiards player of the Oyun odası.
+// Never the lobby's armchairs (the queued jobs wait there) nor a desk.
+export function dekorOrtakYerleri(plan) {
+  const nodes = (plan && plan.dugumler) || {};
+  const out = [['toplanti-sandalye-0', true], ['toplanti-sandalye-1', true], ['toplanti-sandalye-4', true]];
+  const masalar = Array.isArray(plan && plan.yemek_masalari) ? plan.yemek_masalari : [];
+  const son = masalar[masalar.length - 1];
+  if (son) { // the two chairs face to face at the last table's left end, and the next one on its near side
+    const yakin = Object.values(nodes).filter((n) => /^yemekhane-sandalye-\d+$/.test(n.id) && n.id !== 'yemekhane-sandalye-7' &&
+      Math.abs(n.z - son[2]) < 2.5).sort((a, b) => a.x - b.x || a.z - b.z);
+    const xs = [...new Set(yakin.map((n) => n.x))];
+    for (const n of yakin.filter((m) => m.x === xs[0])) out.push([n.id, true]);
+    const ikinci = yakin.find((m) => m.x === xs[1] && m.z < son[2]);
+    if (ikinci) out.push([ikinci.id, true]);
+  }
+  out.push(['cay-ocagi-yer-7', true], ['cay-ocagi-yer-8', true], ['ortak-alan-yer-2', true], ['ortak-alan-yer-3', true],
+    ['oyun-puf', true], ['oyun-bilardo-1', false]);
+  return out.filter(([id]) => nodes[id]);
+}
+
+// The decorative walkers' stops (nodes with stable names on every plan): the front-row corridor, the back corridor, a
+// wing corridor and the lobby's door to the spine. Each walks its stops in order and back to the first, pausing
+// DEKOR_DURAK_S at each.
+export const DEKOR_YURUYUSLER = [['koridor-1-sol', 'koridor-1-sag'], ['koridor-0-sag', 'koridor-0-sol'],
+  ['kanat-2-omurga', 'kanat-2-sag'], ['lobi-kapi', 'kanat-4-omurga']];
+export const DEKOR_HIZ = 0.8; // world units a second: slower than any actor (a stroll)
+export const DEKOR_DURAK_S = 8;
+// A walker's loop from its stops: {bacaklar: [{pts: [[x, z]], cum, L}] (the walk from stop k to stop k + 1 along `yol`,
+// the plan's edges, so never through furniture), sure (one loop in seconds)}; null when a stop is missing or unreachable.
+export function dekorRotasi(plan, duraklar) {
+  const nodes = (plan && plan.dugumler) || {};
+  if (!Array.isArray(duraklar) || duraklar.length < 2 || duraklar.some((d) => !nodes[d])) return null;
+  const bacaklar = [];
+  for (let k = 0; k < duraklar.length; k++) {
+    const p = yol(plan, duraklar[k], duraklar[(k + 1) % duraklar.length]);
+    if (p.length < 2) return null;
+    const pts = p.map((q) => [q.x, q.z]);
+    const cum = [0];
+    for (let j = 1; j < pts.length; j++) cum.push(cum[j - 1] + Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]));
+    bacaklar.push({ pts, cum, L: cum[cum.length - 1] });
+  }
+  const sure = bacaklar.reduce((s, b) => s + DEKOR_DURAK_S + b.L / DEKOR_HIZ, 0);
+  return sure > 0 ? { bacaklar, sure } : null;
+}
+// A walker at scene time t (seconds): {x, z, aci (as yuzAcisi: atan2(dx, dz)), yuruyor}. Periodic in t: a pause at
+// each stop, then the walk to the next. Pure.
+export function dekorYuruyusu(rota, t) {
+  if (!rota || !(rota.sure > 0)) return null;
+  let s = ((Number(t) || 0) % rota.sure + rota.sure) % rota.sure;
+  let aci = 0;
+  for (const b of rota.bacaklar) {
+    const yon = (j) => Math.atan2(b.pts[j][0] - b.pts[j - 1][0], b.pts[j][1] - b.pts[j - 1][1]);
+    if (s < DEKOR_DURAK_S) return { x: b.pts[0][0], z: b.pts[0][1], aci: b.pts.length > 1 ? yon(1) : aci, yuruyor: false };
+    s -= DEKOR_DURAK_S;
+    const yolS = b.L / DEKOR_HIZ;
+    if (s < yolS) {
+      const u = s * DEKOR_HIZ;
+      let j = 1;
+      while (j < b.cum.length - 1 && b.cum[j] < u) j++;
+      const seg = b.cum[j] - b.cum[j - 1] || 1;
+      const f = Math.min(1, Math.max(0, (u - b.cum[j - 1]) / seg));
+      const a = b.pts[j - 1], c = b.pts[j];
+      return { x: a[0] + (c[0] - a[0]) * f, z: a[1] + (c[1] - a[1]) * f, aci: yon(j), yuruyor: true };
+    }
+    s -= yolS;
+    aci = yon(b.pts.length - 1);
+  }
+  const b = rota.bacaklar[0];
+  return { x: b.pts[0][0], z: b.pts[0][1], aci, yuruyor: false };
 }
 // The decorative people shown now: dekorYerleri minus the ones home (outside their seeded office hours) and the ones
 // whose desk an actor uses (`yer` or `masa`, also while walking there). Each entry gets `faz` (a stable phase for its
@@ -3900,7 +4071,7 @@ export function niyetler(state, now, prev = null, options = {}) {
     // the IT team has its own block below (itEkibi); hafif keeps only the doctor here (and the Ar-Ge uzmanı at work)
     if (key === 'sunucu' || !plan.dugumler[masa] || (hafif && key !== 'revir' && !argeGorev)) continue;
     const a = { id: `sus:${key}`, tur: 'sus', gorevli: key, unvan: '', rank: 0, model: '', proje: '', yer: masa, masa,
-      poz: 'yaziyor', simge: null, etiket, durum_metni: 'masasında', tiklama: null };
+      poz: 'yaziyor', simge: null, etiket, durum_metni: masaSozu(key, st, ms), tiklama: null };
     const pa = prevOf(a.id);
     let ziyarette = false;
     if (argeGorev) { // real work first: at its desk while the research job is open, also outside its office hours
@@ -3994,16 +4165,21 @@ export function niyetler(state, now, prev = null, options = {}) {
       planGorusulen.add(planToplantisi.anahtar);
     }
   }
+  const sorunlu = bakilacakIsler(st);
   for (const m of MUDURLUKLER) {
     const masa = mudurMasasi(m.key);
     if (!plan.dugumler[masa] || hafif) continue;
     const a = { id: mudurId(m.key), tur: 'sus', gorevli: 'mudur', alan: m.key, unvan: '', rank: 0, model: '', proje: '',
-      yer: masa, masa, poz: 'yaziyor', simge: null, etiket: m.ad, durum_metni: 'masasında', tiklama: null };
+      yer: masa, masa, poz: 'yaziyor', simge: null, etiket: m.ad, durum_metni: masaSozu('mudur', st, ms, { alan: m.key }),
+      tiklama: null };
     const pa = prevOf(a.id);
     if (m.key === 'yazilim' && planGorusulen.size) a.plan_gorusulen = [...planGorusulen].slice(-10);
     // the reviews the QA Müdürü already visited are kept also while it is in a hand-over chain (no second visit)
     const gorulen = new Set(pa && Array.isArray(pa.gorulen) ? pa.gorulen : []);
     if (m.key === 'qa' && gorulen.size) a.gorulen = [...gorulen].slice(-10);
+    // the silent / stuck jobs it already looked at (once per job), kept through every other duty
+    const bakilan = new Set(pa && Array.isArray(pa.bakilan) ? pa.bakilan : []);
+    if (bakilan.size) a.bakilan = [...bakilan].slice(-10);
     const rol = teslimRolu(teslim, a.id, ms);
     if (rol) { // the hand-over chain: at its desk until the file reaches it, then the leg to the next one
       if (rol.bekle) { a.poz = 'bekliyor'; a.durum_metni = rol.metin; if (rol.gorevde) a.gorevde = true; }
@@ -4057,6 +4233,30 @@ export function niyetler(state, now, prev = null, options = {}) {
       } else { a.poz = 'bekliyor'; a.durum_metni = 'plan incelemesini görüşüyor'; }
       a.gorevde = true;
       gorevde = true;
+    }
+    // owner decision 2026-11-18 ("daha mantıklı"): a silent or stuck job of its department (bakilacakIsler) — the manager
+    // walks to that worker's desk and stands by it ("sessiz işe bakıyor · <iş>"), the walk plus TOPLANTI_MS, once per job;
+    // a side spot someone already holds (the doctor's visit to a stuck desk comes first) waits for a later tick
+    if (!gorevde && !a.cikis && m.key !== 'it') {
+      let bz = pa && pa.bakis && Number.isFinite(pa.bakis.bitis) && ms < pa.bakis.bitis ? pa.bakis : null;
+      if (!bz && sorunlu.size) {
+        const x = visible.find((v) => v._task && v.masa && sorunlu.has(notAdi(v._task.note)) && !bakilan.has(notAdi(v._task.note)) &&
+          !onayAdimi(v._task) && isDepartmani(v._task, v._session) === m.key && plan.dugumler[`${v.masa}-yan`] &&
+          !result.some((y) => y.yer === `${v.masa}-yan`));
+        if (x) {
+          const anahtar = notAdi(x._task.note), hedef = `${x.masa}-yan`;
+          bz = { anahtar, hedef, note: x._task.note, metin: `${BAKIS_METNI[sorunlu.get(anahtar)]} · ${kisa(x._task.title || anahtar, 30)}`,
+            bitis: ms + sure((pa && pa.yer) || masa, hedef) + TOPLANTI_MS };
+          bakilan.add(anahtar);
+          a.bakilan = [...bakilan].slice(-10);
+        }
+      }
+      if (bz) {
+        a.bakis = bz;
+        a.yer = bz.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = bz.metin; a.tiklama = { note: bz.note };
+        a.gorevde = true;
+        gorevde = true;
+      }
     }
     if (!gorevde && !a.cikis && !yemegeGit(a)) { // no duty: lunch, else wherever its personality takes it
       const r = personelRotasi(a.id, ms, plan, dolu, { ev: masa, onceki: prevYer.get(a.id), gece });
@@ -4175,7 +4375,8 @@ export function niyetler(state, now, prev = null, options = {}) {
     const dolu2 = result.some((x) => x.masa === mudur && x.tur !== 'sus');
     const r = { id: `sus:proje:${p}`, tur: 'sus', gorevli: 'proje', unvan: '', rank: 0, model: '', proje: p,
       yer: dolu2 ? `${mudur}-yan` : mudur, masa: dolu2 ? null : mudur, poz: dolu2 ? 'bekliyor' : 'yaziyor', simge: null,
-      etiket: `${aileAdi(p)} sorumlusu`, durum_metni: dolu2 ? 'ekibin yanında' : 'masasında', tiklama: null };
+      etiket: `${aileAdi(p)} sorumlusu`, durum_metni: dolu2 ? 'ekibin yanında' : masaSozu('proje', st, ms, { proje: p }),
+      tiklama: null };
     // duty: while a job of its project is open it stays at its bay (also outside its office hours); else its
     // personality decides, and outside its hours it is home
     const acikIs = tasks.some((t) => t.project === p && !FINAL.has(t.status) && t.status !== 'sirada');
@@ -4202,6 +4403,21 @@ export function niyetler(state, now, prev = null, options = {}) {
       }
     }
     if (gorusulen.size) r.gorusulen = [...gorusulen].slice(-10);
+    // owner decision 2026-11-18 ("daha mantıklı"): a job of its project just finished (bitti within KUTLAMA_MS) — it
+    // stays at (or comes back to) its bay for the walk plus KUTLAMA_MS ("ekibini kutluyor · <iş>"), once per job, also
+    // when nothing else of the project is open: it no longer walks off the very moment the last job is done
+    const kutlanan = new Set(op && Array.isArray(op.kutlanan) ? op.kutlanan : []);
+    let kutlama = !t0 && !gorusme && op && op.kutlama && ms < op.kutlama.bitis ? op.kutlama : null;
+    if (!t0 && !gorusme && !kutlama && op && !op.cikis && !op.otel) { // only one already on the floor (never out of the blue)
+      const t = tasks.find((x) => x.project === p && x.status === 'bitti' && x._bitis !== null && ms >= x._bitis &&
+        ms - x._bitis < KUTLAMA_MS && !kutlanan.has(notAdi(x.note)));
+      if (t) {
+        kutlama = { anahtar: notAdi(t.note), metin: `ekibini kutluyor · ${kisa(t.title || notAdi(t.note), 30)}`,
+          bitis: ms + sure((op && op.yer) || r.yer, r.yer) + KUTLAMA_MS };
+        kutlanan.add(kutlama.anahtar);
+      }
+    }
+    if (kutlanan.size) r.kutlanan = [...kutlanan].slice(-10);
     if (t0) {
       if (t0.bekle) { r.durum_metni = t0.metin; if (t0.gorevde) r.gorevde = true; }
       else { r.yer = t0.yer; r.masa = null; r.poz = 'yuruyor'; r.dosya = true; r.durum_metni = t0.metin; r.gorevde = true; }
@@ -4209,6 +4425,9 @@ export function niyetler(state, now, prev = null, options = {}) {
       r.gorusme = gorusme;
       r.yer = gorusme.hedef; r.masa = null; r.poz = 'yuruyor'; r.gorevde = true;
       r.durum_metni = gorusme.mudur ? 'Genel Müdürle planı görüşüyor' : 'planı görüşüyor';
+    } else if (kutlama) {
+      r.kutlama = kutlama;
+      r.poz = 'kutluyor'; r.durum_metni = kutlama.metin; r.gorevde = true;
     } else if (!acikIs) {
       if (evdeMi(r)) continue;
       if (!r.cikis && !yemegeGit(r)) {

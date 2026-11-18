@@ -30,6 +30,7 @@ import re
 import threading
 import unicodedata
 
+import dil  # display texts: an error keeps its template and form field (bin/dil.py Metin)
 import yasaklar  # (standard library only; the one place that knows which ofis.json is in force)
 
 CONFIG = None  # a test may point this module at a file of its own; None = yasaklar.ofis_json()
@@ -74,16 +75,16 @@ def _katla(text):
 def dogrula(value):
     """[] for a usable owner name, else the plain Turkish errors (the Ayarlar tab shows them)."""
     if not isinstance(value, str) or not value.strip():
-        return ["Adın boş olamaz."]
+        return [dil.Metin("Adın boş olamaz.", "sahip_adi")]
     name = value.strip()
     if len(name) > SINIR:
-        return [f"Adın en çok {SINIR} karakter olabilir."]
+        return [dil.Metin("Adın en çok {sinir} karakter olabilir.", "sahip_adi", sinir=SINIR)]
     if not _GECERLI.fullmatch(name) or "  " in name:
-        return ["Adın harfle başlamalı; yalnız harf, rakam, boşluk, nokta, kesme işareti ve tire içerebilir "
-                "(köşeli parantez, · ya da satır sonu olamaz)."]
+        return [dil.Metin("Adın harfle başlamalı; yalnız harf, rakam, boşluk, nokta, kesme işareti ve tire içerebilir "
+                          "(köşeli parantez, · ya da satır sonu olamaz).", "sahip_adi")]
     folded = _katla(name)
     if folded in _AYRILMIS or folded.startswith(_AYRILMIS_ON):
-        return ["Bu ad ofisin kendi konuşmacılarına ayrılmış (Ofis, CEO, Müdür); başka bir ad yaz."]
+        return [dil.Metin("Bu ad ofisin kendi konuşmacılarına ayrılmış (Ofis, CEO, Müdür); başka bir ad yaz.", "sahip_adi")]
     return []
 
 
@@ -201,19 +202,34 @@ def de(cfg=None):
     return ek(ad(cfg), "de")
 
 
+def ek_dilde(name, hal, dil_kodu="tr"):
+    """ek() for a display text in the display language: in English the bare name, the genitive "Name's"."""
+    if dil_kodu == "en":
+        if hal not in HALLER:
+            raise ValueError(f"unknown case {hal!r}")
+        return f"{name}'s" if hal == "in" else str(name)
+    return ek(name, hal)
+
+
 def ekler(cfg=None):
-    """{ad, e, in, den, i, de} for /api/state (the page has its own helper, web/ofis-davranis.js sahipEk)."""
+    """{ad, e, in, den, i, de} for /api/state (the page has its own helper, web/ofis-davranis.js sahipEk), in the
+    display language (ofis.json dil; bin/dil.py)."""
     name = ad(cfg)
-    return {"adi": name, **{h: ek(name, h) for h in HALLER}}
+    code = dil.kod(cfg if isinstance(cfg, dict) else None)
+    return {"adi": name, **{h: ek_dilde(name, h, code) for h in HALLER}}
 
 
 # --- the reminder line the server appends to every CEO message ---
 _HATIRLATMA_SONU = " Türkçe ve sade yaz.)"
-_HATIRLATMA = re.compile(r"\n\([^()\n]{1,60}['’][a-zçğıöşü]{1,3} Türkçe ve sade yaz\.\)$")
+_HATIRLATMA = re.compile(r"\n\((?:[^()\n]{1,60}['’][a-zçğıöşü]{1,3} Türkçe ve sade yaz|"
+                         r"Reply to [^()\n]{1,60} in plain English)\.\)$")
 
 
-def hatirlatma(name=None):
-    """"(<Name>'e Türkçe ve sade yaz.)": the last line of every message to the CEO."""
+def hatirlatma(name=None, dil_kodu="tr"):
+    """"(<Name>'e Türkçe ve sade yaz.)" — in English (ofis.json dil "en") "(Reply to <Name> in plain English.)": the
+    last line of every message to the CEO. hatirlatmayi_sil removes either form."""
+    if dil_kodu == "en":
+        return f"(Reply to {name or ad()} in plain English.)"
     return "(" + ek(name or ad(), "e") + _HATIRLATMA_SONU
 
 

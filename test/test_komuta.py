@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -24,6 +25,7 @@ def run_k(expr):
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         for name in ("komuta.js", "ofis-sahne.js", "ofis-davranis.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, Path(tmp) / name)
+        webkopya.i18n_ekle(tmp)
         uri = json.dumps((Path(tmp) / "komuta.js").as_uri())
         code = (f"import * as k from {uri};\n{PRELUDE}\n"
                 f"process.stdout.write(JSON.stringify({expr}));")
@@ -358,7 +360,8 @@ class AnnouncementFormTest(unittest.TestCase):
     def test_the_form_is_wired_to_the_endpoint_with_the_token(self):
         html = (WEB / "index.html").read_text(encoding="utf-8")
         for need in ('id="duyuru-form"', 'id="duyuru-metin"', 'maxlength="2000"', 'id="duyuru-sure-sec"',
-                     '<option value="simdi">Yalnız şimdi</option>', '<option value="hafta">Bu hafta</option>',
+                     '<option value="simdi" data-t="Yalnız şimdi">Yalnız şimdi</option>',
+                     '<option value="hafta" data-t="Bu hafta">Bu hafta</option>',
                      'id="duyuru-tarih" type="date"'):
             self.assertIn(need, html)
         app = (WEB / "app.js").read_text(encoding="utf-8")

@@ -14,14 +14,14 @@
   <header class="topbar">
     <div class="brand"><span class="brand-ad" id="brand-ad">Ofis</span></div>
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" role="tab" data-tab="ofis" aria-selected="true">Ofis</button>
-      <button class="tab" role="tab" data-tab="kararlar" aria-selected="false">Kararlar <span class="tab-count" id="tab-count-kararlar" hidden></span></button>
-      <button class="tab" role="tab" data-tab="isler" aria-selected="false">İşler</button>
-      <button class="tab" role="tab" data-tab="raporlar" aria-selected="false">Raporlar</button>
-      <button class="tab" role="tab" data-tab="kalite" aria-selected="false">Kalite</button>
-      <button class="tab" role="tab" data-tab="zamanlanmis" aria-selected="false">Zamanlanmış <span class="tab-count" id="tab-count-zamanlanmis" hidden></span></button>
-      <button class="tab" role="tab" data-tab="olaylar" aria-selected="false">Son olanlar</button>
-      <button class="tab" role="tab" data-tab="ayarlar" aria-selected="false">Ayarlar</button>
+      <button class="tab is-active" role="tab" data-tab="ofis" aria-selected="true" data-t="Ofis">Ofis</button>
+      <button class="tab" role="tab" data-tab="kararlar" aria-selected="false"><span data-t="Kararlar">Kararlar</span> <span class="tab-count" id="tab-count-kararlar" hidden></span></button>
+      <button class="tab" role="tab" data-tab="isler" aria-selected="false" data-t="İşler">İşler</button>
+      <button class="tab" role="tab" data-tab="raporlar" aria-selected="false" data-t="Raporlar">Raporlar</button>
+      <button class="tab" role="tab" data-tab="kalite" aria-selected="false" data-t="Kalite">Kalite</button>
+      <button class="tab" role="tab" data-tab="zamanlanmis" aria-selected="false"><span data-t="Zamanlanmış">Zamanlanmış</span> <span class="tab-count" id="tab-count-zamanlanmis" hidden></span></button>
+      <button class="tab" role="tab" data-tab="olaylar" aria-selected="false" data-t="Son olanlar">Son olanlar</button>
+      <button class="tab" role="tab" data-tab="ayarlar" aria-selected="false" data-t="Ayarlar">Ayarlar</button>
     </nav>
     <div class="topbar-right">
       <button class="pill pill-btn" id="live-pill" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="calisanlar" title="Şu an iş başında"><span class="live-dot" aria-hidden="true"></span><span id="live-text">bağlanıyor…</span><span class="live-count" id="live-count" aria-hidden="true"></span></button>
@@ -29,14 +29,14 @@
            the usage popup (GET /api/kullanim, web/limitler.js kullanimGorunumu; owner decision 2026-11-16) -->
       <span class="uyari-kap limit-kap">
         <button class="pill pill-btn limit-pill" id="limit-pill" type="button" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="limit-pill-detay"></button>
-        <div class="uyari-detay limit-detay" id="limit-pill-detay" role="dialog" aria-label="Claude kullanım sınırı" hidden>
-          <p class="limit-baslik">Claude kullanım sınırı</p>
+        <div class="uyari-detay limit-detay" id="limit-pill-detay" role="dialog" aria-label="Claude kullanım sınırı" data-t-aria-label="Claude kullanım sınırı" hidden>
+          <p class="limit-baslik" data-t="Claude kullanım sınırı">Claude kullanım sınırı</p>
           <div class="limit-pencereler" id="limit-pencereler"></div>
           <p class="limit-olcum" id="limit-olcum"></p>
-          <p class="limit-baslik">En çok kullananlar</p>
-          <div class="limit-sekmeler" role="tablist" aria-label="Aralık">
-            <button type="button" class="limit-sekme is-active" data-sekme="bes_saat" role="tab" aria-selected="true">Bu 5 saat</button>
-            <button type="button" class="limit-sekme" data-sekme="haftalik" role="tab" aria-selected="false">Bu hafta</button>
+          <p class="limit-baslik" data-t="En çok kullananlar">En çok kullananlar</p>
+          <div class="limit-sekmeler" role="tablist" aria-label="Aralık" data-t-aria-label="Aralık">
+            <button type="button" class="limit-sekme is-active" data-sekme="bes_saat" role="tab" aria-selected="true" data-t="Bu 5 saat">Bu 5 saat</button>
+            <button type="button" class="limit-sekme" data-sekme="haftalik" role="tab" aria-selected="false" data-t="Bu hafta">Bu hafta</button>
           </div>
           <p class="limit-aralik" id="limit-aralik"></p>
           <ol class="limit-liste" id="limit-liste"></ol>
@@ -48,36 +48,36 @@
            a click opens the same detail text under the chip -->
       <span class="uyari-kap">
         <button class="pill pill-btn uyari-cip" id="onay-birikti" type="button" hidden aria-live="polite" aria-expanded="false" aria-controls="onay-birikti-detay"><span class="uyari-isaret" aria-hidden="true">!</span><span id="onay-birikti-etiket">Onay birikti</span></button>
-        <div class="uyari-detay" id="onay-birikti-detay" role="dialog" aria-label="Onay birikti" hidden>
+        <div class="uyari-detay" id="onay-birikti-detay" role="dialog" aria-label="Onay birikti" data-t-aria-label="Onay birikti" hidden>
           <p class="onay-birikti-text" id="onay-birikti-text"></p>
         </div>
       </span>
       <span class="uyari-kap">
-        <button class="pill pill-btn uyari-cip" id="po-warn" type="button" hidden aria-live="polite" aria-expanded="false" aria-controls="po-warn-detay" title="Ofis ile proje oturumları arasındaki mesajlarda bir sorun var"><span class="uyari-isaret" aria-hidden="true">!</span><span id="po-warn-etiket">İletişim uyarısı</span></button>
-        <div class="uyari-detay" id="po-warn-detay" role="dialog" aria-label="İletişim uyarısı" hidden>
-          <p class="po-warn-aciklama">Ofis ile proje oturumları arasındaki mesajlarda bir sorun var.</p>
+        <button class="pill pill-btn uyari-cip" id="po-warn" type="button" hidden aria-live="polite" aria-expanded="false" aria-controls="po-warn-detay" title="Ofis ile proje oturumları arasındaki mesajlarda bir sorun var" data-t-title="Ofis ile proje oturumları arasındaki mesajlarda bir sorun var"><span class="uyari-isaret" aria-hidden="true">!</span><span id="po-warn-etiket">İletişim uyarısı</span></button>
+        <div class="uyari-detay" id="po-warn-detay" role="dialog" aria-label="İletişim uyarısı" data-t-aria-label="İletişim uyarısı" hidden>
+          <p class="po-warn-aciklama" data-t="Ofis ile proje oturumları arasındaki mesajlarda bir sorun var.">Ofis ile proje oturumları arasındaki mesajlarda bir sorun var.</p>
           <ul class="po-warn-list" id="po-warn-list"></ul>
         </div>
       </span>
-      <button class="pill pill-btn sema-btn" id="sema-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="sema" title="Şirket şeması: kim kime bağlı, kim ofiste">Şema</button>
+      <button class="pill pill-btn sema-btn" id="sema-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="sema" title="Şirket şeması: kim kime bağlı, kim ofiste" data-t-title="Şirket şeması: kim kime bağlı, kim ofiste" data-t="Şema">Şema</button>
       <span class="demo-pill" id="demo-pill" hidden>demo</span>
-      <button class="btn btn-primary" id="open-chat-top" type="button">CEO ile sohbet<span class="rozet-sayi" id="open-chat-top-sayi" hidden></span></button>
+      <button class="btn btn-primary" id="open-chat-top" type="button"><span data-t="CEO ile sohbet">CEO ile sohbet</span><span class="rozet-sayi" id="open-chat-top-sayi" hidden></span></button>
       <span class="clock" id="clock"><span id="clock-time">--:--</span><span class="clock-date" id="clock-date"></span><span class="clock-date-short" id="clock-date-short"></span></span>
     </div>
   </header>
 
   <main class="stage">
-    <div class="scene" id="scene" aria-label="Ofis görünümü"></div>
+    <div class="scene" id="scene" aria-label="Ofis görünümü" data-t-aria-label="Ofis görünümü"></div>
     <div class="labels" id="labels" aria-hidden="true"></div>
-    <div class="zoom-kontrol" id="zoom-kontrol" role="group" aria-label="Görünüm yakınlığı ve yönü">
-      <button class="zoom-btn" id="zoom-yakin" type="button" aria-label="Yakınlaştır" title="Yakınlaştır (+)">+</button>
-      <button class="zoom-btn" id="zoom-uzak" type="button" aria-label="Uzaklaştır" title="Uzaklaştır (−)">−</button>
-      <button class="zoom-btn" id="zoom-sola" type="button" aria-label="Sola döndür" title="Sola döndür (Q)">↺</button>
-      <button class="zoom-btn" id="zoom-saga" type="button" aria-label="Sağa döndür" title="Sağa döndür (E)">↻</button>
-      <button class="zoom-btn" id="zoom-tumu" type="button" aria-label="Tümünü göster" title="Tümünü göster ve yönü sıfırla (0)">⟲</button>
+    <div class="zoom-kontrol" id="zoom-kontrol" role="group" aria-label="Görünüm yakınlığı ve yönü" data-t-aria-label="Görünüm yakınlığı ve yönü">
+      <button class="zoom-btn" id="zoom-yakin" type="button" aria-label="Yakınlaştır" data-t-aria-label="Yakınlaştır" title="Yakınlaştır (+)" data-t-title="Yakınlaştır (+)">+</button>
+      <button class="zoom-btn" id="zoom-uzak" type="button" aria-label="Uzaklaştır" data-t-aria-label="Uzaklaştır" title="Uzaklaştır (−)" data-t-title="Uzaklaştır (−)">−</button>
+      <button class="zoom-btn" id="zoom-sola" type="button" aria-label="Sola döndür" data-t-aria-label="Sola döndür" title="Sola döndür (Q)" data-t-title="Sola döndür (Q)">↺</button>
+      <button class="zoom-btn" id="zoom-saga" type="button" aria-label="Sağa döndür" data-t-aria-label="Sağa döndür" title="Sağa döndür (E)" data-t-title="Sağa döndür (E)">↻</button>
+      <button class="zoom-btn" id="zoom-tumu" type="button" aria-label="Tümünü göster" data-t-aria-label="Tümünü göster" title="Tümünü göster ve yönü sıfırla (0)" data-t-title="Tümünü göster ve yönü sıfırla (0)">⟲</button>
     </div>
     <p class="demo-caption" id="demo-caption" hidden aria-live="polite"></p>
-    <button class="mesai-disi" id="mesai-disi" type="button" hidden title="Kim ofiste, kim evde: güvenlik görevlisinin kartı"><span class="mesai-disi-uzun" id="mesai-disi-uzun"></span><span class="mesai-disi-kisa" id="mesai-disi-kisa"></span></button>
+    <button class="mesai-disi" id="mesai-disi" type="button" hidden title="Kim ofiste, kim evde: güvenlik görevlisinin kartı" data-t-title="Kim ofiste, kim evde: güvenlik görevlisinin kartı"><span class="mesai-disi-uzun" id="mesai-disi-uzun"></span><span class="mesai-disi-kisa" id="mesai-disi-kisa"></span></button>
 
     <div class="hud-sol">
       <section class="card greeting" aria-live="polite">
@@ -85,14 +85,14 @@
         <p id="greeting-text">Ofisin durumu yükleniyor…</p>
       </section>
       <details class="etiket-lejant" id="etiket-lejant">
-        <summary>Etiket renkleri</summary>
+        <summary data-t="Etiket renkleri">Etiket renkleri</summary>
         <ul>
-          <li><span class="lj lj-ajan"></span>Yapay zekâ çalışanları (CEO, Genel Müdür, kadro, işler, yardımcılar)</li>
-          <li><span class="lj lj-denetci"></span>Denetçiler (Codex, GLM, DeepSeek, Güvenlik, Hakem)</li>
-          <li><span class="lj lj-personel"></span>Ofis personeli (Çaycı, Sekreter, Güvenlik görevlisi)</li>
-          <li><span class="lj lj-oda"></span>Oda adları</li>
-          <li><span class="lj lj-calisiyor"></span>Yeşil etiket: o an gerçekten iş başında (görevli, işi süren çalışan, meşgul CEO, teslim, inceleme)</li>
-          <li class="lj-not">Durum yazısı: sarı soru/izin, kırmızı sorun</li>
+          <li><span class="lj lj-ajan"></span><span data-t="Yapay zekâ çalışanları (CEO, Genel Müdür, kadro, işler, yardımcılar)">Yapay zekâ çalışanları (CEO, Genel Müdür, kadro, işler, yardımcılar)</span></li>
+          <li><span class="lj lj-denetci"></span><span data-t="Denetçiler (Codex, GLM, DeepSeek, Güvenlik, Hakem)">Denetçiler (Codex, GLM, DeepSeek, Güvenlik, Hakem)</span></li>
+          <li><span class="lj lj-personel"></span><span data-t="Ofis personeli (Çaycı, Sekreter, Güvenlik görevlisi)">Ofis personeli (Çaycı, Sekreter, Güvenlik görevlisi)</span></li>
+          <li><span class="lj lj-oda"></span><span data-t="Oda adları">Oda adları</span></li>
+          <li><span class="lj lj-calisiyor"></span><span data-t="Yeşil etiket: o an gerçekten iş başında (görevli, işi süren çalışan, meşgul CEO, teslim, inceleme)">Yeşil etiket: o an gerçekten iş başında (görevli, işi süren çalışan, meşgul CEO, teslim, inceleme)</span></li>
+          <li class="lj-not" data-t="Durum yazısı: sarı soru/izin, kırmızı sorun">Durum yazısı: sarı soru/izin, kırmızı sorun</li>
         </ul>
       </details>
     </div>
@@ -102,14 +102,14 @@
         <span class="avatar-dot" id="room-dot"></span>
         <strong id="room-name"></strong>
         <span class="badge" id="room-status"></span>
-        <button class="icon-btn" id="room-close" type="button" aria-label="Kapat">×</button>
+        <button class="icon-btn" id="room-close" type="button" aria-label="Kapat" data-t-aria-label="Kapat">×</button>
       </div>
       <dl class="room-facts">
-        <dt>Son araç</dt><dd id="room-tool">—</dd>
-        <dt>Bugün</dt><dd id="room-tokens">—</dd>
-        <dt>Oturum</dt><dd id="room-sessions">—</dd>
+        <dt data-t="Son araç">Son araç</dt><dd id="room-tool">—</dd>
+        <dt data-t="Bugün">Bugün</dt><dd id="room-tokens">—</dd>
+        <dt data-t="Oturum">Oturum</dt><dd id="room-sessions">—</dd>
       </dl>
-      <h3 class="mini-title">Son işler</h3>
+      <h3 class="mini-title" data-t="Son işler">Son işler</h3>
       <ul class="room-tasks" id="room-tasks"></ul>
     </section>
 
@@ -118,37 +118,37 @@
          approval-backlog and delivery warnings are two chips there (owner decision 2026-11-13). -->
     <aside class="side" id="side">
       <section class="side-section">
-        <h2 class="section-title">CEO soruyor <span class="count" id="ask-count"></span></h2>
+        <h2 class="section-title"><span data-t="CEO soruyor">CEO soruyor</span> <span class="count" id="ask-count"></span></h2>
         <p class="side-bekleyen" id="side-bekleyen" hidden></p>
         <div class="ask-list" id="ask-list"></div>
-        <p class="empty" id="ask-empty">Şu an bekleyen soru yok.</p>
+        <p class="empty" id="ask-empty" data-t="Şu an bekleyen soru yok.">Şu an bekleyen soru yok.</p>
       </section>
     </aside>
 
     <section class="overlay" id="overlay-kararlar" hidden>
       <div class="overlay-inner card">
-        <h2>Bekleyen kararlar</h2>
-        <p class="muted">Cevaplanan kararlar Obsidian'da <code>OFIS/Kararlar</code> klasöründe durur.</p>
+        <h2 data-t="Bekleyen kararlar">Bekleyen kararlar</h2>
+        <p class="muted"><span data-t="Cevaplanan kararlar Obsidian'da">Cevaplanan kararlar Obsidian'da</span> <code>OFIS/Kararlar</code> <span data-t="klasöründe durur.">klasöründe durur.</span></p>
         <div class="ask-list wide" id="ask-list-wide"></div>
-        <p class="empty" id="ask-empty-wide">Bekleyen karar yok.</p>
+        <p class="empty" id="ask-empty-wide" data-t="Bekleyen karar yok.">Bekleyen karar yok.</p>
       </div>
     </section>
 
     <section class="overlay overlay-wide" id="overlay-isler" hidden>
       <div class="overlay-inner card">
-        <h2>İşler</h2>
-        <p class="muted">Bir işe tıklayınca ayrıntısı açılır. Çubuklar işin harcadığı parayı ve çağrılarını işin sınırıyla karşılaştırır.</p>
+        <h2 data-t="İşler">İşler</h2>
+        <p class="muted" data-t="Bir işe tıklayınca ayrıntısı açılır. Çubuklar işin harcadığı parayı ve çağrılarını işin sınırıyla karşılaştırır.">Bir işe tıklayınca ayrıntısı açılır. Çubuklar işin harcadığı parayı ve çağrılarını işin sınırıyla karşılaştırır.</p>
         <div class="board">
           <section class="board-col" aria-labelledby="board-title-sirada">
-            <h3 class="board-title" id="board-title-sirada">Sıradakiler <span class="count" id="board-count-sirada"></span></h3>
+            <h3 class="board-title" id="board-title-sirada"><span data-t="Sıradakiler">Sıradakiler</span> <span class="count" id="board-count-sirada"></span></h3>
             <div class="board-list" id="board-sirada"></div>
           </section>
           <section class="board-col" aria-labelledby="board-title-devam">
-            <h3 class="board-title" id="board-title-devam">Devam edenler <span class="count" id="board-count-devam"></span></h3>
+            <h3 class="board-title" id="board-title-devam"><span data-t="Devam edenler">Devam edenler</span> <span class="count" id="board-count-devam"></span></h3>
             <div class="board-list" id="board-devam"></div>
           </section>
           <section class="board-col" aria-labelledby="board-title-biten">
-            <h3 class="board-title" id="board-title-biten">Bitenler <span class="count" id="board-count-biten"></span></h3>
+            <h3 class="board-title" id="board-title-biten"><span data-t="Bitenler">Bitenler</span> <span class="count" id="board-count-biten"></span></h3>
             <div class="board-list" id="board-biten"></div>
             <p class="muted board-more" id="board-more" hidden></p>
           </section>
@@ -158,35 +158,35 @@
 
     <section class="overlay overlay-wide" id="overlay-raporlar" hidden>
       <div class="overlay-inner card">
-        <h2>Raporlar</h2>
-        <p class="muted">Birlikte verilen işlerin hepsi bitince Ofis tek bir rapor yazar (Obsidian'da <code>OFIS/Raporlar</code>). Birine tıklayınca raporun tamamı açılır.</p>
+        <h2 data-t="Raporlar">Raporlar</h2>
+        <p class="muted"><span data-t="Birlikte verilen işlerin hepsi bitince Ofis tek bir rapor yazar (Obsidian'da">Birlikte verilen işlerin hepsi bitince Ofis tek bir rapor yazar (Obsidian'da</span> <code>OFIS/Raporlar</code><span data-t="). Birine tıklayınca raporun tamamı açılır.">). Birine tıklayınca raporun tamamı açılır.</span></p>
         <div class="report-list" id="report-list"></div>
-        <p class="empty" id="report-empty" hidden>Henüz rapor yok.</p>
+        <p class="empty" id="report-empty" hidden data-t="Henüz rapor yok.">Henüz rapor yok.</p>
       </div>
     </section>
 
     <section class="overlay overlay-wide" id="overlay-kalite" hidden>
       <div class="overlay-inner card">
-        <h2>Kalite</h2>
-        <p class="muted">Biten her iş karneye bir satır yazar. Ana ölçüt <strong>doğrulanmış iş başına kullanım</strong>: harcanan tokenların tamamı, kontrolü geçerek biten iş sayısına bölünür. “İlk denemede geçti”: Ofis'in çalıştırdığı kontrol ilk seferde başarılı oldu. “Yeniden iş”: en az bir düzeltme gereken işler. Dolar tutarları API fiyatıyla karşılığıdır (≈); abonelikte para ödenmez.</p>
+        <h2 data-t="Kalite">Kalite</h2>
+        <p class="muted"><span data-t="Biten her iş karneye bir satır yazar. Ana ölçüt">Biten her iş karneye bir satır yazar. Ana ölçüt</span> <strong data-t="doğrulanmış iş başına kullanım">doğrulanmış iş başına kullanım</strong><span data-t=": harcanan tokenların tamamı, kontrolü geçerek biten iş sayısına bölünür. “İlk denemede geçti”: Ofis'in çalıştırdığı kontrol ilk seferde başarılı oldu. “Yeniden iş”: en az bir düzeltme gereken işler. Dolar tutarları API fiyatıyla karşılığıdır (≈); abonelikte para ödenmez.">: harcanan tokenların tamamı, kontrolü geçerek biten iş sayısına bölünür. “İlk denemede geçti”: Ofis'in çalıştırdığı kontrol ilk seferde başarılı oldu. “Yeniden iş”: en az bir düzeltme gereken işler. Dolar tutarları API fiyatıyla karşılığıdır (≈); abonelikte para ödenmez.</span></p>
         <div class="stat-row" id="quality-stats"></div>
-        <h3 class="quality-title">Proje, katman ve çalışana göre</h3>
+        <h3 class="quality-title" data-t="Proje, katman ve çalışana göre">Proje, katman ve çalışana göre</h3>
         <div class="table-wrap">
           <table class="tasks quality">
             <thead><tr id="quality-head"></tr></thead>
             <tbody id="quality-body"></tbody>
           </table>
         </div>
-        <h3 class="quality-title">Unvana göre</h3>
+        <h3 class="quality-title" data-t="Unvana göre">Unvana göre</h3>
         <div class="table-wrap">
           <table class="tasks quality">
             <thead><tr id="quality-model-head"></tr></thead>
             <tbody id="quality-models"></tbody>
           </table>
         </div>
-        <p class="empty" id="quality-empty" hidden>Henüz karne kaydı yok: ilk iş bitince burada görünür.</p>
-        <h3 class="quality-title">Kadro ve görev dağılımı</h3>
-        <p class="muted">Karne bir katmanın rahat geçtiğini ya da sık kaldığını gösterince Ofis bir model denemesi (pilot) önerir; eşleme yalnız <span class="sahip-in">sahibin</span> onayıyla değişir.</p>
+        <p class="empty" id="quality-empty" hidden data-t="Henüz karne kaydı yok: ilk iş bitince burada görünür.">Henüz karne kaydı yok: ilk iş bitince burada görünür.</p>
+        <h3 class="quality-title" data-t="Kadro ve görev dağılımı">Kadro ve görev dağılımı</h3>
+        <p class="muted"><span data-t="Karne bir katmanın rahat geçtiğini ya da sık kaldığını gösterince Ofis bir model denemesi (pilot) önerir; eşleme yalnız">Karne bir katmanın rahat geçtiğini ya da sık kaldığını gösterince Ofis bir model denemesi (pilot) önerir; eşleme yalnız</span> <span class="sahip-in">sahibin</span> <span data-t="onayıyla değişir.">onayıyla değişir.</span></p>
         <ul class="model-cards" id="model-cards"></ul>
         <div class="table-wrap">
           <table class="tasks quality">
@@ -199,24 +199,24 @@
 
     <section class="overlay overlay-wide" id="overlay-zamanlanmis" hidden>
       <div class="overlay-inner card">
-        <h2>Zamanlanmış işler</h2>
-        <p class="muted">Ofis bu işleri belirtilen gün ve saatte kendiliğinden ekler. Değişiklik için CEO'ya söyle. Bir koşuya tıklayınca işin notu Obsidian'da açılır.</p>
+        <h2 data-t="Zamanlanmış işler">Zamanlanmış işler</h2>
+        <p class="muted" data-t="Ofis bu işleri belirtilen gün ve saatte kendiliğinden ekler. Değişiklik için CEO'ya söyle. Bir koşuya tıklayınca işin notu Obsidian'da açılır.">Ofis bu işleri belirtilen gün ve saatte kendiliğinden ekler. Değişiklik için CEO'ya söyle. Bir koşuya tıklayınca işin notu Obsidian'da açılır.</p>
         <div class="table-wrap">
           <table class="tasks sched-table">
-            <thead><tr><th scope="col">Ad</th><th scope="col">Proje</th><th scope="col">Ne zaman</th><th scope="col">Sonraki</th><th scope="col">Durum</th><th scope="col">Son koşu</th></tr></thead>
+            <thead><tr><th scope="col" data-t="Ad">Ad</th><th scope="col" data-t="Proje">Proje</th><th scope="col" data-t="Ne zaman">Ne zaman</th><th scope="col" data-t="Sonraki">Sonraki</th><th scope="col" data-t="Durum">Durum</th><th scope="col" data-t="Son koşu">Son koşu</th></tr></thead>
             <tbody id="sched-body"></tbody>
           </table>
         </div>
-        <p class="empty" id="sched-empty" hidden>Zamanlanmış iş yok.</p>
-        <h3 class="quality-title" id="sched-runs-title">Son koşular</h3>
+        <p class="empty" id="sched-empty" hidden data-t="Zamanlanmış iş yok.">Zamanlanmış iş yok.</p>
+        <h3 class="quality-title" id="sched-runs-title" data-t="Son koşular">Son koşular</h3>
         <div class="sched-runs" id="sched-runs"></div>
       </div>
     </section>
 
     <section class="overlay overlay-wide" id="overlay-olaylar" hidden>
       <div class="overlay-inner card">
-        <h2>Son olanlar</h2>
-        <p class="muted">Bu sayfa açıkken ofiste olanlar, en yenisi üstte. Birine tıklayınca ayrıntısı açılır.</p>
+        <h2 data-t="Son olanlar">Son olanlar</h2>
+        <p class="muted" data-t="Bu sayfa açıkken ofiste olanlar, en yenisi üstte. Birine tıklayınca ayrıntısı açılır.">Bu sayfa açıkken ofiste olanlar, en yenisi üstte. Birine tıklayınca ayrıntısı açılır.</p>
         <ol class="olay-akisi" id="olay-akisi"></ol>
       </div>
     </section>
@@ -225,98 +225,124 @@
          pure helpers in web/ayarlar.js). Drawn only when the tab opens and after a save, never on a state push. -->
     <section class="overlay overlay-wide" id="overlay-ayarlar" hidden>
       <div class="overlay-inner card ayarlar">
-        <h2>Ayarlar</h2>
-        <p class="muted">Ofisin adı, senin adın ve ofiste çalışan projeler. Buradaki değişiklikler hemen geçerli olur; sunucuyu yeniden başlatmak gerekmez.</p>
+        <h2 data-t="Ayarlar">Ayarlar</h2>
+        <p class="muted" data-t="Ofisin adı, senin adın ve ofiste çalışan projeler. Buradaki değişiklikler hemen geçerli olur; sunucuyu yeniden başlatmak gerekmez.">Ofisin adı, senin adın ve ofiste çalışan projeler. Buradaki değişiklikler hemen geçerli olur; sunucuyu yeniden başlatmak gerekmez.</p>
 
         <section class="ayar-bolum" aria-labelledby="ayar-genel-baslik">
-          <h3 class="ayar-baslik" id="ayar-genel-baslik">Genel</h3>
+          <h3 class="ayar-baslik" id="ayar-genel-baslik" data-t="Genel">Genel</h3>
           <form class="ayar-genel" id="ayar-genel-form" autocomplete="off" novalidate>
-            <label class="ayar-etiket" for="ayar-ofis-adi">Ofis adı</label>
+            <label class="ayar-etiket" for="ayar-ofis-adi" data-t="Ofis adı">Ofis adı</label>
             <div class="ayar-satir">
               <input class="input" id="ayar-ofis-adi" type="text" maxlength="40" aria-describedby="ayar-ofis-adi-ipucu ayar-ofis-adi-hata">
-              <button class="btn btn-primary" type="submit" id="ayar-genel-kaydet">Kaydet</button>
+              <button class="btn btn-primary" type="submit" id="ayar-genel-kaydet" data-t="Kaydet">Kaydet</button>
             </div>
-            <p class="ayar-ipucu" id="ayar-ofis-adi-ipucu">Sekmenin başlığında, üst çubukta ve ofisteki tabelada görünür.</p>
+            <p class="ayar-ipucu" id="ayar-ofis-adi-ipucu" data-t="Sekmenin başlığında, üst çubukta ve ofisteki tabelada görünür.">Sekmenin başlığında, üst çubukta ve ofisteki tabelada görünür.</p>
             <p class="ayar-hata" id="ayar-ofis-adi-hata" hidden></p>
-            <label class="ayar-etiket" for="ayar-sahip-adi">Senin adın</label>
+            <label class="ayar-etiket" for="ayar-sahip-adi" data-t="Senin adın">Senin adın</label>
             <div class="ayar-satir">
               <input class="input" id="ayar-sahip-adi" type="text" maxlength="40" aria-describedby="ayar-sahip-adi-ipucu ayar-sahip-adi-hata">
             </div>
-            <p class="ayar-ipucu" id="ayar-sahip-adi-ipucu">CEO sana bu adla hitap eder; bildirimlerde ve ofiste bu ad görünür. Yeni ad CEO'nun bir sonraki yeni oturumunda tam geçerli olur.</p>
+            <p class="ayar-ipucu" id="ayar-sahip-adi-ipucu" data-t="CEO sana bu adla hitap eder; bildirimlerde ve ofiste bu ad görünür. Yeni ad CEO'nun bir sonraki yeni oturumunda tam geçerli olur.">CEO sana bu adla hitap eder; bildirimlerde ve ofiste bu ad görünür. Yeni ad CEO'nun bir sonraki yeni oturumunda tam geçerli olur.</p>
             <p class="ayar-hata" id="ayar-sahip-adi-hata" hidden></p>
+          </form>
+          <!-- NPC chat (bin/npc_sohbet.py, ofis.json npc_sohbet): its own small form, saved through the same genel path -->
+          <form class="ayar-genel ayar-npc" id="ayar-npc-form" autocomplete="off" novalidate>
+            <label class="ayar-etiket ayar-secim" for="ayar-npc-acik">
+              <input type="checkbox" id="ayar-npc-acik" aria-describedby="ayar-npc-ipucu"> <span data-t="NPC sohbeti">NPC sohbeti</span>
+            </label>
+            <div class="ayar-satir">
+              <label class="ayar-etiket" for="ayar-npc-sinir" data-t="Saatte en çok">Saatte en çok</label>
+              <input class="input ayar-sayi" id="ayar-npc-sinir" type="number" min="1" max="200" step="1" inputmode="numeric" aria-describedby="ayar-npc-ipucu ayar-npc-hata">
+              <span class="ayar-ipucu" data-t="soru">soru</span>
+              <button class="btn btn-primary" type="submit" id="ayar-npc-kaydet" data-t="Kaydet">Kaydet</button>
+            </div>
+            <p class="ayar-ipucu" id="ayar-npc-ipucu" data-t="Açıkken ofisteki çalışanlara (Sekreter, müdürler, Muhasebeci, İK, doktor, psikolog, proje sorumluları…) kartlarından kısa bir soru sorabilirsin. Her soru Stajyer ile bir kısa çağrıdır; ofisin kendi verisiyle cevap verir, hiçbir şeyi değiştirmez. Kullanımı düşüktür ama sıfır değildir.">Açıkken ofisteki çalışanlara (Sekreter, müdürler, Muhasebeci, İK, doktor, psikolog, proje sorumluları…) kartlarından kısa bir soru sorabilirsin. Her soru Stajyer ile bir kısa çağrıdır; ofisin kendi verisiyle cevap verir, hiçbir şeyi değiştirmez. Kullanımı düşüktür ama sıfır değildir.</p>
+            <p class="ayar-hata" id="ayar-npc-hata" hidden></p>
+          </form>
+          <!-- the display language (ofis.json dil, bin/dil.py; web/i18n.js): saved at once through the same genel path -->
+          <form class="ayar-genel ayar-dil" id="ayar-dil-form" autocomplete="off" novalidate>
+            <label class="ayar-etiket" for="ayar-dil">Dil / Language</label>
+            <div class="ayar-satir">
+              <select class="input" id="ayar-dil" aria-describedby="ayar-dil-ipucu ayar-dil-hata">
+                <option value="tr">Türkçe</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <p class="ayar-ipucu" id="ayar-dil-ipucu" data-t="Sayfanın ve CEO'nun cevaplarının dili. CEO yeni dile bir sonraki yeni oturumunda geçer.">Sayfanın ve CEO'nun cevaplarının dili. CEO yeni dile bir sonraki yeni oturumunda geçer.</p>
+            <p class="ayar-hata" id="ayar-dil-hata" hidden></p>
           </form>
         </section>
 
         <section class="ayar-bolum" aria-labelledby="ayar-projeler-baslik">
           <div class="ayar-bolum-bas">
-            <h3 class="ayar-baslik" id="ayar-projeler-baslik">Projeler</h3>
-            <button class="btn btn-primary btn-sm" id="ayar-proje-ekle" type="button">Proje ekle</button>
+            <h3 class="ayar-baslik" id="ayar-projeler-baslik" data-t="Projeler">Projeler</h3>
+            <button class="btn btn-primary btn-sm" id="ayar-proje-ekle" type="button" data-t="Proje ekle">Proje ekle</button>
           </div>
-          <p class="ayar-ipucu">Her proje ofiste bir ekip odası olur. Yeni bir proje birkaç saniye içinde ofiste görünür.</p>
+          <p class="ayar-ipucu" data-t="Her proje ofiste bir ekip odası olur. Yeni bir proje birkaç saniye içinde ofiste görünür.">Her proje ofiste bir ekip odası olur. Yeni bir proje birkaç saniye içinde ofiste görünür.</p>
           <div class="ayar-projeler" id="ayar-projeler"></div>
-          <p class="empty" id="ayar-projeler-bos" hidden>Henüz proje yok. “Proje ekle” ile ilkini ekle.</p>
+          <p class="empty" id="ayar-projeler-bos" hidden data-t="Henüz proje yok. “Proje ekle” ile ilkini ekle.">Henüz proje yok. “Proje ekle” ile ilkini ekle.</p>
 
           <form class="ayar-form" id="ayar-proje-form" autocomplete="off" novalidate hidden aria-labelledby="ayar-form-baslik">
             <h4 class="ayar-form-baslik" id="ayar-form-baslik">Yeni proje</h4>
             <div class="ayar-alan">
-              <label class="ayar-etiket" for="ayar-f-ad">Proje adı</label>
+              <label class="ayar-etiket" for="ayar-f-ad" data-t="Proje adı">Proje adı</label>
               <input class="input" id="ayar-f-ad" type="text" maxlength="40" spellcheck="false" aria-describedby="ayar-f-ad-ipucu ayar-f-ad-hata">
               <p class="ayar-ipucu" id="ayar-f-ad-ipucu">Küçük harf, rakam ve tire (ör. musteri-paneli). Sonradan değiştirilemez.</p>
               <p class="ayar-hata" id="ayar-f-ad-hata" hidden></p>
             </div>
             <div class="ayar-alan">
-              <label class="ayar-etiket" for="ayar-f-path">Klasör yolu</label>
+              <label class="ayar-etiket" for="ayar-f-path" data-t="Klasör yolu">Klasör yolu</label>
               <input class="input" id="ayar-f-path" type="text" maxlength="1024" spellcheck="false" placeholder="~/Dev/proje" aria-describedby="ayar-f-path-ipucu ayar-f-path-hata">
-              <p class="ayar-ipucu" id="ayar-f-path-ipucu">Projenin bilgisayardaki klasörü; / ya da ~ ile başlar.</p>
+              <p class="ayar-ipucu" id="ayar-f-path-ipucu" data-t="Projenin bilgisayardaki klasörü; / ya da ~ ile başlar.">Projenin bilgisayardaki klasörü; / ya da ~ ile başlar.</p>
               <p class="ayar-hata" id="ayar-f-path-hata" hidden></p>
             </div>
             <div class="ayar-alan">
-              <label class="ayar-etiket" for="ayar-f-description">Açıklama</label>
+              <label class="ayar-etiket" for="ayar-f-description" data-t="Açıklama">Açıklama</label>
               <input class="input" id="ayar-f-description" type="text" maxlength="300" aria-describedby="ayar-f-description-ipucu ayar-f-description-hata">
-              <p class="ayar-ipucu" id="ayar-f-description-ipucu">Tek cümle: proje ne yapıyor?</p>
+              <p class="ayar-ipucu" id="ayar-f-description-ipucu" data-t="Tek cümle: proje ne yapıyor?">Tek cümle: proje ne yapıyor?</p>
               <p class="ayar-hata" id="ayar-f-description-hata" hidden></p>
             </div>
             <div class="ayar-alan">
-              <label class="ayar-etiket" for="ayar-f-notes">Proje kuralları <span class="ayar-istege">(isteğe bağlı)</span></label>
+              <label class="ayar-etiket" for="ayar-f-notes"><span data-t="Proje kuralları">Proje kuralları</span> <span class="ayar-istege" data-t="(isteğe bağlı)">(isteğe bağlı)</span></label>
               <textarea class="input" id="ayar-f-notes" rows="3" maxlength="2000" aria-describedby="ayar-f-notes-ipucu ayar-f-notes-hata"></textarea>
-              <p class="ayar-ipucu" id="ayar-f-notes-ipucu">Bu projede çalışan her ajanın bilmesi gerekenler.</p>
+              <p class="ayar-ipucu" id="ayar-f-notes-ipucu" data-t="Bu projede çalışan her ajanın bilmesi gerekenler.">Bu projede çalışan her ajanın bilmesi gerekenler.</p>
               <p class="ayar-hata" id="ayar-f-notes-hata" hidden></p>
             </div>
             <details class="ayar-gelismis" id="ayar-gelismis">
-              <summary>Gelişmiş</summary>
-              <p class="ayar-ipucu">Her satıra bir madde yaz. Boş bırakılanlar için ofisin varsayılanları geçerlidir.</p>
+              <summary data-t="Gelişmiş">Gelişmiş</summary>
+              <p class="ayar-ipucu" data-t="Her satıra bir madde yaz. Boş bırakılanlar için ofisin varsayılanları geçerlidir.">Her satıra bir madde yaz. Boş bırakılanlar için ofisin varsayılanları geçerlidir.</p>
               <div class="ayar-alan">
-                <label class="ayar-etiket" for="ayar-f-hassas_yollar">Hassas yollar</label>
+                <label class="ayar-etiket" for="ayar-f-hassas_yollar" data-t="Hassas yollar">Hassas yollar</label>
                 <textarea class="input" id="ayar-f-hassas_yollar" rows="2" spellcheck="false" placeholder=".env*" aria-describedby="ayar-f-hassas_yollar-ipucu ayar-f-hassas_yollar-hata"></textarea>
-                <p class="ayar-ipucu" id="ayar-f-hassas_yollar-ipucu">Değişince incelemenin daha sıkı yapıldığı dosyalar (ör. .env*, odeme/**).</p>
+                <p class="ayar-ipucu" id="ayar-f-hassas_yollar-ipucu" data-t="Değişince incelemenin daha sıkı yapıldığı dosyalar (ör. .env*, odeme/**).">Değişince incelemenin daha sıkı yapıldığı dosyalar (ör. .env*, odeme/**).</p>
                 <p class="ayar-hata" id="ayar-f-hassas_yollar-hata" hidden></p>
               </div>
               <div class="ayar-alan">
-                <label class="ayar-etiket" for="ayar-f-dur_sor">Durup sorması gerekenler</label>
+                <label class="ayar-etiket" for="ayar-f-dur_sor" data-t="Durup sorması gerekenler">Durup sorması gerekenler</label>
                 <textarea class="input" id="ayar-f-dur_sor" rows="2" aria-describedby="ayar-f-dur_sor-hata"></textarea>
                 <p class="ayar-hata" id="ayar-f-dur_sor-hata" hidden></p>
               </div>
               <div class="ayar-alan">
-                <label class="ayar-etiket" for="ayar-f-asla">Asla yapmaması gerekenler</label>
+                <label class="ayar-etiket" for="ayar-f-asla" data-t="Asla yapmaması gerekenler">Asla yapmaması gerekenler</label>
                 <textarea class="input" id="ayar-f-asla" rows="2" aria-describedby="ayar-f-asla-hata"></textarea>
                 <p class="ayar-hata" id="ayar-f-asla-hata" hidden></p>
               </div>
               <div class="ayar-alan">
-                <label class="ayar-etiket" for="ayar-f-teslim">Teslim biçimi</label>
+                <label class="ayar-etiket" for="ayar-f-teslim" data-t="Teslim biçimi">Teslim biçimi</label>
                 <textarea class="input" id="ayar-f-teslim" rows="2" aria-describedby="ayar-f-teslim-hata"></textarea>
                 <p class="ayar-hata" id="ayar-f-teslim-hata" hidden></p>
               </div>
               <div class="ayar-alan">
-                <label class="ayar-etiket" for="ayar-f-domainler">Domainler</label>
+                <label class="ayar-etiket" for="ayar-f-domainler" data-t="Domainler">Domainler</label>
                 <textarea class="input" id="ayar-f-domainler" rows="2" spellcheck="false" placeholder="ornek.com" aria-describedby="ayar-f-domainler-ipucu ayar-f-domainler-hata"></textarea>
-                <p class="ayar-ipucu" id="ayar-f-domainler-ipucu">Sunucu odasının izlediği alan adları; yalnız ad (https:// ya da yol yok).</p>
+                <p class="ayar-ipucu" id="ayar-f-domainler-ipucu" data-t="Sunucu odasının izlediği alan adları; yalnız ad (https:// ya da yol yok).">Sunucu odasının izlediği alan adları; yalnız ad (https:// ya da yol yok).</p>
                 <p class="ayar-hata" id="ayar-f-domainler-hata" hidden></p>
               </div>
             </details>
             <ul class="ayar-hatalar" id="ayar-form-hatalar" role="alert" hidden></ul>
             <div class="ayar-eylemler">
-              <button class="btn btn-soft" type="button" id="ayar-form-vazgec">Vazgeç</button>
-              <button class="btn btn-primary" type="submit" id="ayar-form-kaydet">Kaydet</button>
+              <button class="btn btn-soft" type="button" id="ayar-form-vazgec" data-t="Vazgeç">Vazgeç</button>
+              <button class="btn btn-primary" type="submit" id="ayar-form-kaydet" data-t="Kaydet">Kaydet</button>
             </div>
           </form>
         </section>
@@ -329,21 +355,21 @@
   <aside class="drawer" id="drawer" aria-hidden="true">
     <header class="drawer-head">
       <div>
-        <strong>CEO ile sohbet</strong>
+        <strong data-t="CEO ile sohbet">CEO ile sohbet</strong>
         <div class="drawer-sub" id="drawer-sub">—</div>
       </div>
       <div class="drawer-head-actions">
-        <button class="btn btn-soft btn-sm" id="drawer-expand" type="button" title="Komuta masasını aç">Genişlet</button>
-        <button class="icon-btn" id="drawer-close" type="button" aria-label="Kapat">×</button>
+        <button class="btn btn-soft btn-sm" id="drawer-expand" type="button" title="Komuta masasını aç" data-t-title="Komuta masasını aç" data-t="Genişlet">Genişlet</button>
+        <button class="icon-btn" id="drawer-close" type="button" aria-label="Kapat" data-t-aria-label="Kapat">×</button>
       </div>
     </header>
     <div class="messages" id="messages"></div>
-    <div class="typing" id="typing" hidden><span></span><span></span><span></span> CEO yazıyor…</div>
+    <div class="typing" id="typing" hidden><span></span><span></span><span></span> <span data-t="CEO yazıyor…">CEO yazıyor…</span></div>
     <form class="drawer-form" id="drawer-form" autocomplete="off">
-      <textarea class="input" id="drawer-input" rows="2" maxlength="4000" placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" aria-label="Mesaj"></textarea>
+      <textarea class="input" id="drawer-input" rows="2" maxlength="4000" placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" data-t-placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" aria-label="Mesaj" data-t-aria-label="Mesaj"></textarea>
       <div class="drawer-actions">
         <span class="muted" id="queue-note"></span>
-        <button class="btn btn-primary" type="submit">Gönder</button>
+        <button class="btn btn-primary" type="submit" data-t="Gönder">Gönder</button>
       </div>
     </form>
   </aside>
@@ -353,67 +379,67 @@
   <div class="komuta" id="komuta" role="dialog" aria-modal="true" aria-labelledby="komuta-title" hidden>
     <div class="komuta-card">
       <header class="komuta-head">
-        <h2 id="komuta-title">Komuta masası</h2>
-        <nav class="komuta-tabs" role="tablist" aria-label="Komuta masası bölümleri">
-          <button class="komuta-tab is-active" role="tab" type="button" id="komuta-tab-sohbet" data-sekme="sohbet" aria-selected="true" aria-controls="komuta-sohbet">Sohbet</button>
-          <button class="komuta-tab" role="tab" type="button" id="komuta-tab-suan" data-sekme="suan" aria-selected="false" aria-controls="komuta-suan">Şu an</button>
-          <button class="komuta-tab" role="tab" type="button" id="komuta-tab-kararlar" data-sekme="kararlar" aria-selected="false" aria-controls="komuta-kararlar">Kararlar <span class="tab-count" id="komuta-karar-sayi" hidden></span></button>
+        <h2 id="komuta-title" data-t="Komuta masası">Komuta masası</h2>
+        <nav class="komuta-tabs" role="tablist" aria-label="Komuta masası bölümleri" data-t-aria-label="Komuta masası bölümleri">
+          <button class="komuta-tab is-active" role="tab" type="button" id="komuta-tab-sohbet" data-sekme="sohbet" aria-selected="true" aria-controls="komuta-sohbet" data-t="Sohbet">Sohbet</button>
+          <button class="komuta-tab" role="tab" type="button" id="komuta-tab-suan" data-sekme="suan" aria-selected="false" aria-controls="komuta-suan" data-t="Şu an">Şu an</button>
+          <button class="komuta-tab" role="tab" type="button" id="komuta-tab-kararlar" data-sekme="kararlar" aria-selected="false" aria-controls="komuta-kararlar"><span data-t="Kararlar">Kararlar</span> <span class="tab-count" id="komuta-karar-sayi" hidden></span></button>
         </nav>
-        <button class="btn btn-ghost btn-sm" id="komuta-kucult" type="button" title="Küçük sohbet penceresine geç">Küçült</button>
-        <button class="icon-btn" id="komuta-close" type="button" aria-label="Komuta masasını kapat">×</button>
+        <button class="btn btn-ghost btn-sm" id="komuta-kucult" type="button" title="Küçük sohbet penceresine geç" data-t-title="Küçük sohbet penceresine geç" data-t="Küçült">Küçült</button>
+        <button class="icon-btn" id="komuta-close" type="button" aria-label="Komuta masasını kapat" data-t-aria-label="Komuta masasını kapat">×</button>
       </header>
       <div class="komuta-cols" id="komuta-cols" data-sekme="sohbet">
         <section class="komuta-col komuta-suan" id="komuta-suan" role="tabpanel" aria-labelledby="komuta-tab-suan">
-          <h3 class="komuta-col-title">Şu an</h3>
-          <p class="komuta-hint">Bir işe tıklayınca ayrıntısı açılır ve iş mesajına bağlam olarak eklenir.</p>
+          <h3 class="komuta-col-title" data-t="Şu an">Şu an</h3>
+          <p class="komuta-hint" data-t="Bir işe tıklayınca ayrıntısı açılır ve iş mesajına bağlam olarak eklenir.">Bir işe tıklayınca ayrıntısı açılır ve iş mesajına bağlam olarak eklenir.</p>
           <div class="suan-list" id="suan-list"></div>
-          <p class="empty" id="suan-empty" hidden>Şu an çalışan ya da sırada bekleyen iş yok.</p>
+          <p class="empty" id="suan-empty" hidden data-t="Şu an çalışan ya da sırada bekleyen iş yok.">Şu an çalışan ya da sırada bekleyen iş yok.</p>
         </section>
         <section class="komuta-col komuta-sohbet" id="komuta-sohbet" role="tabpanel" aria-labelledby="komuta-tab-sohbet">
           <div class="ceo-simdi" id="ceo-simdi" aria-live="polite">CEO şu an: —</div>
           <details class="ceo-adimlar" id="ceo-adimlar">
-            <summary>Son adımlar <span class="muted" id="ceo-adimlar-sayi"></span></summary>
+            <summary><span data-t="Son adımlar">Son adımlar</span> <span class="muted" id="ceo-adimlar-sayi"></span></summary>
             <ol class="ceo-adim-list" id="ceo-adim-list"></ol>
           </details>
           <div class="messages komuta-messages" id="komuta-messages" aria-live="polite"></div>
           <p class="komuta-sirada" id="komuta-sirada" hidden></p>
           <form class="komuta-form" id="komuta-form" autocomplete="off">
-            <div class="hazir-sorular" id="hazir-sorular" role="group" aria-label="Hazır sorular"></div>
-            <div class="baglam-list" id="baglam-list" role="group" aria-label="Mesaja eklenen işler"></div>
-            <textarea class="input" id="komuta-input" rows="3" maxlength="4000" placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" aria-label="Mesaj"></textarea>
+            <div class="hazir-sorular" id="hazir-sorular" role="group" aria-label="Hazır sorular" data-t-aria-label="Hazır sorular"></div>
+            <div class="baglam-list" id="baglam-list" role="group" aria-label="Mesaja eklenen işler" data-t-aria-label="Mesaja eklenen işler"></div>
+            <textarea class="input" id="komuta-input" rows="3" maxlength="4000" placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" data-t-placeholder="CEO'ya yaz… (Enter gönderir, Shift+Enter satır)" aria-label="Mesaj" data-t-aria-label="Mesaj"></textarea>
             <div class="drawer-actions">
               <span class="muted" id="komuta-queue-note"></span>
-              <button class="btn btn-primary" type="submit">Gönder</button>
+              <button class="btn btn-primary" type="submit" data-t="Gönder">Gönder</button>
             </div>
           </form>
           <details class="duyuru-yap" id="duyuru-yap">
-            <summary>Duyuru yap</summary>
+            <summary data-t="Duyuru yap">Duyuru yap</summary>
             <form class="duyuru-form" id="duyuru-form" autocomplete="off">
-              <p class="komuta-hint">Duyuru, şu an çalışan bütün proje oturumlarına iletilir; süre seçersen o süre içinde başlayan işlere de eklenir.</p>
-              <textarea class="input" id="duyuru-metin" rows="3" maxlength="2000" placeholder="Bütün ekibe duyurun…" aria-label="Duyuru metni"></textarea>
+              <p class="komuta-hint" data-t="Duyuru, şu an çalışan bütün proje oturumlarına iletilir; süre seçersen o süre içinde başlayan işlere de eklenir.">Duyuru, şu an çalışan bütün proje oturumlarına iletilir; süre seçersen o süre içinde başlayan işlere de eklenir.</p>
+              <textarea class="input" id="duyuru-metin" rows="3" maxlength="2000" placeholder="Bütün ekibe duyurun…" data-t-placeholder="Bütün ekibe duyurun…" aria-label="Duyuru metni" data-t-aria-label="Duyuru metni"></textarea>
               <div class="duyuru-sure">
-                <label for="duyuru-sure-sec">Süre</label>
+                <label for="duyuru-sure-sec" data-t="Süre">Süre</label>
                 <select class="input" id="duyuru-sure-sec">
-                  <option value="simdi">Yalnız şimdi</option>
-                  <option value="bugun">Bugün</option>
-                  <option value="hafta">Bu hafta</option>
-                  <option value="tarih">Tarihe kadar…</option>
+                  <option value="simdi" data-t="Yalnız şimdi">Yalnız şimdi</option>
+                  <option value="bugun" data-t="Bugün">Bugün</option>
+                  <option value="hafta" data-t="Bu hafta">Bu hafta</option>
+                  <option value="tarih" data-t="Tarihe kadar…">Tarihe kadar…</option>
                 </select>
-                <input class="input" id="duyuru-tarih" type="date" aria-label="Son gün" hidden>
-                <button class="btn btn-primary" type="submit" id="duyuru-gonder">Duyur</button>
+                <input class="input" id="duyuru-tarih" type="date" aria-label="Son gün" data-t-aria-label="Son gün" hidden>
+                <button class="btn btn-primary" type="submit" id="duyuru-gonder" data-t="Duyur">Duyur</button>
               </div>
               <p class="muted duyuru-durum" id="duyuru-durum" aria-live="polite"></p>
             </form>
           </details>
           <details class="duyuru-yap yakala-yap" id="yakala-yap" hidden>
-            <summary>Yakala</summary>
+            <summary data-t="Yakala">Yakala</summary>
             <form class="duyuru-form" id="yakala-form" autocomplete="off">
-              <p class="komuta-hint">Gözüne çarpan bir bağlantıyı yapıştır ya da küçük bir dosya seç (.txt, .md, .pdf). Ar-Ge uzmanı inceler ve "kullan / fikir al / geç" diye önerir; sonucu CEO sana söyler.</p>
-              <input class="input" id="yakala-url" type="url" maxlength="2000" placeholder="https://…" aria-label="Bağlantı">
-              <input class="input" id="yakala-not" type="text" maxlength="300" placeholder="Neden ilgini çekti? (isteğe bağlı)" aria-label="Not">
+              <p class="komuta-hint" data-t="Gözüne çarpan bir bağlantıyı yapıştır ya da küçük bir dosya seç (.txt, .md, .pdf). Ar-Ge uzmanı inceler ve &quot;kullan / fikir al / geç&quot; diye önerir; sonucu CEO sana söyler.">Gözüne çarpan bir bağlantıyı yapıştır ya da küçük bir dosya seç (.txt, .md, .pdf). Ar-Ge uzmanı inceler ve "kullan / fikir al / geç" diye önerir; sonucu CEO sana söyler.</p>
+              <input class="input" id="yakala-url" type="url" maxlength="2000" placeholder="https://…" aria-label="Bağlantı" data-t-aria-label="Bağlantı">
+              <input class="input" id="yakala-not" type="text" maxlength="300" placeholder="Neden ilgini çekti? (isteğe bağlı)" data-t-placeholder="Neden ilgini çekti? (isteğe bağlı)" aria-label="Not" data-t-aria-label="Not">
               <div class="duyuru-sure">
-                <input class="input yakala-dosya" id="yakala-dosya" type="file" accept=".txt,.md,.markdown,.pdf" aria-label="Dosya">
-                <button class="btn btn-primary" type="submit" id="yakala-gonder">Yakala</button>
+                <input class="input yakala-dosya" id="yakala-dosya" type="file" accept=".txt,.md,.markdown,.pdf" aria-label="Dosya" data-t-aria-label="Dosya">
+                <button class="btn btn-primary" type="submit" id="yakala-gonder" data-t="Yakala">Yakala</button>
               </div>
               <p class="muted duyuru-durum" id="yakala-durum" aria-live="polite"></p>
               <ul class="yakala-son" id="yakala-son"></ul>
@@ -421,14 +447,14 @@
           </details>
         </section>
         <section class="komuta-col komuta-kararlar" id="komuta-kararlar" role="tabpanel" aria-labelledby="komuta-tab-kararlar">
-          <h3 class="komuta-col-title">Bekleyen kararlar <span class="count" id="komuta-ask-count"></span></h3>
+          <h3 class="komuta-col-title"><span data-t="Bekleyen kararlar">Bekleyen kararlar</span> <span class="count" id="komuta-ask-count"></span></h3>
           <div class="ask-list komuta-ask-list" id="ask-list-komuta"></div>
-          <p class="empty" id="ask-empty-komuta">Bekleyen karar yok.</p>
-          <h3 class="komuta-col-title">Çalışanlar <span class="models-sum" id="komuta-models-sum"></span></h3>
+          <p class="empty" id="ask-empty-komuta" data-t="Bekleyen karar yok.">Bekleyen karar yok.</p>
+          <h3 class="komuta-col-title"><span data-t="Çalışanlar">Çalışanlar</span> <span class="models-sum" id="komuta-models-sum"></span></h3>
           <ul class="models-list" id="komuta-models-list"></ul>
-          <h3 class="komuta-col-title">Bugünkü kullanım</h3>
+          <h3 class="komuta-col-title" data-t="Bugünkü kullanım">Bugünkü kullanım</h3>
           <p class="komuta-harcama" id="komuta-harcama">—</p>
-          <h3 class="komuta-col-title">Son olanlar</h3>
+          <h3 class="komuta-col-title" data-t="Son olanlar">Son olanlar</h3>
           <ul class="feed" id="komuta-feed"></ul>
         </section>
       </div>
@@ -438,20 +464,20 @@
   <div class="modal" id="detail" role="dialog" aria-modal="true" aria-labelledby="detail-title" hidden>
     <div class="modal-card">
       <header class="modal-head">
-        <button class="btn btn-ghost modal-back" id="detail-back" type="button" hidden>← Geri</button>
+        <button class="btn btn-ghost modal-back" id="detail-back" type="button" hidden data-t="← Geri">← Geri</button>
         <div class="modal-titles">
           <p class="modal-kicker" id="detail-kicker"></p>
           <h2 id="detail-title"></h2>
         </div>
-        <button class="btn btn-ghost" id="detail-close" type="button">Kapat</button>
+        <button class="btn btn-ghost" id="detail-close" type="button" data-t="Kapat">Kapat</button>
       </header>
       <div class="modal-body" id="detail-body"></div>
     </div>
   </div>
   <section class="calisanlar card" id="calisanlar" role="dialog" aria-labelledby="calisanlar-title" hidden>
     <header class="calisanlar-head">
-      <h2 id="calisanlar-title">Şu an iş başında</h2>
-      <button class="icon-btn" id="calisanlar-close" type="button" aria-label="Kapat">×</button>
+      <h2 id="calisanlar-title" data-t="Şu an iş başında">Şu an iş başında</h2>
+      <button class="icon-btn" id="calisanlar-close" type="button" aria-label="Kapat" data-t-aria-label="Kapat">×</button>
     </header>
     <div class="calisanlar-wrap">
       <table class="tasks calisanlar-table">
@@ -460,15 +486,15 @@
       </table>
     </div>
     <p class="empty" id="calisanlar-empty" hidden></p>
-    <h3 class="calisanlar-kadro-title" id="calisanlar-kadro-title">Çalışanlar</h3>
+    <h3 class="calisanlar-kadro-title" id="calisanlar-kadro-title" data-t="Çalışanlar">Çalışanlar</h3>
     <ul class="models-list calisanlar-kadro" id="calisanlar-kadro" aria-labelledby="calisanlar-kadro-title"></ul>
   </section>
   <section class="sema card" id="sema" role="dialog" aria-labelledby="sema-title" hidden>
     <header class="calisanlar-head">
-      <h2 id="sema-title">Şirket şeması</h2>
-      <button class="icon-btn" id="sema-close" type="button" aria-label="Kapat">×</button>
+      <h2 id="sema-title" data-t="Şirket şeması">Şirket şeması</h2>
+      <button class="icon-btn" id="sema-close" type="button" aria-label="Kapat" data-t-aria-label="Kapat">×</button>
     </header>
-    <p class="sema-not">Gerçek verilerden: kim ofiste, nöbette ya da evde ve her birinin şu anki durumu. Kartını açmak için bir kişiye tıkla.</p>
+    <p class="sema-not" data-t="Gerçek verilerden: kim ofiste, nöbette ya da evde ve her birinin şu anki durumu. Kartını açmak için bir kişiye tıkla.">Gerçek verilerden: kim ofiste, nöbette ya da evde ve her birinin şu anki durumu. Kartını açmak için bir kişiye tıkla.</p>
     <div class="sema-wrap"><ul class="sema-agac" id="sema-agac"></ul></div>
   </section>
   <div class="toast" id="toast" role="status" hidden></div>

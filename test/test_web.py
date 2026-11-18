@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -26,9 +27,10 @@ def as_module(name, folder):
     target = Path(folder) / (Path(name).stem + ".mjs")
     text = (WEB / name).read_text(encoding="utf-8")
     if "'./ofis-davranis.js'" in text:
-        shutil.copyfile(WEB / "ofis-davranis.js", Path(folder) / "ofis-davranis.mjs")
-        text = text.replace("'./ofis-davranis.js'", "'./ofis-davranis.mjs'")
-    target.write_text(text, encoding="utf-8")
+        (Path(folder) / "ofis-davranis.mjs").write_text(
+            webkopya.mjs_yap((WEB / "ofis-davranis.js").read_text(encoding="utf-8")), encoding="utf-8")
+    webkopya.i18n_ekle(folder, mjs=True)
+    target.write_text(webkopya.mjs_yap(text), encoding="utf-8")
     return target
 
 
@@ -329,7 +331,7 @@ class PageWiringTest(unittest.TestCase):
 
     def test_the_page_knows_kontrolde_budget_and_the_kontrol_evidence(self):
         app = (WEB / "app.js").read_text(encoding="utf-8")
-        self.assertIn("kontrolde: 'kontrolde'", app)
+        self.assertIn("kontrolde: N_('kontrolde')", app)
         self.assertIn("budgetText(", app)
         self.assertIn("t.kontrol", app)
         self.assertRegex((WEB / "style.css").read_text(encoding="utf-8"), r"\.badge\.kontrolde")
@@ -1091,6 +1093,7 @@ def run_scene(expr, prelude="", tz=None):
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         for name in ("ofis-sahne.js", "ofis-davranis.js", "demo.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, Path(tmp) / name)
+        webkopya.i18n_ekle(tmp)
         uri = lambda n: json.dumps((Path(tmp) / n).as_uri())  # noqa: E731
         code = (f"import * as h from {uri('ofis-sahne.js')};\nimport * as d from {uri('ofis-davranis.js')};\n"
                 f"import * as demo from {uri('demo.js')};\n{DAV_PRELUDE}\n{prelude}\n"
@@ -1701,7 +1704,7 @@ class PillEmployeeListTest(unittest.TestCase):
         html = (WEB / "index.html").read_text(encoding="utf-8")
         pop = html[html.index('id="calisanlar"'):html.index("</section>", html.index('id="calisanlar"'))]
         self.assertLess(pop.index('id="calisanlar-body"'), pop.index('id="calisanlar-kadro"'))  # below the agents
-        self.assertIn('id="calisanlar-kadro-title">Çalışanlar<', pop)
+        self.assertIn('id="calisanlar-kadro-title" data-t="Çalışanlar">Çalışanlar<', pop)
         self.assertNotIn("model-mini", html)
         app = (WEB / "app.js").read_text(encoding="utf-8")
         fn = app[app.index("function renderCalisanlarKadro("):app.index("function renderCalisanlar() {")]
@@ -2571,7 +2574,7 @@ class LabelGroupTest(unittest.TestCase):
                      "@media (max-width: 600px) { .etiket-lejant { display: none; } }"):
             self.assertIn(name, css)
         page = (WEB / "index.html").read_text(encoding="utf-8")
-        self.assertRegex(page, r'<details class="etiket-lejant" id="etiket-lejant">\s*<summary>Etiket renkleri</summary>')
+        self.assertRegex(page, r'<details class="etiket-lejant" id="etiket-lejant">\s*<summary data-t="Etiket renkleri">Etiket renkleri</summary>')
         for text in ("Yapay zekâ çalışanları", "Denetçiler", "Ofis personeli", "Oda adları"):
             self.assertIn(text, page)
 
@@ -2980,7 +2983,8 @@ class CharacterCardTest(unittest.TestCase):
         app = (WEB / "app.js").read_text(encoding="utf-8")
         kart = app[app.index("function kartGoster("):]
         kart = kart[:kart.index("\n}\n")]
-        self.assertIn("const anahtar = JSON.stringify(k);", kart)
+        # the card's content and (NPC chat, 2026-11-18) whether its question box shows
+        self.assertIn("const anahtar = JSON.stringify([k, npcSohbetRolu(a) && npcSohbetKutusu(state, DEMO)]);", kart)
         self.assertIn("if (el && !place && kart.anahtar === anahtar && !el.hidden) return;", kart)
         self.assertIn("kart.anahtar = anahtar;", kart)
 
@@ -3525,6 +3529,33 @@ class OfficeStaffCardsTest(unittest.TestCase):
         self.assertEqual(k["eylemler"], [{"tur": "karar", "metin": "Kadro önerisi · 1 sa", "note": "m.md"},
                                          {"tur": "kalite", "metin": "Kalite sekmesini aç"}])
 
+    def test_hr_shows_who_is_in_on_shift_and_at_the_otel(self):
+        # owner decision 2026-11-18: the same people the guard's card counts (kimNerede)
+        out = self.card("""(() => { const s = st(); const l = run(s); const k = d.kimNerede(s, NOW, l);
+          return { rows: h.karakterKarti(one(l, 'sus:ik'), s, NOW, { aktorler: l }).satirlar.filter((r) => r.bolum === 'Şu an').map((r) => [r.ad, r.metin]),
+            ofiste: k.ofiste.filter((e) => e.durum !== 'cikiyor').length, evde: k.evde.length,
+            nobet: k.ofiste.filter((e) => e.durum === 'nobette').length, v: h.ikVarligi(s, NOW, l) }; })()""")
+        rows = dict(out["rows"])
+        self.assertEqual(list(rows), ["Ofiste", "Nöbette", "Otelde"])
+        self.assertTrue(rows["Ofiste"].startswith(f"{out['ofiste']} kişi ("), rows)
+        self.assertEqual(len(out["v"]["nobette"]), out["nobet"])
+        self.assertIn("Güvenlik · ", rows["Nöbette"])
+        self.assertEqual(rows["Otelde"], f"{out['evde']} kişi" if out["evde"] else "kimse yok")
+
+    def test_a_manager_card_lists_its_departments_silent_and_stuck_jobs(self):
+        out = run_scene("""(() => { const s = st({ tasks: [task('a.md', 'calisiyor', { title: 'Sepet' }),
+            task('b.md', 'tikandi', { title: 'Ödeme', finished: iso(NOW - 3600000) }),
+            task('c.md', 'tikandi', { title: 'Dün', finished: iso(NOW - 30 * 3600000) }),
+            task('r.md', 'calisiyor', { title: 'İnceleme', tier: 'inceleme', step_kind: 'kod-inceleme' })],
+            postoffice: { silent: [{ is: 'a', seconds: 300 }, { is: 'r', seconds: 300 }] } });
+          const rows = (k) => k.satirlar.map((r) => [r.ad, r.metin]);
+          return { yaz: rows(h.mudurKarti(s, NOW, 'yazilim')), qa: rows(h.mudurKarti(s, NOW, 'qa')), it: h.sorunluIsler(s, NOW, 'it') }; })()""")
+        i = out["yaz"].index(["Bakılması gereken", "yayin · Sepet · sessiz"])
+        self.assertEqual(out["yaz"][i + 1], ["", "yayin · Ödeme · takıldı"])
+        self.assertNotIn("Dün", str(out["yaz"]))  # stuck today only
+        self.assertIn(["Bakılması gereken", "yayin · İnceleme · sessiz"], out["qa"])
+        self.assertEqual(out["it"], [])
+
     def test_the_project_resident_shows_its_project_without_pretending_to_work(self):
         k = self.card("""(() => { const s = st({ projects: [{ name: 'yayin', description: 'Dilek uygulaması', klasor: 'yayin' }],
             sessions: [ses('w', 'busy', { note: 'a.md', model: 'opus' })],
@@ -3608,7 +3639,20 @@ class CareStaffTest(unittest.TestCase):
         ok = self.card("""(() => { const s = st({ postoffice: { silent: [] } }); return h.karakterKarti(one(run(s), 'sus:revir'), s, NOW); })()""")
         r = {x["ad"]: x["metin"] for x in ok["satirlar"]}
         self.assertEqual(r["Durum"], "Ofis sağlıklı")
-        self.assertEqual(r["Bakılanlar"], "takılan iş yok · sessiz oturum yok · hata veren çalışan yok")
+        self.assertEqual(r["Bakılanlar"], "takılan iş yok · Kontrol'ü geçmeyen iş yok · sessiz oturum yok · hata veren çalışan yok")
+
+    def test_the_doctor_lists_the_open_jobs_whose_kontrol_failed(self):
+        # owner decision 2026-11-18: failing jobs too (a Kontrol that did not pass; the job is fixing it now)
+        k = self.card("""(() => { const s = st({ tasks: [task('k.md', 'calisiyor', { title: 'Sepet', kontrol_sonuc: 'kaldi', kontrol_deneme: 1 }),
+              task('m.md', 'calisiyor', { title: 'Ödeme', kontrol_sonuc: 'kaldi', kontrol_deneme: 2 }),
+              task('b.md', 'bitti', { title: 'Eski', kontrol_sonuc: 'kaldi', finished: iso(NOW - H) })], postoffice: { silent: [] } });
+          return h.karakterKarti(one(run(s), 'sus:revir'), s, NOW); })()""")
+        got = [[r["ad"], r["metin"]] for r in k["satirlar"]]
+        self.assertIn(["Kontrol'ü geçmeyen", "yayin · Sepet · düzeltiyor"], got)
+        self.assertIn(["", "yayin · Ödeme · 2. deneme"], got)
+        self.assertNotIn("Eski", str(got))  # a finished job is no case
+        self.assertNotIn("Ofis sağlıklı", str(got))
+        self.assertEqual([e["note"] for e in k["eylemler"]], ["k.md", "m.md"])
 
     def test_the_doctor_visits_each_new_case_once_and_never_moves_the_patient(self):
         out = run_dav("""(() => { const stuck = () => st({ sessions: [ses('s', 'idle', { note: 'a.md', model: 'opus' })],
@@ -3817,7 +3861,7 @@ class StaffFloorLabelTest(unittest.TestCase):
         for s in out["idle"]:
             self.assertNotIn("is-gorevde", s.split(), out["idle"])
         page = (WEB / "index.html").read_text(encoding="utf-8")
-        self.assertIn('<span class="lj lj-calisiyor"></span>Yeşil etiket', page)  # the legend names it
+        self.assertIn('<span class="lj lj-calisiyor"></span><span data-t="Yeşil etiket', page)  # the legend names it
         self.assertIn(".etiket-lejant .lj-calisiyor { background: #2E7D4F; }", (WEB / "style.css").read_text(encoding="utf-8"))
 
     def test_the_tea_server_is_on_duty_only_when_it_carries_tea_to_a_fresh_finish(self):
@@ -3836,7 +3880,7 @@ class UzmanlikMapsTest(unittest.TestCase):
         for name, const in (("ofis-davranis.js", "UZMANLIK_BASLIK"), ("ofis-text.js", "UZMANLIK_ADI")):
             text = (WEB / name).read_text(encoding="utf-8")
             body = re.search(const + r" = \{(.*?)\};", text, re.S).group(1)
-            found = dict(re.findall(r"(\w+): '([^']*)'", body))
+            found = dict(re.findall(r"(\w+): (?:N_\()?'([^']*)'", body))  # N_('…'): translated where drawn
             self.assertEqual(found, titles, name)
         # the scorecard's titles too
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bin"))
@@ -4053,12 +4097,12 @@ class SidePanelAndTabsTest(unittest.TestCase):
     def test_two_new_tabs_after_kalite_open_full_panel_views(self):
         tabs = re.findall(r'data-tab="([a-z]+)"', self.html)
         self.assertEqual(tabs, ["ofis", "kararlar", "isler", "raporlar", "kalite", "zamanlanmis", "olaylar", "ayarlar"])
-        self.assertIn(">Zamanlanmış <span", self.html)
-        self.assertIn('data-tab="olaylar" aria-selected="false">Son olanlar</button>', self.html)
+        self.assertIn(">Zamanlanmış</span> <span", self.html)
+        self.assertIn('data-tab="olaylar" aria-selected="false" data-t="Son olanlar">Son olanlar</button>', self.html)
         for name in ("zamanlanmis", "olaylar"):
             self.assertIn(f'<section class="overlay overlay-wide" id="overlay-{name}" hidden>', self.html)
         self.assertIn("const OVERLAYS = ['kararlar', 'isler', 'raporlar', 'kalite', 'zamanlanmis', 'olaylar', 'ayarlar'];", self.app)
-        heads = re.findall(r"<th scope=\"col\">([^<]+)</th>", self.html[self.html.index('id="overlay-zamanlanmis"'):])[:6]
+        heads = re.findall(r"<th scope=\"col\"(?: data-t=\"[^\"]*\")?>([^<]+)</th>", self.html[self.html.index('id="overlay-zamanlanmis"'):])[:6]
         self.assertEqual(heads, ["Ad", "Proje", "Ne zaman", "Sonraki", "Durum", "Son koşu"])
         # on a phone the tab bar scrolls sideways (the same tabs); nothing hides these two
         self.assertNotRegex(self.css, r'data-tab="(zamanlanmis|olaylar)"[^{]*\{[^}]*display: none')
@@ -4333,10 +4377,10 @@ class ProjectReportFormatterTest(unittest.TestCase):
 def run_yol(expr):
     """Evaluates `expr` with web/is-akisi.js imported as `y` (the per-job progress line)."""
     with tempfile.TemporaryDirectory() as tmp:
-        shutil.copyfile(WEB / "ofis-davranis.js", Path(tmp) / "ofis-davranis.mjs")
+        (Path(tmp) / "ofis-davranis.mjs").write_text(
+            webkopya.mjs_yap((WEB / "ofis-davranis.js").read_text(encoding="utf-8")), encoding="utf-8")
         module = as_module("is-akisi.js", tmp)
-        module.write_text(module.read_text(encoding="utf-8").replace("./ofis-davranis.js", "./ofis-davranis.mjs"),
-                          encoding="utf-8")
+        module.write_text(webkopya.mjs_yap(module.read_text(encoding="utf-8")), encoding="utf-8")
         code = (f"import * as y from {json.dumps(module.as_uri())};\n"
                 f"process.stdout.write(JSON.stringify({expr}));")
         proc = subprocess.run([NODE, "--input-type=module", "-e", code], capture_output=True, text=True, timeout=30)
@@ -4446,6 +4490,54 @@ class JobPathWiringTest(unittest.TestCase):
         self.assertNotIn("innerHTML", js)
         css = (WEB / "style.css").read_text(encoding="utf-8")
         for cls in (".yol-tamam", ".yol-simdi", ".yol-bekleme", ".yol-hata", ".yol-atlandi", ".yol-kompakt"):
+            self.assertIn(cls, css)
+
+
+
+# --- NPC chat (owner decision 2026-11-18; bin/npc_sohbet.py): the card's question box ---
+
+@unittest.skipUnless(NODE, "node is not installed")
+class NpcSohbetTest(unittest.TestCase):
+    def test_role_keys_for_staff_only(self):
+        out = run_scene("""[
+          h.npcSohbetRolu({ tur: 'sus', gorevli: 'sekreter' }), h.npcSohbetRolu({ tur: 'sus', id: 'sus:muhasebe' }),
+          h.npcSohbetRolu({ tur: 'sus', gorevli: 'mudur', alan: 'qa' }), h.npcSohbetRolu({ tur: 'sus', gorevli: 'mudur', alan: 'x' }),
+          h.npcSohbetRolu({ tur: 'sus', gorevli: 'proje', proje: 'blog' }), h.npcSohbetRolu({ tur: 'sus', gorevli: 'proje', proje: '../x' }),
+          h.npcSohbetRolu({ tur: 'sus', gorevli: 'cayci' }), h.npcSohbetRolu({ tur: 'dekor', gorevli: 'sekreter' }),
+          h.npcSohbetRolu({ tur: 'ceo' }), h.npcSohbetRolu(null)]""")
+        self.assertEqual(out, ["sekreter", "muhasebe", "mudur:qa", None, "proje:blog", None, None, None, None, None])
+
+    def test_the_box_only_when_on_and_never_in_the_demo(self):
+        out = run_scene("""[h.npcSohbetKutusu({ npc_sohbet: { acik: true } }), h.npcSohbetKutusu({ npc_sohbet: { acik: false } }),
+          h.npcSohbetKutusu({}), h.npcSohbetKutusu({ npc_sohbet: { acik: true } }, true)]""")
+        self.assertEqual(out[0], {"kutu": True, "ipucu": ""})
+        self.assertFalse(out[1]["kutu"])
+        self.assertIn("Ayarlar", out[1]["ipucu"])
+        self.assertEqual(out[1], out[2])
+        self.assertEqual(out[3], {"kutu": False, "ipucu": "Soru sormak demo modunda çalışmaz."})
+
+    def test_the_answer_or_a_plain_error(self):
+        out = run_scene("""[h.npcSohbetSonucu(200, { cevap: ' Bugün sakin. ', kullanim: '1,2 bin token · API karşılığı ~$0.002' }),
+          h.npcSohbetSonucu(200, { cevap: '' }), h.npcSohbetSonucu(429, { error: 'Saatte en çok 20 soru sorulabilir.' }),
+          h.npcSohbetSonucu(0, null), h.npcSohbetSonucu(403, {}), h.npcSohbetSonucu(500, {})]""")
+        self.assertEqual(out[0], {"cevap": "Bugün sakin.", "alt": "Kullanım: 1,2 bin token · API karşılığı ~$0.002"})
+        self.assertIn("hata", out[1])
+        self.assertEqual(out[2], {"hata": "Saatte en çok 20 soru sorulabilir."})
+        self.assertIn("Sunucuya ulaşılamadı", out[3]["hata"])
+        self.assertIn("reddedildi", out[4]["hata"])
+        self.assertEqual(out[5], {"hata": "Cevap alınamadı (hata 500)."})
+
+    def test_the_page_draws_the_answer_as_text_and_keeps_the_box_across_rebuilds(self):
+        app = (WEB / "app.js").read_text(encoding="utf-8")
+        part = app[app.index("function sohbetYap("):app.index("// The one character card component")]
+        self.assertIn("post('/api/npc-sohbet', { npc: rol, soru })", part)
+        self.assertIn("cevap.textContent = out.cevap || out.hata;", part)
+        self.assertIn("'Düşünüyor…'", part)
+        self.assertNotIn("innerHTML", part)
+        self.assertIn("for (const c of [...el.children]) if (c !== soru) c.remove();", app)
+        self.assertIn("npcSohbetKutusu(state, DEMO)", app)
+        css = (WEB / "style.css").read_text(encoding="utf-8")
+        for cls in (".npc-sohbet-form", ".npc-sohbet-cevap", ".npc-sohbet-alt"):
             self.assertIn(cls, css)
 
 

@@ -1,5 +1,6 @@
 // The owner's Claude plan usage limits in the top bar (owner decision 2026-11-14; /api/state.limitler from bin/limitler.py).
 // Pure helper, tested with node in test/test_limitler.py. The page writes its result with textContent only.
+import { t as T, N_ } from './i18n.js';
 
 export const LIMIT_UYARI = 80;   // amber from here
 export const LIMIT_KRITIK = 95;  // red from here
@@ -13,18 +14,20 @@ export function limitPill(l) {
   if (!l || typeof l !== 'object') return { gizli: true, metin: '', ton: '', ipucu: '' };
   const parts = [];
   let enYuksek = null;
-  for (const [ad, etiket] of [['haftalik', 'Haftalık'], ['bes_saat', '5 saat']]) {
+  for (const [ad, kaynak] of [['haftalik', N_('Haftalık')], ['bes_saat', N_('5 saat')]]) {
     const p = l[ad];
     if (!p || typeof p !== 'object') continue;
+    const etiket = T(kaynak);
     const y = yuzde(p);
-    if (y === null) { if (p.gecti) parts.push(`${etiket} sıfırlandı`); continue; }
-    parts.push(`${etiket} %${y}`);
+    if (y === null) { if (p.gecti) parts.push(T('{etiket} sıfırlandı', { etiket })); continue; }
+    parts.push(T('{etiket} %{y}', { etiket, y }));
     enYuksek = enYuksek === null ? y : Math.max(enYuksek, y);
   }
   if (!parts.length) return { gizli: true, metin: '', ton: '', ipucu: '' };
   const ton = enYuksek === null ? '' : enYuksek >= LIMIT_KRITIK ? 'kritik' : enYuksek >= LIMIT_UYARI ? 'uyari' : '';
-  const ipucu = 'Claude kullanım sınırı' + (typeof l.metin === 'string' && l.metin ? `: ${l.metin}` : '')
-    + (l.eski ? ' (son ölçüm eski: değerler bir Claude oturumu açılınca yenilenir)' : '');
+  const ipucu = (typeof l.metin === 'string' && l.metin ? T('Claude kullanım sınırı: {metin}', { metin: l.metin })
+    : T('Claude kullanım sınırı'))
+    + (l.eski ? ' ' + T('(son ölçüm eski: değerler bir Claude oturumu açılınca yenilenir)') : '');
   return { gizli: false, metin: parts.join(' · '), ton, ipucu };
 }
 
@@ -52,8 +55,8 @@ export function kullanimGorunumu(data, sekme, durum = '') {
     if (!p || typeof p !== 'object') continue;
     const y = yuzde(p);
     pencereler.push({
-      etiket: metin(p.etiket, 30) || 'Sınır',
-      yuzdeMetni: y !== null ? `%${y}` : p.gecti ? 'sıfırlandı' : 'bilinmiyor',
+      etiket: metin(p.etiket, 30) || T('Sınır'),
+      yuzdeMetni: y !== null ? T('%{y}', { y }) : p.gecti ? T('sıfırlandı') : T('bilinmiyor'),
       genislik: y ?? 0,
       ton: y === null ? '' : y >= LIMIT_KRITIK ? 'kritik' : y >= LIMIT_UYARI ? 'uyari' : '',
       yenilenir: metin(p.yenilenir, 80),
@@ -65,18 +68,18 @@ export function kullanimGorunumu(data, sekme, durum = '') {
   const satirlar = (Array.isArray(dag && dag.satirlar) ? dag.satirlar : []).map(satirGorunumu).filter(Boolean);
   const toplam = dag ? satirGorunumu(dag.toplam) : null;
   let bos = '';
-  if (durum === 'yukleniyor' && !dag) bos = 'Yükleniyor…';
-  else if (durum === 'hata' && !dag) bos = 'Kullanım dökümü alınamadı.';
-  else if (!satirlar.length) bos = 'Bu aralıkta kayıtlı kullanım yok.';
+  if (durum === 'yukleniyor' && !dag) bos = T('Yükleniyor…');
+  else if (durum === 'hata' && !dag) bos = T('Kullanım dökümü alınamadı.');
+  else if (!satirlar.length) bos = T('Bu aralıkta kayıtlı kullanım yok.');
   return {
     pencereler,
-    sinirYok: !pencereler.length && !(durum && !data) ? 'Sınır bilgisi yok: bir Claude oturumu açılınca gelir.' : '',
+    sinirYok: !pencereler.length && !(durum && !data) ? T('Sınır bilgisi yok: bir Claude oturumu açılınca gelir.') : '',
     olcum,
     sekme: s,
     aralik: dag ? metin(dag.aralik, 80) : '',
     satirlar,
     toplam: satirlar.length ? toplam : null,
-    fiyatNotu: satirlar.some((r) => r.fiyatEksik) ? 'Bazı çağrıların fiyatı bilinmiyor; API karşılığı onlarsız hesaplandı.' : '',
+    fiyatNotu: satirlar.some((r) => r.fiyatEksik) ? T('Bazı çağrıların fiyatı bilinmiyor; API karşılığı onlarsız hesaplandı.') : '',
     bos,
     not: metin(d.not, 300),
   };

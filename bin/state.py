@@ -17,6 +17,7 @@ import ayarlar
 import budget
 import claude_cli
 import denetci
+import dil
 import duyuru
 import gunsonu
 import hafiza
@@ -26,6 +27,7 @@ import launch
 import limitler
 import model_durum
 import mudur
+import npc_sohbet
 import pricing
 import rapor
 import records
@@ -418,12 +420,13 @@ def iletildi_zamani(bildirim, turlar):
     return "simdi", ""
 
 
-def is_yolu(task, ek=None, bildirim=None, turlar=(), izin=False):
+def is_yolu(task, ek=None, bildirim=None, turlar=(), izin=False, dil_kodu="tr"):
     """The job's progress line: [{adim, durum, zaman, not}] in YOL_ADIMLARI order. durum: tamam (with its stamp),
     simdi (the current step), bekliyor (still ahead), hata (stopped here; `not` = the reason word), atlandi (Kontrol
     yok), yok (will not happen), bilinmiyor (it happened or not, the records cannot tell). The current step's `not`
     says what it waits for: "cevap" (a question to the owner), "izin" (a permission prompt). ek: {mesaj_zamani (the last
-    report's arrival), kontrol_var, durdurma (budget/call stop)}; bildirim: bildirim_zamani(); turlar: the CEO's turns."""
+    report's arrival), kontrol_var, durdurma (budget/call stop)}; bildirim: bildirim_zamani(); turlar: the CEO's turns.
+    dil_kodu: the language of the reason words of `hata` (bin/dil.py; "cevap" / "izin" stay codes)."""
     ek = ek or {}
     s = task.get("status", "")
     steps = {a: {"adim": a, "durum": "bekliyor", "zaman": "", "not": ""} for a in YOL_ADIMLARI}
@@ -443,7 +446,7 @@ def is_yolu(task, ek=None, bildirim=None, turlar=(), izin=False):
         put("verildi", "simdi")  # key kept for the API; it means "a worker takes the job" (the start), not a hand-over
         return [steps[a] for a in YOL_ADIMLARI]
     if s == "basarisiz" or (s == "iptal" and not started):
-        put("verildi", "hata", note="başlatılamadı" if s == "basarisiz" else "iptal")
+        put("verildi", "hata", note=dil.t("başlatılamadı" if s == "basarisiz" else "iptal", dil_kodu))
         for a in ("calisiyor", "kontrol", "rapor"):
             put(a, "yok")
     else:
@@ -460,8 +463,9 @@ def is_yolu(task, ek=None, bildirim=None, turlar=(), izin=False):
                 put("kontrol", "tamam", finished)
             put("rapor", "tamam", finished)
         elif s == "tikandi":
-            why = ("üst katmana taşındı" if task.get("escalated_to") else
-                   {"butce": "kullanım sınırı doldu", "cagri": "çağrı sınırı"}.get(ek.get("durdurma"), "takıldı"))
+            why = dil.t(dil.N_("üst katmana taşındı") if task.get("escalated_to") else
+                        {"butce": dil.N_("kullanım sınırı doldu"), "cagri": dil.N_("çağrı sınırı")}.get(
+                            ek.get("durdurma"), dil.N_("takıldı")), dil_kodu)
             if kontrol_sonuc == "kaldi":
                 put("calisiyor", "tamam", report)
                 put("kontrol", "hata", finished, why)
@@ -471,7 +475,7 @@ def is_yolu(task, ek=None, bildirim=None, turlar=(), izin=False):
                     put("kontrol", "yok")
             put("rapor", "tamam" if finished else "bilinmiyor", finished)
         elif s == "iptal":
-            put("calisiyor", "hata", finished, "iptal")
+            put("calisiyor", "hata", finished, dil.t("iptal", dil_kodu))
             for a in ("kontrol", "rapor"):
                 if steps[a]["durum"] != "atlandi":
                     put(a, "yok")
@@ -513,9 +517,10 @@ def yerel_zaman(value):
     return (d.astimezone() if d.tzinfo else d).replace(tzinfo=None).strftime(STAMP)
 
 
-def yol_ekle(tasks, extras, sent=None, turlar=(), izinli=()):
+def yol_ekle(tasks, extras, sent=None, turlar=(), izinli=(), dil_kodu="tr"):
     """Sets task["yol"] on each task (extras: {note: ek with son_mesaj, grup}); sent: the CEO's sent_times();
-    turlar: the CEO's turns, local stamps, oldest first; izinli: session names at a permission prompt."""
+    turlar: the CEO's turns, local stamps, oldest first; izinli: session names at a permission prompt; dil_kodu: the
+    reason words' language (ofis.json dil)."""
     dizin = bildirim_dizini(sent)
     izinli = set(izinli or ())
     for t in tasks:
@@ -523,7 +528,8 @@ def yol_ekle(tasks, extras, sent=None, turlar=(), izinli=()):
         when = None
         if t["status"] in jobs.FINAL_STATUSES:
             when = bildirim_zamani(dizin, t["note"], ek.get("son_mesaj"), ek.get("grup"), t.get("finished"))
-        t["yol"] = is_yolu(t, ek, when, turlar, izin=bool(t.get("session")) and t["session"] in izinli)
+        t["yol"] = is_yolu(t, ek, when, turlar, izin=bool(t.get("session")) and t["session"] in izinli,
+                           dil_kodu=dil_kodu)
 
 
 def recent_tasks(vault_ofis, limit=MAX_TASKS, cfg=None, durum_dir=None, extras=None):
@@ -628,7 +634,7 @@ def _limitler_ozeti(cfg):
     """/api/state.limitler (bin/limitler.py sayfa): the owner's Claude plan usage limits; None when off, without data or
     unreadable — never fails the state build."""
     try:
-        return limitler.sayfa(cfg or {})
+        return limitler.sayfa(cfg or {}, dil_kodu=dil.kod(cfg or {}))
     except Exception:  # noqa: BLE001 — display only
         return None
 
@@ -909,7 +915,7 @@ class OfficeState:
         ceo["tur_kapaniyor"] = bool(ceo.get("state") == "busy" and self._ceo_closing(ceo.get("session_id")))
         # the per-job progress line: the CEO channel's delivery times and the CEO's turns (display only)
         yol_ekle(all_tasks, extras, self._ceo_sent(), self._ceo_turlar(ceo.get("session_id")),
-                 {s["name"] for s in sessions if s.get("status") == "waiting"})
+                 {s["name"] for s in sessions if s.get("status") == "waiting"}, dil.kod(self.cfg or {}))
         denetim = self._denetim()
         modeller = self._models(sessions, all_tasks, ceo, now, tz, denetim)
         for s in sessions:
@@ -952,7 +958,8 @@ class OfficeState:
             "denetim": denetim,
             "sahne": sahne,
             # the office's own name (ofis.json ofis_adi, the Ayarlar tab; default "Ofis"): the page title and the sign
-            "ofis": {"adi": ayarlar.ofis_adi(self.cfg)},
+            # dil: the display language (ofis.json dil, bin/dil.py; "tr" | "en"): the page's texts (web/i18n.js)
+            "ofis": {"adi": ayarlar.ofis_adi(self.cfg), "dil": dil.kod(self.cfg)},
             # the owner's display name (ofis.json sahip_adi, the Ayarlar tab; default "Sahip") with its case forms
             # {adi, e, in, den, i, de}: every page text that names the owner (web/ofis-davranis.js sahipAyarla)
             "sahip": sahip.ekler(self.cfg),
@@ -970,6 +977,9 @@ class OfficeState:
             "gun_sonu": _gun_sonu_ozeti(self.cfg, self.durum_dir),
             # the Yakala box (bin/yakala.py sayfa): on / off, the file limit, the last few captures; display only
             "yakala": _yakala_ozeti(self.cfg, self.durum_dir),
+            # NPC chat (bin/npc_sohbet.py; ofis.json npc_sohbet): {acik, saatlik_sinir} — the staff cards show the question
+            # box only when it is on; display only (POST /api/npc-sohbet reads ofis.json again)
+            "npc_sohbet": npc_sohbet.sayfa(self.cfg),
             # The owner's Claude plan usage limits (bin/limitler.py sayfa; ofis.json limitler): the top bar's pill
             "limitler": _limitler_ozeti(self.cfg),
             # the effective tier -> model mapping (global, project overrides, running pilots): the living office's

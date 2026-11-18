@@ -14,6 +14,27 @@
   in front of it), the top bar's text `#brand-ad` (textContent; no logo image) and the scene's lobby sign and the
   hall's idle screen (`Office.setOfisAdi`: the name drawn with fillText on a canvas). The favicon is the neutral
   `web/favicon.svg`. Internal names (`ofis.py`, `ofis-ceo`, `OFIS/`) stay. The greeting card stays "İyi günler.".
+- **Language** (English option, phase 1, 2026-11-18): ofis.json `dil` (`tr` default | `en`; `/api/state.ofis.dil`,
+  bin/dil.py `kod`), set on Ayarlar › Genel › "Dil / Language" (a select saved at once, `{islem: "genel", dil}`,
+  `dilGovdesi` in web/ayarlar.js). The page keys its strings by their Turkish source text: `web/i18n.js` `t(tr, vars)`
+  (imported as `T`; returns the input in Turkish, the `web/i18n-en.js` entry in English, `{name}` placeholders filled,
+  an entry may be `{one, other}` chosen by `vars.n`), `N_('…')` marks a module constant translated where it is drawn
+  (never `T()` at module top level), `yerel()` = `tr-TR` / `en-GB` for dates and numbers (Turkish casing helpers keep
+  `tr`). Static HTML carries `data-t="<Turkish>"` (and `data-t-title` / `-placeholder` / `-aria-label`), translated by
+  `ceviriUygula` at load and again on a change (`dilDinle` in app.js, from `renderDil` in `renderAll`); the last
+  language is kept in localStorage `ofis-dil` (try/catch) so the first paint is right. Owner-name suffixes
+  (`sahipEk`, bin/sahip.py `ek_dilde`) give the bare name / "Name's" in English. Server texts the page shows are
+  translated at their API field with bin/dil.py `t(text, cfg)` (its own `EN`): the progress line's stop reasons, the
+  usage popup (bin/kullanim.py), the limit pill (bin/limitler.py `sayfa`), the Sunucu odası, the Ayarlar errors
+  (bin/dil.py `Metin`: the Turkish text with its template and form field — the answer carries `alanlar`, one field per
+  error, so web/ayarlar.js `sunucuHatalari` no longer matches the text) and the NPC chat's answers. Codes, protocol
+  prefixes, notice titles the page matches, vault notes, CEO notices and `ofis.py` output stay Turkish. A language
+  change asks for a fresh CEO session (the `ofis.py ceo-yenile` flag; bin/ceo.py `yenile_iste`): its system text
+  (`ceo_system_prompt(name, dil)`) and the reminder line (`(Reply to <Name> in plain English.)`, bin/sahip.py
+  `hatirlatma`; `hatirlatmayi_sil` strips both forms) follow `dil`. Phase 2 (not yet): the scene and its cards
+  (web/ofis-sahne.js except the NPC chat box, ofis-davranis.js role titles, scene.js, demo.js). test/test_dil.py checks
+  that every `T('…')` / `N_('…')` / `data-t` literal has an English entry, no entry is unused and placeholders match
+  (the same for bin/dil.py); test/webkopya.py copies the i18n modules next to the web modules the node tests load.
 - **Decision bell** (the owner, 2026-11-12): next to the live pill a warning-tone button "N karar bekliyor" with an inline
   SVG bell (the count alone on a bar below 1100 px) while decisions wait for the owner — `state.decisions` minus the cards
   already answered from the page (`answer_sent`, or sent in this tab); `kararBildirimi` in `web/ofis-text.js`. A click
@@ -170,6 +191,15 @@
   `office.resize()`; `rightInset` in `web/scene.js` then leaves no room for it and the camera fit uses the full width
   (unless the viewer moved the camera). The first question brings it back. "Çalışanlar" (the live pill's popover),
   "Zamanlanmış işler" and "Son olanlar" (two tabs, below) are no longer in it.
+- **NPC chat** (owner decision 2026-11-18, "gerçekten akıllı NPC'ler"; bin/npc_sohbet.py, `gelistirici/sunucu.md`): the
+  cards of the Sekreter, the four managers, Muhasebeci, İdari işler, İK, doctor, psychologist, IT sorumlusu, Ar-Ge
+  uzmanı, guard and each project sorumlusu (`npcSohbetRolu` in web/ofis-sahne.js; the rest stay plain) end with a
+  "Soru sor" section: an input (≤ 500) and "Sor" → `POST /api/npc-sohbet {npc, soru}`; "Düşünüyor…" while it waits,
+  then the answer (textContent only) and a "Kullanım: … token · API karşılığı ~$X" line, or the server's Turkish error
+  (`npcSohbetSonucu`). The box is one element per opened card (`sohbet` in app.js), kept in place across the card's
+  rebuilds so typing and focus survive; it goes when the card closes. Off (`/api/state.npc_sohbet.acik` false, the
+  default) the section shows only a hint to turn it on in Ayarlar › Genel; in the demo "Soru sormak demo modunda
+  çalışmaz." (`npcSohbetKutusu`).
 - **Character cards — one component** (owner decision 2026-11-13, "kartlar okunaklı olsun"). Every character's card (staff,
   managers, IT ekibi, guard, İK, Ar-Ge, doctor, secretary, kadro, jobs, helpers, reviewers, the CEO) is
   `karakterKarti` → `kartDuzeni(k)` (`web/ofis-sahne.js`, pure) → `kartIcerigi` (`web/app.js`, createElement /
@@ -187,6 +217,13 @@
   scroll and a sticky title; placed near the click with a 16 px gutter (`KART_KENAR`); on a phone a label sits above
   its value and nothing scrolls sideways (a wide table scrolls inside its own box). Opened details (groups, folded
   lists) stay open across the 1 s rebuild (`details[data-anahtar]`).
+  **More useful staff cards** (owner decision 2026-11-18, "daha yetenekli"; no model call, pure helpers in
+  `web/ofis-sahne.js`): a manager's card (Yazılım / QA / Analist) lists "Bakılması gereken" — its department's silent
+  jobs (`postoffice.silent`) and the ones stuck today, each opens (`sorunluIsler`); the doctor's card adds
+  "Kontrol'ü geçmeyen" (open jobs with `kontrol_sonuc` `kaldi`, "düzeltiyor" / "N. deneme", each opens); the İK card ends
+  with a "Şu an" section — "Ofiste" N kişi (çalışan · personel), "Nöbette" (each shift team's person on shift), "Otelde"
+  — from `kimNerede`, the guard's card's source (`ikVarligi`). A common-area decorative person's card: "Ofisten biri" ·
+  "görünüm amaçlı", where it is (the room, or "koridorda yürüyor") and the office's open jobs and waiting questions now.
 - Tabs: **Ofis** (3D), **Kararlar**, **İşler** — a three-column board (Sıradakiler / Devam edenler / Bitenler, the 20
   newest finished; a workflow is one card with its steps and progress; each card: project, tier/model, status, budget
   and call bars, queue state, escalation mark; a click opens the job detail) from `state.board` (`state.board_hidden`
@@ -230,7 +267,9 @@
   `sistem`, `yerlesik`, `acik_is_sayisi`, `guven` (Claude Code's folder trust: true / false / null) and `ipucu`
   (`cd <folder> && claude` when untrusted), `kurallar`) is read **only when the tab opens and after a save** — never
   from `renderAll`, so a state push never wipes a form being typed; a second click on the open tab does not reload it.
-  Sections: **Genel** (Ofis adı and Senin adın — the owner's name, ofis.json `sahip_adi`, plan "2. Aşama" — + one Kaydet → `{islem: "genel", ofis_adi, sahip_adi}`; `genelGovdesi` / `sahipAdiHatasi` in web/ayarlar.js, an error under its own field; `/api/state.sahip` names the owner in every page text through web/ofis-davranis.js `sahipAyarla`, and `<span class="sahip-in">` in index.html gets the genitive form) and **Projeler**: one card per project (colour
+  Sections: **Genel** (the language select "Dil / Language" — see Language above —; the NPC chat switch — "NPC sohbeti" checkbox + "Saatte en çok N soru", its own Kaydet →
+  `{islem: "genel", npc_sohbet: {acik, saatlik_sinir}}`, `npcSohbetGovdesi` in web/ayarlar.js; bin/npc_sohbet.py
+  `dogrula` checks it again —; Ofis adı and Senin adın — the owner's name, ofis.json `sahip_adi`, plan "2. Aşama" — + one Kaydet → `{islem: "genel", ofis_adi, sahip_adi}`; `genelGovdesi` / `sahipAdiHatasi` in web/ayarlar.js, an error under its own field; `/api/state.sahip` names the owner in every page text through web/ofis-davranis.js `sahipAyarla`, and `<span class="sahip-in">` in index.html gets the genitive form) and **Projeler**: one card per project (colour
   dot = `projeRengi`, name, "Yerleşik" badge for `arge`, trust badge, description, folder (the resolved path in the
   tooltip), "N açık iş", for an untrusted folder the command with a Kopyala button, Düzenle and — not for `arge` — Sil)
   and "Proje ekle". The form (the list is hidden while it is open; focus goes to the first field and back to the

@@ -36,6 +36,7 @@ import threading
 import time
 
 import budget
+import dil
 import jobs
 import limitler
 import pricing
@@ -58,11 +59,11 @@ ENTRYPOINT = re.compile(rb'"entrypoint":\s*"([a-z-]{1,20})"')
 OFIS_ADI = re.compile(r"ofis-([a-z0-9-]{1,40}?)-\d{4}-\d{6}-[0-9a-f]{4}")
 
 CEO, IS, YAN, GELISTIRICI, JARVIS, DIGER, KUCUK = "ceo", "is", "yan", "gelistirici", "jarvis", "diger", "kucuk"
-ADLAR = {CEO: "CEO", YAN: "Müdür ve hakem çağrıları", GELISTIRICI: "Geliştirici oturumu", JARVIS: "Jarvis",
-         DIGER: "Ofis dışı diğer oturumlar"}
-NOT_METNI = ("Plan yüzdesi tokenlarla birebir orantılı değildir (önbellekten okunan tokenlar daha hafif sayılır); "
+ADLAR = {CEO: "CEO", YAN: dil.N_("Müdür ve hakem çağrıları"), GELISTIRICI: dil.N_("Geliştirici oturumu"),
+         JARVIS: "Jarvis", DIGER: dil.N_("Ofis dışı diğer oturumlar")}  # translated where drawn (dil.t)
+NOT_METNI = dil.N_("Plan yüzdesi tokenlarla birebir orantılı değildir (önbellekten okunan tokenlar daha hafif sayılır); "
              "bu liste kimin en çok kullandığını gösterir, kesin payını değil.")
-ESKI_ACIKLAMA = "Son ölçüm eski: değerler bir Claude oturumu açılınca yenilenir."
+ESKI_ACIKLAMA = dil.N_("Son ölçüm eski: değerler bir Claude oturumu açılınca yenilenir.")
 
 
 # --- reading one transcript file ---
@@ -205,14 +206,15 @@ def is_haritasi(vault_ofis, durum_dir):
     return by_name, by_id
 
 
-def _sinif(kind, proje, names, entry, sid, ceo_name, isler, projeler):
-    """(group key, display name, kind) of one session."""
+def _sinif(kind, proje, names, entry, sid, ceo_name, isler, projeler, dil_kodu="tr"):
+    """(group key, display name, kind) of one session; the name in the display language (bin/dil.py)."""
     by_name, by_id = isler
+    ad_ = lambda k: dil.t(ADLAR[k], dil_kodu)  # noqa: E731
     if kind == "ofis" and ceo_name in names:
-        return CEO, ADLAR[CEO], CEO
+        return CEO, ad_(CEO), CEO
     ofis_names = sorted(n for n in names if n.startswith("ofis-") and n != ceo_name)
     if kind == "denetci":
-        return YAN, ADLAR[YAN], YAN
+        return YAN, ad_(YAN), YAN
     job = next((by_name[n] for n in ofis_names if n in by_name), None) or by_id.get(sid)
     if job:
         title, p = job
@@ -220,15 +222,15 @@ def _sinif(kind, proje, names, entry, sid, ceo_name, isler, projeler):
     if ofis_names:
         m = OFIS_ADI.fullmatch(ofis_names[0])
         p = m.group(1) if m and m.group(1) in projeler else proje
-        ad = f"{p} işi" if p else "Ofis işi"
+        ad = dil.t("{proje} işi", dil_kodu, proje=p) if p else dil.t("Ofis işi", dil_kodu)
         return f"is:{ad}", ad, IS
     if kind == "proje" and not names and entry == "sdk-cli":
-        return YAN, ADLAR[YAN], YAN
+        return YAN, ad_(YAN), YAN
     if kind == "ofis" and entry != "sdk-cli":
-        return GELISTIRICI, ADLAR[GELISTIRICI], GELISTIRICI
+        return GELISTIRICI, ad_(GELISTIRICI), GELISTIRICI
     if kind == "jarvis":
-        return JARVIS, ADLAR[JARVIS], JARVIS
-    return DIGER, ADLAR[DIGER], DIGER
+        return JARVIS, ad_(JARVIS), JARVIS
+    return DIGER, ad_(DIGER), DIGER
 
 
 # --- windows ---
@@ -247,26 +249,29 @@ def pencereler(veri, now):
     return out
 
 
-def _kalan(saniye):
-    """"2 sa 14 dk sonra", "45 dk sonra", "3 gün 4 sa sonra", "1 dakikadan az kaldı"."""
+def _kalan(saniye, dil_kodu="tr"):
+    """"2 sa 14 dk sonra", "45 dk sonra", "3 gün 4 sa sonra", "1 dakikadan az kaldı" (English under dil "en")."""
     dk = int(saniye // 60)
     if dk < 1:
-        return "1 dakikadan az kaldı"
+        return dil.t("1 dakikadan az kaldı", dil_kodu)
     gun, sa, dk = dk // 1440, (dk % 1440) // 60, dk % 60
     if gun:
-        return f"{gun} gün {sa} sa sonra" if sa else f"{gun} gün sonra"
+        return dil.t("{gun} gün {sa} sa sonra" if sa else "{gun} gün sonra", dil_kodu, gun=gun, sa=sa, n=gun)
     if sa:
-        return f"{sa} sa {dk} dk sonra" if dk else f"{sa} sa sonra"
-    return f"{dk} dk sonra"
+        return dil.t("{sa} sa {dk} dk sonra" if dk else "{sa} sa sonra", dil_kodu, sa=sa, dk=dk)
+    return dil.t("{dk} dk sonra", dil_kodu, dk=dk)
 
 
-def _beri(ts, now, tz):
-    """"16:00'dan beri", "dün 21:30'dan beri", "çarşamba 22:00'den beri" (the ablative of limitler's clock text)."""
+def _beri(ts, now, tz, dil_kodu="tr"):
+    """"16:00'dan beri", "dün 21:30'dan beri", "çarşamba 22:00'den beri" (the ablative of limitler's clock text);
+    English "since 16:00", "since yesterday 21:30"."""
+    if dil_kodu == "en":
+        return "since " + limitler.zaman_en(ts, now, tz, gun_adi=False, edat=False)
     zaman = limitler._zaman(ts, now, tz, gun_adi=False)
     return f"{zaman}n beri"  # 'de -> 'den, 'da -> 'dan, 'te -> 'ten, 'ta -> 'tan
 
 
-def limit_bolumu(veri, now, tz):
+def limit_bolumu(veri, now, tz, dil_kodu="tr"):
     """The popup's limit part: per window its percentage, reset text and remaining time; when it was measured."""
     if not isinstance(veri, dict):
         return None
@@ -275,29 +280,33 @@ def limit_bolumu(veri, now, tz):
         p = veri.get(ad)
         if not isinstance(p, dict):
             continue
-        item = {"ad": ad, "etiket": etiket, "yuzde": p.get("yuzde"), "gecti": bool(p.get("gecti")),
+        item = {"ad": ad, "etiket": dil.t(etiket, dil_kodu), "yuzde": p.get("yuzde"), "gecti": bool(p.get("gecti")),
                 "yenilenir": "", "kalan": ""}
         if p.get("gecti"):
-            item["yenilenir"] = "sıfırlandı (yeni değer henüz ölçülmedi)"
+            item["yenilenir"] = dil.t("sıfırlandı (yeni değer henüz ölçülmedi)", dil_kodu)
         elif p.get("sifirlanma"):
-            item["yenilenir"] = f"{limitler._zaman(p['sifirlanma'], now, tz)} yenilenir"
-            item["kalan"] = _kalan(p["sifirlanma"] - now)
+            item["yenilenir"] = dil.t("{zaman} yenilenir", dil_kodu,
+                                      zaman=limitler._zaman(p["sifirlanma"], now, tz, dil_kodu=dil_kodu))
+            item["kalan"] = _kalan(p["sifirlanma"] - now, dil_kodu)
         out.append(item)
     olc = veri.get("olculdu")
     return {"pencereler": out, "eski": bool(veri.get("eski")),
-            "olculdu": f"{limitler._zaman(olc, now, tz)} ölçüldü" if olc else "ölçüm zamanı bilinmiyor",
-            "eski_aciklama": ESKI_ACIKLAMA if veri.get("eski") else ""}
+            "olculdu": dil.t("{zaman} ölçüldü", dil_kodu, zaman=limitler._zaman(olc, now, tz, dil_kodu=dil_kodu))
+            if olc else dil.t("ölçüm zamanı bilinmiyor", dil_kodu),
+            "eski_aciklama": dil.t(ESKI_ACIKLAMA, dil_kodu) if veri.get("eski") else ""}
 
 
 # --- the scan ---
 
-def _satir(ad, tur, b):
+def _satir(ad, tur, b, dil_kodu="tr"):
     tok = b["token"]
+    tt = budget.token_text_en if dil_kodu == "en" else budget.token_text
     return {"ad": ad, "tur": tur, "token": tok, "cikti_token": b["cikti"], "usd": round(b["usd"], 6),
             "fiyat_eksik": b["fiyatsiz"] > 0, "oturum_sayisi": len(b["oturumlar"]),
-            "metin": (f"{budget.token_text(tok)} · API karşılığı bilinmiyor" if b["fiyatsiz"] and not b["usd"]
-                      and tok > 0 else budget.spend_text(b["usd"], tok if tok > 0 else None)),
-            "cikti_metni": f"çıktı {budget.token_text(b['cikti'])}" if tok > 0 else ""}
+            "metin": (dil.t("{token} · API karşılığı bilinmiyor", dil_kodu, token=tt(tok))
+                      if b["fiyatsiz"] and not b["usd"] and tok > 0
+                      else budget.spend_text(b["usd"], tok if tok > 0 else None, dil_kodu)),
+            "cikti_metni": dil.t("çıktı {token}", dil_kodu, token=tt(b["cikti"])) if tok > 0 else ""}
 
 
 def _bos():
@@ -314,9 +323,9 @@ def _ekle(b, call, oturum):
     b["oturumlar"].add(oturum)
 
 
-def _liste(gruplar):
+def _liste(gruplar, dil_kodu="tr"):
     rows = sorted(gruplar.items(), key=lambda kv: (-kv[1][2]["token"], kv[1][0]))
-    out = [_satir(ad, tur, b) for _, (ad, tur, b) in rows[:MAX_SATIR]]
+    out = [_satir(ad, tur, b, dil_kodu) for _, (ad, tur, b) in rows[:MAX_SATIR]]
     rest = rows[MAX_SATIR:]
     if rest:
         merged = _bos()
@@ -324,13 +333,13 @@ def _liste(gruplar):
             for k in ("token", "cikti", "usd", "fiyatsiz"):
                 merged[k] += b[k]
             merged["oturumlar"] |= b["oturumlar"]
-        out.append(_satir(f"Daha küçük {len(rest)} kullanım", KUCUK, merged))
+        out.append(_satir(dil.t("Daha küçük {n} kullanım", dil_kodu, n=len(rest)), KUCUK, merged, dil_kodu))
     toplam = _bos()
     for _, (_, _, b) in rows:
         for k in ("token", "cikti", "usd", "fiyatsiz"):
             toplam[k] += b[k]
         toplam["oturumlar"] |= b["oturumlar"]
-    return out, _satir("Toplam", "toplam", toplam)
+    return out, _satir(dil.t("Toplam", dil_kodu), "toplam", toplam, dil_kodu)
 
 
 class Kullanim:
@@ -431,6 +440,7 @@ class Kullanim:
     def dagilim(self, cfg, windows, now):
         """{bes_saat: {...}, haftalik: {...}}: the rows of each window (see the module doc)."""
         keep_since = min(w[0] for w in windows.values())
+        dil_kodu = dil.kod(cfg if isinstance(cfg, dict) else {})  # the rows' names and texts (bin/dil.py)
         # the read state of a file is kept for the longest window any request can ask for (a later request without
         # the limit file falls back to the last 7 days): bisect and prune by that, filter by the windows below
         scan_since = min(keep_since, now - HAFTA_S)
@@ -458,7 +468,7 @@ class Kullanim:
                     if os.path.isfile(parent) and not os.path.islink(parent) else frozenset()
                 parent_c = self._files.get(parent)
                 entry = (parent_c.entry if parent_c else None) or c.entry
-                siniflar[key] = _sinif(kind, proje, names, entry, sid, ceo_name, isler, projeler)
+                siniflar[key] = _sinif(kind, proje, names, entry, sid, ceo_name, isler, projeler, dil_kodu)
             gkey, ad, tur = siniflar[key]
             for call in c.calls:
                 if call[1] is not None:
@@ -473,7 +483,7 @@ class Kullanim:
             del self._files[path]  # a file that left the window (or was removed): forget it
         out = {}
         for w, (start, tahmini) in windows.items():
-            satirlar, toplam = _liste(gruplar[w])
+            satirlar, toplam = _liste(gruplar[w], dil_kodu)
             out[w] = {"baslangic": int(start), "tahmini": tahmini, "satirlar": satirlar, "toplam": toplam}
         return out
 
@@ -489,7 +499,8 @@ class Kullanim:
         windows = pencereler(veri, now)
         # a window from a reset time is the same window while its start stays; a fallback window ("the last 5 h")
         # moves with the clock, so it is cached by its kind only (at most CACHE_S seconds behind)
-        key = tuple((w, None if windows[w][1] else int(windows[w][0] // 60)) for w in sorted(windows))
+        dil_kodu = dil.kod(cfg if isinstance(cfg, dict) else {})
+        key = tuple((w, None if windows[w][1] else int(windows[w][0] // 60)) for w in sorted(windows)) + (dil_kodu,)
         with self._lock:
             hit = self._cache
             if hit and hit[1] == key and 0 <= now - hit[0] < CACHE_S:
@@ -499,8 +510,10 @@ class Kullanim:
                 self._cache = (now, key, breakdown)
         dagilim = {}
         for w, d in breakdown.items():
-            uzun = "5 saat" if w == "bes_saat" else "7 gün"
-            beri = f"Son {uzun}" if d["tahmini"] else f"Bu pencere: {_beri(d['baslangic'], now, tz)}"
+            if d["tahmini"]:
+                beri = dil.t("Son 5 saat" if w == "bes_saat" else "Son 7 gün", dil_kodu)
+            else:
+                beri = dil.t("Bu pencere: {beri}", dil_kodu, beri=_beri(d["baslangic"], now, tz, dil_kodu))
             dagilim[w] = {**d, "aralik": beri}
-        return {"limitler": limit_bolumu(veri, now, tz), "dagilim": dagilim, "not": NOT_METNI,
+        return {"limitler": limit_bolumu(veri, now, tz, dil_kodu), "dagilim": dagilim, "not": dil.t(NOT_METNI, dil_kodu),
                 "hesaplandi": int(self._cache[0])}

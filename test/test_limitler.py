@@ -12,6 +12,10 @@ import time
 import unittest
 from datetime import datetime
 from pathlib import Path
+
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -322,6 +326,7 @@ def run_js(expr):
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         shutil.copyfile(WEB / "limitler.js", Path(tmp) / "limitler.js")
+        webkopya.i18n_ekle(tmp)
         uri = json.dumps((Path(tmp) / "limitler.js").as_uri())
         code = f"import * as l from {uri};\nprocess.stdout.write(JSON.stringify({expr}));"
         proc = subprocess.run([NODE, "--input-type=module", "-e", code], capture_output=True, text=True, timeout=30,

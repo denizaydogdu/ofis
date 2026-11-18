@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { ODA_RENKLERI, projeRengi, ARGE_KITAPLIK_OLCU, ARGE_TAHTA_OLCU, GUVENLIK_UNVAN, KABIN_OLCU, MASA_OLCU, PATRON_MASA_OLCU, UNVAN, YAYA_EN_COK, dekorYerleri, otelOdasiMi, yayaKonumu,
+import { ODA_RENKLERI, projeRengi, ARGE_KITAPLIK_OLCU, ARGE_TAHTA_OLCU, GUVENLIK_UNVAN, KABIN_OLCU, MASA_OLCU, PATRON_MASA_OLCU, UNVAN, YAYA_EN_COK, dekorYerleri, dekorYuruyusu, otelOdasiMi, yayaKonumu,
   yayaRotalari, yayaSayisi } from './ofis-davranis.js';
 import {
   YURUME_HIZI, aciFarki, denetciRenk, etiketBilgisi, etiketOnceligi, odaEtiketiGorunur, odaEtiketleri, etiketSecimi, etiketleriYerlestir, ortakOfsetler, oturmaYeri, planAnahtari, yolHazirla, yolKonumu,
@@ -2060,7 +2060,11 @@ export class Office {
   // (built once per plan with room for every seat). Nobody shown: the meshes are hidden (no draw call).
   setDekor(list) {
     if (!this.plan) return;
-    const items = (Array.isArray(list) ? list : []).filter((d) => d && Number.isFinite(d.x) && Number.isFinite(d.z));
+    // hafif keeps it light: the seated and standing ones only (static), never a walker
+    const items = (Array.isArray(list) ? list : []).filter((d) => d && Number.isFinite(d.x) && Number.isFinite(d.z) &&
+      !(this.light && d.yuruyen))
+      // a common-area seat (aci null) faces like a real character on that spot
+      .map((d) => (Number.isFinite(d.aci) ? d : { ...d, aci: (d.yer && yuzAcisi(this.plan, d.yer)) || 0 }));
     if (!this.dekor) {
       const { govde, bacak, malzeme } = dekorGeometrileri();
       const cap = Math.max(1, dekorYerleri(this.plan).length);
@@ -2068,6 +2072,7 @@ export class Office {
         const m = new THREE.InstancedMesh(g, malzeme, cap);
         m.castShadow = false; m.receiveShadow = !this.light;
         m.count = 0; m.visible = false; m.userData.dinamik = true;
+        m.frustumCulled = false; // the walkers move: never culled by a stale bounding sphere
         this.world.add(m);
         return m;
       };
@@ -2081,7 +2086,10 @@ export class Office {
     D.list = items.slice(0, cap);
     D.bacaklar = [];
     D.list.forEach((d, i) => {
-      D.renk.set(DEKOR_TON[d.grup] || projeRengi(d.proje, this.plan.projeler, '#E3D2BF'));
+      // the common areas' people: a coat colour each (the pedestrians' palette); a room's people its tint
+      // (by a hash of its id, not its list index: a hidden desk figure must not recolour the others)
+      D.renk.set(d.grup === 'ortak' ? YAYA_RENK[[...String(d.id)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % YAYA_RENK.length]
+        : DEKOR_TON[d.grup] || projeRengi(d.proje, this.plan.projeler, '#E3D2BF'));
       D.govde.setColorAt(i, D.renk);
       if (!d.oturan) D.bacaklar.push(i);
     });
@@ -2106,14 +2114,18 @@ export class Office {
     let b = 0;
     for (let i = 0; i < D.list.length; i++) {
       const d = D.list[i];
-      let aci = d.aci, dy = 0;
-      if (t > 0) {
+      let aci = d.aci, dy = 0, x = d.x, z = d.z;
+      const w = d.yuruyen ? dekorYuruyusu(d.rota, t + (d.faz || 0)) : null;
+      if (w) { // a walker: along its loop, a small bob while it walks
+        x = w.x; z = w.z; aci = w.aci;
+        if (w.yuruyor) dy = Math.abs(Math.sin(t * 5.5 + (d.faz || 0))) * 0.035;
+      } else if (t > 0) {
         const p = t + (d.faz || 0);
         const c = p % 24; // once in 24 s: a 3 s look to one side and back
         aci += Math.sin(p * 0.45) * 0.07 + (c < 3 ? Math.sin((c / 3) * Math.PI) * 0.45 * ((d.faz || 0) > 12 ? 1 : -1) : 0);
         if (d.oturan) dy = Math.sin(p * 1.1) * 0.012;
       }
-      D.p.set(d.x, Y0 + (d.oturan ? SIT.masa : 0) + dy, d.z);
+      D.p.set(x, Y0 + (d.oturan ? SIT[d.sit] ?? SIT.masa : 0) + dy, z);
       D.q.setFromAxisAngle(D.y, aci);
       D.s.setScalar(DEKOR_BOY);
       D.m.compose(D.p, D.q, D.s);
@@ -2472,7 +2484,8 @@ export class Office {
       if (o.userData.dekor && this.dekor && Number.isInteger(h.instanceId)) { // a decorative person: its plain card
         const d = this.dekor.list[h.instanceId];
         if (d) {
-          this.onActor({ id: d.id, tur: 'dekor', grup: d.grup, proje: d.proje || '', etiket: '' }, { x: e.clientX, y: e.clientY });
+          this.onActor({ id: d.id, tur: 'dekor', grup: d.grup, proje: d.proje || '', etiket: '',
+            ...(d.grup === 'ortak' ? { oda: d.oda || '', yuruyen: !!d.yuruyen } : {}) }, { x: e.clientX, y: e.clientY });
           return;
         }
       }

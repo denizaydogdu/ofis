@@ -19,6 +19,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
+import dil
 import model_durum
 import sahip
 
@@ -33,11 +34,15 @@ STATE_DIR = "limitler"
 STATE_FILE = "uyarilar.json"
 SYSTEM_PREFIX = "[Ofis · sistem]\n"
 # (our name, the file's key, the label in a sentence, the short label of the pill)
-PENCERELER = (("haftalik", "seven_day", "Haftalık", "Haftalık"),
-              ("bes_saat", "five_hour", "5 saatlik", "5 saat"))
+PENCERELER = (("haftalik", "seven_day", dil.N_("Haftalık"), dil.N_("Haftalık")),
+              ("bes_saat", "five_hour", dil.N_("5 saatlik"), dil.N_("5 saat")))  # labels: dil.t where drawn
 GUNLER = ("pazartesi", "salı", "çarşamba", "perşembe", "cuma", "cumartesi", "pazar")
 AYLAR = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım",
          "Aralık")
+# English (ofis.json dil "en"; bin/dil.py): the page path only (sayfa / metin / kisa with dil_kodu="en")
+GUNLER_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+AYLAR_EN = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+            "November", "December")
 
 
 # --- config ---
@@ -154,9 +159,28 @@ def _saat_de(t):
     return _EK[_son_kelime(t.minute if t.minute else t.hour)][0]
 
 
-def _zaman(ts, now, tz, gun_adi=True):
+def zaman_en(ts, now, tz, gun_adi=True, edat=True):
+    """The English twin of _zaman: "at 21:00", "today at 21:00", "tomorrow at 21:00", "on Wednesday at 22:00",
+    "on 20 November at 22:00"; without `edat` the bare forms ("21:00", "yesterday 21:30", "Wednesday 22:00")."""
+    t, n = _yerel(ts, tz), _yerel(now, tz)
+    saat = t.strftime("%H:%M")
+    at = f"at {saat}" if edat else saat
+    fark = (t.date() - n.date()).days
+    if fark == 0:
+        return f"today {at}" if gun_adi else at
+    if fark == 1:
+        return f"tomorrow {at}"
+    if fark == -1:
+        return f"yesterday {at}"
+    gun = GUNLER_EN[t.weekday()] if 1 < fark < 7 else f"{t.day} {AYLAR_EN[t.month - 1]}"
+    return f"on {gun} {at}" if edat else f"{gun} {saat}"
+
+
+def _zaman(ts, now, tz, gun_adi=True, dil_kodu="tr"):
     """"21:00'de", "yarın 21:00'de", "çarşamba 22:00'de" (within a week) or "20 Kasım 22:00'de", in the office zone;
-    today without a day name unless `gun_adi` ("bugün 21:00'de")."""
+    today without a day name unless `gun_adi` ("bugün 21:00'de"). dil_kodu "en": zaman_en."""
+    if dil_kodu == "en":
+        return zaman_en(ts, now, tz, gun_adi)
     t, n = _yerel(ts, tz), _yerel(now, tz)
     saat = f"{t.strftime('%H:%M')}'{_saat_de(t)}"
     fark = (t.date() - n.date()).days
@@ -171,19 +195,21 @@ def _zaman(ts, now, tz, gun_adi=True):
     return f"{t.day} {AYLAR[t.month - 1]} {saat}"
 
 
-def _parca(etiket, p, now, tz, ilk):
+def _parca(etiket, p, now, tz, ilk, dil_kodu="tr"):
+    etiket = dil.t(etiket, dil_kodu)
     if p["gecti"]:
-        return f"{etiket} sınır sıfırlandı (yeni değer henüz ölçülmedi)"
-    head = f"{etiket} sınır %{p['yuzde']}" if ilk else f"{etiket} %{p['yuzde']}"
+        return dil.t("{etiket} sınır sıfırlandı (yeni değer henüz ölçülmedi)", dil_kodu, etiket=etiket)
+    head = dil.t("{etiket} sınır %{yuzde}" if ilk else "{etiket} %{yuzde}", dil_kodu, etiket=etiket,
+                 yuzde=p["yuzde"])
     if p["sifirlanma"] is None:
         return head
-    zaman = _zaman(p["sifirlanma"], now, tz, gun_adi=ilk)
-    return f"{head} · {zaman} sıfırlanır" if ilk else f"{head} · {zaman}"
+    zaman = _zaman(p["sifirlanma"], now, tz, gun_adi=ilk, dil_kodu=dil_kodu)
+    return dil.t("{head} · {zaman} sıfırlanır" if ilk else "{head} · {zaman}", dil_kodu, head=head, zaman=zaman)
 
 
-def metin(veri, now=None, tz=None):
+def metin(veri, now=None, tz=None, dil_kodu="tr"):
     """"Haftalık sınır %54 · çarşamba 22:00'de sıfırlanır · 5 saatlik %62 · 21:00'de" (+ " · 19:41'de ölçüldü"
-    when the reading is old); None without data."""
+    when the reading is old); None without data. dil_kodu "en": the page's English (bin/dil.py)."""
     if not isinstance(veri, dict):
         return None
     now = time.time() if now is None else float(now)
@@ -192,17 +218,19 @@ def metin(veri, now=None, tz=None):
     for ad, _, etiket, _ in PENCERELER:
         p = veri.get(ad)
         if isinstance(p, dict):
-            parts.append(_parca(etiket, p, now, tz, ilk=not parts))
+            parts.append(_parca(etiket, p, now, tz, ilk=not parts, dil_kodu=dil_kodu))
     if not parts:
         return None
     out = " · ".join(parts)
     if veri.get("eski"):
         olc = veri.get("olculdu")
-        out += f" · {_zaman(olc, now, tz, gun_adi=False)} ölçüldü" if olc else " · ölçüm zamanı bilinmiyor"
+        out += " · " + (dil.t("{zaman} ölçüldü", dil_kodu, zaman=_zaman(olc, now, tz, gun_adi=False,
+                                                                         dil_kodu=dil_kodu))
+                        if olc else dil.t("ölçüm zamanı bilinmiyor", dil_kodu))
     return out
 
 
-def kisa(veri):
+def kisa(veri, dil_kodu="tr"):
     """The pill's text: "Haftalık %54 · 5 saat %62" (a reset window: "sıfırlandı"); None without data."""
     if not isinstance(veri, dict):
         return None
@@ -210,12 +238,14 @@ def kisa(veri):
     for ad, _, _, etiket in PENCERELER:
         p = veri.get(ad)
         if isinstance(p, dict):
-            parts.append(f"{etiket} sıfırlandı" if p["gecti"] else f"{etiket} %{p['yuzde']}")
+            parts.append(dil.t("{etiket} sıfırlandı" if p["gecti"] else "{etiket} %{yuzde}", dil_kodu,
+                               etiket=dil.t(etiket, dil_kodu), yuzde=p["yuzde"]))
     return " · ".join(parts) or None
 
 
-def sayfa(cfg, now=None):
-    """/api/state.limitler: the reading plus `metin` (the tooltip) and `kisa`; None when off or without data."""
+def sayfa(cfg, now=None, dil_kodu="tr"):
+    """/api/state.limitler: the reading plus `metin` (the tooltip) and `kisa`; None when off or without data.
+    dil_kodu: the texts' language (the page passes ofis.json dil; satir and the notices stay Turkish)."""
     a = ayar(cfg)
     if not a["acik"]:
         return None
@@ -223,7 +253,7 @@ def sayfa(cfg, now=None):
     veri = oku(now, a["dosya"])
     if veri is None:
         return None
-    return {**veri, "metin": metin(veri, now, _tz(cfg)), "kisa": kisa(veri)}
+    return {**veri, "metin": metin(veri, now, _tz(cfg), dil_kodu), "kisa": kisa(veri, dil_kodu)}
 
 
 def satir(cfg, now=None):

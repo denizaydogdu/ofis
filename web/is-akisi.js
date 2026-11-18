@@ -4,33 +4,35 @@
 // (yolCizgisi). textContent / createElement only.
 
 import { ARGE_PROJESI, isModeli, modelAilesi, rolMetni } from './ofis-davranis.js';
+import { t as T, N_ } from './i18n.js';
 
 export const YOL_SIRASI = ['alindi', 'verildi', 'calisiyor', 'kontrol', 'rapor', 'ceo', 'iletildi'];
-const BEKLEME = { cevap: 'senin cevabını bekliyor', izin: 'izin bekliyor' };
+const BEKLEME = { cevap: N_('senin cevabını bekliyor'), izin: N_('izin bekliyor') };
 const DURUMLAR = new Set(['tamam', 'simdi', 'bekliyor', 'hata', 'atlandi', 'yok', 'bilinmiyor']);
 
 // Who took the job, as the page and the scene title the worker: the Ar-Ge uzmanı for an arge job, else "<kıdem>
 // <uzmanlık>" from the job's own model (else its tier's default). The Genel Müdür shows only when his model really runs the job.
 function calisanUnvani(t) {
-  if (t.project === ARGE_PROJESI) return 'Ar-Ge uzmanı';
+  if (t.project === ARGE_PROJESI) return T('Ar-Ge uzmanı');
   const fam = modelAilesi(isModeli(t));
-  return fam ? rolMetni(fam, t.uzmanlik) : 'Çalışan';
+  return fam ? rolMetni(fam, t.uzmanlik) : T('Çalışan');
 }
 
 function odaMetni(t) {
-  if (t.project === ARGE_PROJESI) return 'Ar-Ge odasında';
-  return t.project ? `${String(t.project).slice(0, 40)} masasında` : 'masasında';
+  if (t.project === ARGE_PROJESI) return T('Ar-Ge odasında');
+  return t.project ? T('{proje} masasında', { proje: String(t.project).slice(0, 40) }) : T('masasında');
 }
 
 function etiket(adim, durum, t) {
   switch (adim) {
-    case 'alindi': return 'CEO aldı';
-    case 'verildi': return durum === 'simdi' ? `${calisanUnvani(t)} alacak` : `${calisanUnvani(t)} aldı`;
-    case 'calisiyor': return `${odaMetni(t)} çalışıyor`;
-    case 'kontrol': return durum === 'atlandi' ? 'Kontrol yok' : 'Kontrol';
-    case 'rapor': return 'rapor geldi';
-    case 'ceo': return "CEO'ya ulaştı";
-    default: return 'sana iletildi';
+    case 'alindi': return T('CEO aldı');
+    case 'verildi': return durum === 'simdi' ? T('{unvan} alacak', { unvan: calisanUnvani(t) })
+      : T('{unvan} aldı', { unvan: calisanUnvani(t) });
+    case 'calisiyor': return T('{oda} çalışıyor', { oda: odaMetni(t) });
+    case 'kontrol': return durum === 'atlandi' ? T('Kontrol yok') : T('Kontrol');
+    case 'rapor': return T('rapor geldi');
+    case 'ceo': return T("CEO'ya ulaştı");
+    default: return T('sana iletildi');
   }
 }
 
@@ -52,12 +54,12 @@ export function yolAdimlari(task) {
     const x = byStep.get(adim) || {};
     const durum = DURUMLAR.has(x.durum) ? x.durum : 'bekliyor';
     const not = String(x.not || '');
-    const bekleme = durum === 'simdi' && BEKLEME[not] ? BEKLEME[not] : '';
+    const bekleme = durum === 'simdi' && BEKLEME[not] ? T(BEKLEME[not]) : '';
     let ek = '';
     if (durum === 'tamam') ek = saatDakika(x.zaman);
-    else if (durum === 'simdi') ek = bekleme || 'şimdi';
-    else if (durum === 'hata') ek = not.slice(0, 40) || 'durdu';
-    else if (durum === 'bilinmiyor') ek = 'bilinmiyor';
+    else if (durum === 'simdi') ek = bekleme || T('şimdi');
+    else if (durum === 'hata') ek = not.slice(0, 40) || T('durdu');
+    else if (durum === 'bilinmiyor') ek = T('bilinmiyor');
     return { adim, etiket: etiket(adim, durum, t), durum, sinif: bekleme ? 'bekleme' : durum, zaman: String(x.zaman || ''), ek };
   });
 }
@@ -69,13 +71,13 @@ export function yolOzeti(task) {
   const simdi = adimlar.find((a) => a.durum === 'simdi' || a.durum === 'hata');
   const son = simdi || [...adimlar].reverse().find((a) => a.durum === 'tamam');
   if (!son) return '';
-  return son.ek && son.durum !== 'tamam' && son.ek !== 'şimdi' ? `${son.etiket} · ${son.ek}` : son.etiket;
+  return son.ek && son.durum !== 'tamam' && son.ek !== T('şimdi') ? `${son.etiket} · ${son.ek}` : son.etiket;
 }
 
 // The line's aria-label: the compact form names its step for screen readers (its dots carry only a title).
 export function yolEtiketi(task, kompakt) {
   const ozet = kompakt ? yolOzeti(task) : '';
-  return ozet ? `İşin yolu: ${ozet}` : 'İşin yolu';
+  return ozet ? T('İşin yolu: {ozet}', { ozet }) : T('İşin yolu');
 }
 
 function el(tag, cls, text) {
@@ -107,7 +109,7 @@ export function yolCizgisi(task, { kompakt = false, onNote = null } = {}) {
   if (kompakt) box.appendChild(el('span', 'yol-ozet', yolOzeti(task)));
   const yeni = task && typeof task.escalated_to === 'string' ? task.escalated_to : '';
   if (yeni && !kompakt) {  // the compact form says "üst katmana taşındı"; its row opens the job's detail
-    const link = el('button', 'yol-yeni', '→ yeni iş');
+    const link = el('button', 'yol-yeni', T('→ yeni iş'));
     link.type = 'button';
     link.title = yeni.replace(/\.md$/, '');
     if (onNote) {

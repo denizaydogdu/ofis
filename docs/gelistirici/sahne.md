@@ -672,6 +672,33 @@
     group line on the existing box (`ekip`: "QA ekibi: 3 kişi · görünüm amaçlı" on the QA odası, "Analist ekibi: …" on the
     Analist odası, "<proje> ekibi: 2 kişi · görünüm amaçlı" on each project sorumlusu), never a box per person. Tests:
     `DekorTest` in `test/test_npc.py`.
+  - **A busier office** (owner decision 2026-11-18, "NPC'leri fazlalaştıralım"): more decorative people (`grup: 'ortak'`,
+    same instanced meshes, so **no new draw call**): seated on the common-area seats the real actors take last
+    (`dekorOrtakYerleri`: three at the Toplantı odası's table — it stays empty of actors —, three at the canteen's last
+    table, the tea corner's last round table, one café table of the Ortak alan, the bean bag; one billiards player
+    standing; never a desk or a lobby armchair), turned like a real character on that spot (`yuzAcisi`, the seat's own
+    height `sit`), and four walkers (`DEKOR_YURUYUSLER`: the front-row corridor, the back corridor, a wing corridor, the
+    lobby door to the spine) that stroll at `DEKOR_HIZ` 0.8 units/s along `yol` between their stops — the plan's own
+    walks, never through furniture — pausing `DEKOR_DURAK_S` 8 s at each (`dekorRotasi`, `dekorYuruyusu`: pure,
+    periodic in the scene's time; a small bob, the standing legs mesh). Same rules: own seeded office hours, none at
+    night, a seat an actor uses or heads for is given up, never in `kimNerede` / Çalışanlar / cues; hafif keeps the
+    seated ones (static) and drops the walkers. They move with the scene's frames (9 fps at rest, no faster frame rate;
+    the dekor meshes are not frustum-culled). Day count 14 → 30 (26 in hafif). Measured (`run_scene_count`,
+    `dort-mesgul`): from scratch 576 at 10:30 (576 before), 574 at 16:00 (576), 615 at 12:25 (615), 358 at 03:45 (358),
+    348 in hafif (348); walking sequence 603 at the 16:00 change (605), 633 at lunch (633) — under `DRAW_LIMIT` 725.
+    Tests: `DekorOrtakTest`.
+  - **More logical behaviour** (owner decision 2026-11-18, "daha mantıklı"; real state only, `MantikliDavranisTest`):
+    a **silent or stuck job** (`bakilacakIsler`: `postoffice.silent` without a permission prompt, `tikandi`) → its
+    department's manager (Yazılım / QA / Analist by `isDepartmani`; the IT has none) walks to that worker's desk side spot
+    and stands by it — "sessiz işe bakıyor · <iş>" / "takılan işe bakıyor · <iş>", the walk plus `TOPLANTI_MS`, once per
+    job (`bakilan`), only on no other duty; a side spot someone holds waits (the doctor's visit to a stuck desk comes
+    first, never both on one spot). A **job just finished** (bitti within `KUTLAMA_MS`) keeps its project sorumlusu at its
+    bay for the walk plus `KUTLAMA_MS` ("ekibini kutluyor · <iş>", once per job, only one already on the floor) — before,
+    it walked off the very moment its project's last job was done. **Idle desk lines say real things** (`masaSozu`):
+    the managers their department's open work ("masasında · 3 kod işi takipte · en yoğun: blog", "… inceleme …", the IT
+    Müdürü the system's load), the doctor today's stuck jobs or "ofis sağlıklı", the psychologist the jobs on a second
+    Kontrol, the İK the jobs at work, the Muhasebeci today's finished jobs, the İdari işler the schedules, a project
+    sorumlusu its open jobs; plain "masasında" when there is nothing real to say.
 - **Konferans salonu** (owner decision 2026-11-12): a fixed facility cell under the Revir (`TESIS_HUCRELERI.konferans`, `alt`
   column 2 row 3; it took a project cell, so the wing gets its third column one project earlier): a screen on a stand
   at the back wall, a lectern (`konferans-kursu`) and three rows of six chairs facing the screen. For `DUYURU_MS`

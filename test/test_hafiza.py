@@ -13,6 +13,10 @@ from unittest import mock
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "bin"))
 sys.path.insert(0, HERE)
@@ -396,6 +400,7 @@ class PageTest(unittest.TestCase):
             (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
             for n in ("ofis-sahne.js", "ofis-davranis.js", "ofis-text.js"):
                 shutil.copyfile(WEB / n, Path(tmp) / n)
+            webkopya.i18n_ekle(tmp)
             uri = lambda n: json.dumps((Path(tmp) / n).as_uri())  # noqa: E731
             code = (f"import * as h from {uri('ofis-sahne.js')};\nimport * as t from {uri('ofis-text.js')};\n"
                     f"process.stdout.write(JSON.stringify({expr}));")

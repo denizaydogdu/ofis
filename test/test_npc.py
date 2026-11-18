@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # (-I leaves the scrip
 from yavas import yavas  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,6 +70,7 @@ def run_js(expr, timeout=600):
         (Path(tmp) / "npc").mkdir()
         for name in ("ofis-davranis.js", "ofis-sahne.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, Path(tmp) / "web" / name)
+        webkopya.i18n_ekle(Path(tmp) / "web")
         for name in ("fixtures.mjs", "yurume.mjs"):
             shutil.copyfile(NPC / name, Path(tmp) / "npc" / name)
         uri = lambda n: json.dumps((Path(tmp) / n).as_uri())  # noqa: E731
@@ -724,8 +726,8 @@ class CompanyStructureTest(unittest.TestCase):
         self.assertNotIn("innerHTML", block)
         self.assertIn("openActor(a,", block)
         # the badge words: only the Otel's guests read "otelde"; a quota-stopped reviewer reads "kota doldu"
-        self.assertIn("evde: 'otelde'", app)
-        self.assertIn("kota: 'kota doldu'", app)
+        self.assertIn("evde: N_('otelde')", app)
+        self.assertIn("kota: N_('kota doldu')", app)
         self.assertIn(".yer-kota", (WEB / "style.css").read_text(encoding="utf-8"))
 
 
@@ -1166,6 +1168,7 @@ def run_scene_count(expr, timeout=240):
             f.write_text(f.read_text(encoding="utf-8").replace("from 'three'", "from '../../three.module.js'"), encoding="utf-8")
         for name in ("ofis-davranis.js", "ofis-sahne.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, t / "web" / name)
+        webkopya.i18n_ekle(t / "web")
         scene = (WEB / "scene.js").read_text(encoding="utf-8")
         scene = scene.replace("import * as THREE from 'three';",
                               "import * as THREE0 from './vendor/three/three.module.js'; import { FakeRenderer } from "
@@ -1344,7 +1347,8 @@ class DekorTest(unittest.TestCase):
     def test_the_seats(self):
         out = run_js("""(() => { const st = F.durumOlustur(F.SENARYOLAR['dort-mesgul'], at(10, 30));
           const plan = d.ofisPlani(st.projects, { max_running_per_project: 1, denetciler: d.denetciListesi(st.modeller) });
-          const y = d.dekorYerleri(plan);
+          const hepsi = d.dekorYerleri(plan);
+          const y = hepsi.filter((x) => x.grup !== 'ortak'); // the common areas' people: DekorOrtakTest
           const say = {}; for (const x of y) say[x.oda] = (say[x.oda] || 0) + 1;
           const oda = new Map(plan.odalar.map((r) => [r.id, r]));
           const disarida = y.filter((x) => { const r = oda.get(x.oda); return !(x.x > r.x + 0.8 && x.x < r.x + r.w - 0.8 && x.z > r.z + 0.8 && x.z < r.z + r.d - 0.8); }).map((x) => x.id);
@@ -1355,8 +1359,8 @@ class DekorTest(unittest.TestCase):
             if (n.oda !== x.oda) continue;
             if (Math.hypot(n.x - x.x, n.z - x.z) < 1.0) yakin.push([x.id, n.id]);
             if (n.tur === 'masa' && Math.hypot(n.x - x.x, n.z + 1.3 - x.z) < 1.9) yakin.push([x.id, n.id, 'masa']); }
-          return { say, n: y.length, ayri: new Set(y.map((x) => `${x.x},${x.z}`)).size, disarida, masaYanlis, yakin,
-            ayni: JSON.stringify(y) === JSON.stringify(d.dekorYerleri(plan)), projeler: plan.projeler,
+          return { say, n: hepsi.length, ayri: new Set(hepsi.map((x) => `${x.x},${x.z}`)).size, disarida, masaYanlis, yakin,
+            ayni: JSON.stringify(hepsi) === JSON.stringify(d.dekorYerleri(plan)), projeler: plan.projeler,
             qa: y.filter((x) => x.grup === 'qa').map((x) => x.yer) }; })()""")
         self.assertEqual(out["say"]["qa"], 3, out)
         self.assertEqual(out["say"]["analist"], 3, out)
@@ -1456,6 +1460,182 @@ class DekorTest(unittest.TestCase):
                                       "proje": out["tik"]["proje"], "etiket": ""})
         for v in out["konum"]:
             self.assertAlmostEqual(v, 0, places=4)
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class DekorOrtakTest(unittest.TestCase):
+    """The owner, 2026-11-18 ("NPC'leri fazlalaştıralım"): more decorative people in the common areas — seated on seats the
+    real actors take last, a few walking slowly along the plan's own walks — still two draw calls, none walking in hafif."""
+
+    def test_common_seats_and_walk_routes(self):
+        out = run_js("""(() => { const r = [];
+          for (const ps of [['vitrin'], ['vitrin', 'kasa', 'blog', 'atolye'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]) {
+            const plan = d.ofisPlani(ps, { max_running_per_project: 1, denetciler: ['codex'] });
+            const y = d.dekorYerleri(plan).filter((x) => x.grup === 'ortak');
+            const oturan = y.filter((x) => !x.yuruyen);
+            const kotu = oturan.filter((x) => { const n = plan.dugumler[x.yer];
+              return !n || n.x !== x.x || n.z !== x.z || n.oda !== x.oda || ['masa', 'mudur-masasi', 'bekleme'].includes(n.tur) ||
+                x.oturan !== ['sandalye', 'tabure', 'kafe', 'puf'].includes(n.tur) || (x.oturan && x.sit !== n.tur); }).map((x) => x.id);
+            const odalar = [...new Set(oturan.map((x) => x.oda))].sort();
+            // every walker follows the plan's own walks (yol) between its stops, and its loop closes
+            const yollar = y.filter((x) => x.yuruyen).map((x, k) => { const st = d.DEKOR_YURUYUSLER[k];
+              return x.rota.bacaklar.every((b, i) => JSON.stringify(b.pts) === JSON.stringify(d.yol(plan, st[i], st[(i + 1) % st.length]).map((q) => [q.x, q.z]))); });
+            r.push({ n: y.length, kotu, odalar, yollar, lobi: oturan.some((x) => /^lobi-koltuk/.test(x.yer)),
+              ayni: JSON.stringify(y) === JSON.stringify(d.dekorYerleri(plan).filter((x) => x.grup === 'ortak')) }); }
+          return r; })()""")
+        for o in out:
+            self.assertEqual(o["kotu"], [], o)  # a real seat or game spot, never a desk or a lobby armchair
+            self.assertFalse(o["lobi"])  # the queued jobs wait there
+            self.assertEqual(o["odalar"], ["cay-ocagi", "ortak-alan", "oyun", "toplanti", "yemekhane"], o)
+            self.assertEqual(o["yollar"], [True, True, True, True], o)
+            self.assertGreaterEqual(o["n"], 15, o)
+            self.assertTrue(o["ayni"])
+
+    def test_a_walker_strolls_pauses_and_loops(self):
+        out = run_js("""(() => { const plan = d.ofisPlani(['vitrin', 'kasa'], { max_running_per_project: 1, denetciler: ['codex'] });
+          const w = d.dekorYerleri(plan).filter((x) => x.yuruyen);
+          return w.map((x) => { const R = x.rota; let hiz = 0, dur = 0, yur = 0;
+            for (let t = 0; t < R.sure; t += 0.5) { const a = d.dekorYuruyusu(R, t), b = d.dekorYuruyusu(R, t + 0.5);
+              hiz = Math.max(hiz, Math.hypot(b.x - a.x, b.z - a.z) / 0.5); if (a.yuruyor) yur++; else dur++; }
+            const p0 = d.dekorYuruyusu(R, 3), p1 = d.dekorYuruyusu(R, 3 + R.sure);
+            return { hiz, dur, yur, dongu: Math.hypot(p0.x - p1.x, p0.z - p1.z), basta: d.dekorYuruyusu(R, 1).yuruyor }; }); })()""")
+        self.assertEqual(len(out), 4)
+        for o in out:
+            self.assertLessEqual(o["hiz"], 0.8 + 1e-6, o)  # never faster than DEKOR_HIZ (no jumps)
+            self.assertGreater(o["yur"], o["dur"], o)  # mostly walking, with pauses at the stops
+            self.assertAlmostEqual(o["dongu"], 0, places=6)
+            self.assertFalse(o["basta"])  # it starts with a pause at its first stop
+
+    def test_office_hours_real_seats_first_and_none_at_night(self):
+        out = run_js("""[at(3), at(10, 30), at(12, 25)].map((ms) => {
+          let a = null, st = null, plan = null; gun('dort-mesgul', ms - 4000, ms + 1000, 1, (t, x, emu, s, ev, p) => { a = x; st = s; plan = p; });
+          const e = d.dekorEkibi(plan, a, ms, st.sahne).filter((x) => x.grup === 'ortak');
+          const dolu = new Set(a.flatMap((x) => [x.yer, x.masa]).filter(Boolean));
+          return { n: e.length, yuruyen: e.filter((x) => x.yuruyen).length, ust: e.filter((x) => x.yer && dolu.has(x.yer)).map((x) => x.id),
+            kimde: d.kimNerede(st, ms, a).ofiste.filter((x) => String(x.id).startsWith('dekor')).length }; })""")
+        self.assertEqual(out[0]["n"], 0, out)  # 03:00: home
+        self.assertGreater(out[1]["n"], 8, out)
+        self.assertGreater(out[1]["yuruyen"], 0, out)
+        for o in out:
+            self.assertEqual(o["ust"], [], o)  # an actor's seat is never shared (lunch: the eaters take theirs)
+            self.assertEqual(o["kimde"], 0, o)
+
+    def test_the_card_of_a_common_area_person(self):
+        out = run_js("""(() => { const ms = at(10, 30); const st = F.durumOlustur(F.SENARYOLAR['kararlar'], ms);
+          return { o: h.karakterKarti({ id: 'dekor:ortak:3', tur: 'dekor', grup: 'ortak', oda: 'yemekhane', etiket: '' }, st, ms),
+            w: h.karakterKarti({ id: 'dekor:yuruyen:0', tur: 'dekor', grup: 'ortak', oda: '', yuruyen: true, etiket: '' }, st, ms),
+            soru: st.decisions.filter((x) => !x.answer_sent).length }; })()""")
+        o = out["o"]
+        self.assertEqual((o["baslik"], o["alt"], o["eylemler"]), ("Ofisten biri", "görünüm amaçlı", []))
+        self.assertIn("gerçek bir çalışan ya da model oturumu değildir", o["satirlar"][0]["metin"])
+        self.assertEqual(o["satirlar"][1], {"ad": "Nerede", "metin": "Yemekhane"})
+        self.assertEqual(o["satirlar"][2]["metin"], f"1 açık iş · {out['soru']} bekleyen soru")
+        self.assertEqual(out["w"]["satirlar"][1], {"ad": "Nerede", "metin": "koridorda yürüyor"})
+
+    def test_still_two_draw_calls_walkers_move_and_hafif_has_none(self):
+        out = run_scene_count("""(() => { const r = {};
+          for (const [k, light] of [['gun', false], ['hafif', true]]) {
+            const { office } = ofis('dort-mesgul', F.at(10, 30), light);
+            const vis = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+            const Y = office.yaya ? [office.yaya.govde, office.yaya.bacak] : [];
+            let draw = 0; office.world.traverse((o) => { if (o.isInstancedMesh && vis(o) && o !== office.bacak && o !== office.kol && !Y.includes(o)) draw++; });
+            const D = office.dekor, i = D.list.findIndex((x) => x.yuruyen);
+            const yer = () => { const M4 = D.m.clone(); D.govde.getMatrixAt(Math.max(0, i), M4); return [M4.elements[12], M4.elements[14]]; };
+            office.dekorKonumla(20); const a = yer(); office.dekorKonumla(30); const b = yer();
+            r[k] = { draw, yuruyen: D.list.filter((x) => x.yuruyen).length, ortak: D.list.filter((x) => x.grup === 'ortak').length,
+              adim: Math.hypot(a[0] - b[0], a[1] - b[1]), cull: D.govde.frustumCulled }; }
+          return r; })()""")
+        self.assertEqual(out["gun"]["draw"], 2, out)
+        self.assertEqual(out["hafif"]["draw"], 2, out)
+        self.assertGreater(out["gun"]["yuruyen"], 0, out)
+        self.assertGreater(out["gun"]["adim"], 1, out)  # 10 s later the walker is elsewhere
+        self.assertEqual(out["hafif"]["yuruyen"], 0, out)  # hafif: seated ones only, static
+        self.assertGreater(out["hafif"]["ortak"], 5, out)
+        self.assertFalse(out["gun"]["cull"])
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class MantikliDavranisTest(unittest.TestCase):
+    """The owner, 2026-11-18 ("daha mantıklı"): behaviour tied to the real office state — a manager looks at a silent or
+    stuck job of its department, a project sorumlusu stays for a finished job, idle staff say real things."""
+
+    def test_the_yazilim_mudur_looks_at_a_silent_job_once_and_reaches_it(self):
+        out = run_js("""({ yaz: stintler('sessiz-is', at(9, 58), at(10, 30), 'sus:mudur:yazilim', (x) => /^sessiz işe bakıyor · Sepet/.test(x.durum_metni || '')),
+          diger: ['sus:mudur:qa', 'sus:mudur:analist', 'sus:mudur:it'].flatMap((id) => stintler('sessiz-is', at(9, 58), at(10, 30), id, (x) => /bakıyor/.test(x.durum_metni || ''))),
+          once: stintler('sessiz-is', at(9, 30), at(10, 1), 'sus:mudur:yazilim', (x) => /bakıyor/.test(x.durum_metni || '')),
+          kart: (() => { const ms = at(10, 5); const st = F.durumOlustur(F.SENARYOLAR['sessiz-is'], ms);
+            return h.karakterKarti({ id: 'sus:mudur:yazilim', tur: 'sus', gorevli: 'mudur', alan: 'yazilim' }, st, ms); })() })""")
+        self.assertEqual(len(out["yaz"]), 1, out)
+        y = out["yaz"][0]
+        self.assertEqual(y["yer"], "ekip-vitrin-masa-1-yan")
+        self.assertTrue(y["ulasti"], y)
+        self.assertGreaterEqual(y["son"] - y["bas"], 20000)
+        self.assertLess(y["son"] - y["bas"], 120000)  # a look, not a stay
+        self.assertEqual(out["diger"], [])  # only its own department's manager
+        self.assertEqual(out["once"], [])  # nothing before the server calls it silent
+        rows = [[r["ad"], r["metin"]] for r in out["kart"]["satirlar"]]
+        self.assertIn(["Bakılması gereken", "vitrin · Sepet hesabı · sessiz"], rows)
+        self.assertIn({"tur": "is", "note": "2026-11-12-093000-vitrin.md", "metin": "İşi aç: Sepet hesabı"}, out["kart"]["eylemler"])
+
+    def test_a_stuck_job_gets_the_doctor_first_then_its_manager_never_on_the_same_spot(self):
+        out = run_js("""(() => { let ayni = 0;
+          gun('takildi-kirmizi', at(9, 59), at(10, 30), 1, (ms, a) => { const m = bul(a, 'sus:mudur:yazilim'), dr = bul(a, 'sus:revir');
+            if (m && dr && m.yer === dr.yer && /-yan$/.test(m.yer || '')) ayni++; });
+          return { ayni, yaz: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:mudur:yazilim', (x) => /^takılan işe bakıyor/.test(x.durum_metni || '')),
+            dr: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:revir', (x) => x.durum_metni === 'hastaya bakıyor') }; })()""")
+        self.assertEqual(len(out["dr"]), 1, out)
+        self.assertEqual(len(out["yaz"]), 1, out)
+        self.assertTrue(out["yaz"][0]["ulasti"], out)
+        self.assertGreater(out["yaz"][0]["bas"], out["dr"][0]["son"])  # the doctor's visit comes first
+        self.assertEqual(out["ayni"], 0)
+
+    def test_no_look_without_a_silent_or_stuck_job_and_none_in_hafif(self):
+        out = run_js("""(() => { const seen = new Set();
+          for (const ad of ['kontrol', 'izin', 'tek-proje-ceo-bosta']) gun(ad, at(9), at(12), 10, (ms, a) => {
+            for (const x of a) if (/işe bakıyor/.test(x.durum_metni || '')) seen.add(ad + ':' + x.id); });
+          gun('sessiz-is', at(9, 58), at(10, 30), 5, (ms, a) => { for (const x of a) if (/işe bakıyor/.test(x.durum_metni || '')) seen.add('hafif:' + x.id); }, { hafif: true });
+          return [...seen]; })()""")
+        self.assertEqual(out, [])  # a permission prompt is the owner's, not a manager's
+
+    def test_the_sorumlu_stays_for_a_finished_job_instead_of_walking_off(self):
+        out = run_js("""(() => { const ks = stintler('tek-proje-ceo-bosta', at(11, 29), at(11, 34), 'sus:proje:vitrin',
+            (x) => x.durum_metni === 'ekibini kutluyor · Giriş ekranı');
+          let once = null; gun('tek-proje-ceo-bosta', at(11, 29), at(11, 29, 59), 1, (ms, a) => { once = bul(a, 'sus:proje:vitrin'); });
+          return { ks, once: once && [once.yer, once.durum_metni] }; })()""")
+        self.assertEqual(len(out["ks"]), 1, out)
+        k = out["ks"][0]
+        self.assertGreaterEqual(k["son"] - k["bas"], 29000)
+        self.assertIn(k["yer"], ("ekip-vitrin-mudur", "ekip-vitrin-mudur-yan"))
+        self.assertEqual(out["once"], ["ekip-vitrin-mudur", "masasında · 1 açık iş"])  # a real thing, not filler
+
+    def test_idle_staff_lines_say_real_things(self):
+        out = run_js("""(() => { const ms = at(10, 30);
+          const t = (note, status, x = {}) => ({ note, status, project: 'vitrin', tier: 'kod', title: 'İş', ...x });
+          const st = { tasks: [t('a.md', 'calisiyor'), t('b.md', 'calisiyor', { project: 'kasa' }), t('c.md', 'kontrolde', { project: 'kasa' }),
+              t('d.md', 'calisiyor', { tier: 'inceleme', step_kind: 'kod-inceleme' }), t('e.md', 'calisiyor', { kontrol_deneme: 2 }),
+              t('f.md', 'tikandi', { finished: F.iso(ms - 3600000) }), t('g.md', 'tikandi', { finished: F.iso(ms - 30 * 3600000) }),
+              t('o.md', 'karar-bekliyor', { step_kind: 'onay' })],
+            summary: { finished_today: 3 }, schedules: [{ ad: 'x' }, { ad: 'y', duraklatildi: true }], sistem: { seviye: 'sari' },
+            postoffice: { silent: [{ is: 'a', seconds: 200 }, { is: 'e', seconds: 200, izin: true }] },
+            sahne: { saat_dilimi: 'Europe/Istanbul', sunucu_utc_ofset_dk: 180 } };
+          const s = (g, o) => d.masaSozu(g, st, ms, o);
+          return { yaz: s('mudur', { alan: 'yazilim' }), qa: s('mudur', { alan: 'qa' }), an: s('mudur', { alan: 'analist' }),
+            it: s('mudur', { alan: 'it' }), revir: s('revir'), psi: s('psikolog'), ik: s('ik'), mu: s('muhasebe'), id: s('idari'),
+            pr: s('proje', { proje: 'kasa' }), bos: d.masaSozu('mudur', {}, ms, { alan: 'qa' }), masaj: s('masaj'),
+            bak: [...d.bakilacakIsler(st)] }; })()""")
+        self.assertEqual(out["yaz"], "masasında · 4 kod işi takipte · en yoğun: kasa")
+        self.assertEqual(out["qa"], "masasında · 1 inceleme takipte")
+        self.assertEqual(out["an"], "masasında · açık plan incelemesi yok")
+        self.assertEqual(out["it"], "masasında · sistem yoğun")
+        self.assertEqual(out["revir"], "masasında · bugün 1 iş takıldı")  # today's only
+        self.assertEqual(out["psi"], "masasında · 1 iş ikinci Kontrol denemesinde")
+        self.assertEqual(out["ik"], "masasında · 4 iş üzerinde çalışılıyor")
+        self.assertEqual(out["mu"], "masasında · bugün 3 iş bitti")
+        self.assertEqual(out["id"], "masasında · 1 zamanlanmış iş")
+        self.assertEqual(out["pr"], "masasında · 2 açık iş")
+        self.assertEqual(out["bos"], "masasında · açık inceleme yok")
+        self.assertEqual(out["masaj"], "masasında")
+        self.assertEqual(out["bak"], [["a", "sessiz"], ["f", "takildi"], ["g", "takildi"]])
 
 
 @unittest.skipUnless(NODE, "node is not installed")

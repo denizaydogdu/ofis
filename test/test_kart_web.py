@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webkopya  # noqa: E402  (web/i18n.js next to the copied modules)
 import sahip_yasaklari  # noqa: E402,F401  (the owner's name as in his ofis.json; node reads it too)
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -20,9 +21,10 @@ NODE = shutil.which("node")
 def run_js(expr, tz=None):
     with tempfile.TemporaryDirectory() as tmp:
         module = Path(tmp) / "ofis-text.mjs"
-        shutil.copyfile(WEB / "ofis-davranis.js", Path(tmp) / "ofis-davranis.mjs")  # the owner's name helpers
-        module.write_text((WEB / "ofis-text.js").read_text(encoding="utf-8")
-                          .replace("'./ofis-davranis.js'", "'./ofis-davranis.mjs'"), encoding="utf-8")
+        (Path(tmp) / "ofis-davranis.mjs").write_text(  # the owner's name helpers
+            webkopya.mjs_yap((WEB / "ofis-davranis.js").read_text(encoding="utf-8")), encoding="utf-8")
+        webkopya.i18n_ekle(tmp, mjs=True)
+        module.write_text(webkopya.mjs_yap((WEB / "ofis-text.js").read_text(encoding="utf-8")), encoding="utf-8")
         code = (f"import * as t from {json.dumps(module.as_uri())};\n"
                 f"process.stdout.write(JSON.stringify({expr}));")
         env = dict(os.environ, TZ=tz) if tz else None
@@ -65,7 +67,7 @@ class CardOrderTest(unittest.TestCase):
         self.assertIn("renderQuiz(card.parts.quiz, sinavMaddeleri(d.quiz))", body)
         quiz = a[a.index("function renderQuiz("):a.index("function syncAsks(")]
         self.assertIn("h('details', 'ask-quiz-answer')", quiz)
-        self.assertIn("h('summary', null, 'Cevabı göster')", quiz)
+        self.assertIn("h('summary', null, T('Cevabı göster'))", quiz)
         self.assertNotIn("innerHTML", quiz)
         build = a[a.index("function buildAsk("):a.index("function renderQuiz(")]
         self.assertLess(build.index("evidence, quiz, secenekler, ta"), len(build), "the quiz comes after the evidence")
@@ -163,6 +165,7 @@ def run_demo(expr):
         (Path(tmp) / "package.json").write_text('{"type": "module"}', encoding="utf-8")
         for name in ("ofis-sahne.js", "ofis-davranis.js", "demo.js", "ofis-text.js"):
             shutil.copyfile(WEB / name, Path(tmp) / name)
+        webkopya.i18n_ekle(tmp)
         uri = json.dumps((Path(tmp) / "demo.js").as_uri())
         sahne = json.dumps((Path(tmp) / "ofis-sahne.js").as_uri())
         code = (f"import * as demo from {uri};\nimport * as h from {sahne};\n"
@@ -239,7 +242,7 @@ class OfficeVocabularyTest(unittest.TestCase):
 
     def test_the_page_says_calisanlar_not_modeller(self):
         html = (WEB / "index.html").read_text(encoding="utf-8")
-        for text in (">Çalışanlar <", 'id="calisanlar-kadro-title">Çalışanlar</h3>', "Şu an iş başında", "Unvana göre",
+        for text in (">Çalışanlar</span> <", 'id="calisanlar-kadro-title" data-t="Çalışanlar">Çalışanlar</h3>', "Şu an iş başında", "Unvana göre",
                      "Kadro ve görev dağılımı"):
             self.assertIn(text, html)
         for old in ("Modeller", "Modele göre", "Model seçimi", "Şu an çalışanlar"):
