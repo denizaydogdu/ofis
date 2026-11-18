@@ -997,6 +997,8 @@ export const EN = {
   "molada": "on a break",
   "moral veriyor": "cheering someone up",
   "mutfakta": "in the kitchen",
+  "kestiriyor": "dozing",
+  "çay molasında": "on a tea break",
   "nöbet dışı": "off shift",
   "nöbeti devretti · otele gidiyor": "handed over the shift · going to the hotel",
   "nöbette yemek yiyor": "eating on shift",

@@ -2970,7 +2970,8 @@ export function personelRotasi(id, ms, plan, dolu = new Set(), opts = {}) {
 // - at lunch, until the first eaters finish (OGLE_YEMEK_DK[0] minutes), it serves at the counter; then it alternates —
 //   collecting the trays at a table's end (a seeded band) for most of a slot, carrying them to the Bulaşıkhane and
 //   washing at the sink for the rest;
-// - outside lunch: at the counter or the Bulaşıkhane, or wherever its personality takes it (personelRotasi; not at night).
+// - outside lunch: at the counter or the Bulaşıkhane; since 2026-11-18 asleep at night and on a seeded break by day
+//   like the cook (mutfakDisi).
 // Since 2026-11-14 the yemekhane görevlisi on duty (YEMEKHANE_EKIBI) does the same at every meal of yemekPenceresi
 // (breakfast, lunch, dinner — weekends too); opts: {id (the member: its seeds), onceki, gece}.
 // Returns {yer, poz, metin, gorevde, faz} (faz: hazirlik | servis | topluyor | yikiyor | serbest).
@@ -2998,19 +2999,54 @@ export function yemekhaneSorumlusu(now, plan, sahne, dolu = new Set(), opts = {}
   if (sonra && sonra.gecen < OGLE_HAZIRLIK_DK) {
     return { yer: YEMEKHANE_SERVIS, poz: 'cay-al', metin: T(OGUN_HAZIRLIK[sonra.tur]), gorevde: true, faz: 'hazirlik' };
   }
-  const { dilim } = molaDilimi(id, ms);
-  const h = hash(`${id === 'sus:yemekhane' ? 'yemekhane' : id}:serbest:${dilim}`) % 4;
-  if (h === 0) return { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: T('tezgâhta'), gorevde: false, faz: 'serbest' };
-  if (h === 1 && nodes[YEMEKHANE_BULASIK]) return { ...yika, metin: T('bulaşıkhaneyi topluyor'), gorevde: false, faz: 'serbest' };
-  const m = personelRotasi(id, ms, plan, dolu, { ev: YEMEKHANE_SERVIS, onceki: opts.onceki, gece: !!opts.gece });
-  return m ? { yer: m.yer, poz: m.poz, metin: m.metin, gorevde: false, faz: 'serbest', mola: true }
-    : { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: T('tezgâhta'), gorevde: false, faz: 'serbest' };
+  // owner decision 2026-11-18 ("NPC'ler biraz daha akıllı olabilir"): no meal near — asleep at night, else a seeded break
+  const bos = mutfakDisi(id, ms, plan, dolu, { ev: YEMEKHANE_SERVIS, ...opts });
+  if (bos) return bos;
+  const h = hash(`${id}:serbest:${Math.floor(ms / YEMEKHANE_ADIM_MS)}`) % 3;
+  if (h === 0 && nodes[YEMEKHANE_BULASIK]) return { ...yika, metin: T('bulaşıkhaneyi topluyor'), gorevde: false, faz: 'serbest' };
+  return { yer: YEMEKHANE_SERVIS, poz: 'bekliyor', metin: T('tezgâhta'), gorevde: false, faz: 'serbest' };
+}
+// The kitchen teams between meals (owner decision 2026-11-18: "aşçı gece hep mutfakta duruyor … NPC'ler biraz daha akıllı
+// olabilir"): the cook and the yemekhane görevlisi on duty work only around the meals (their prep time and the window);
+// otherwise
+// - at night (opts.uyku: the agents' sleeping time) each sleeps on a bed of the Dinlenme odası the caller found free
+//   (opts.yatak: "uyuyor"; no free bed — more than 18 sleepers —: dozing on its staff chair opts.sandalye, "kestiriyor"),
+//   and the meal's prep wakes it (the callers check the meal windows first);
+// - by day, per own MUTFAK_MOLA_MS slot (molaDilimi, seeded per member): two slots in five it takes a break for the
+//   first MUTFAK_MOLA_KALIS_MS — tea at the staff spot of the tea corner ("çay molasında"), a chat at a standing place of
+//   the Ortak alan ("sohbet ediyor") or a short walk on a corridor near the canteen ("biraz dolaşıyor"); the spot it
+//   held in the previous tick first, a taken spot falls back to the walk — and walks back for the rest of the slot.
+// Walks follow the plan's graph like everyone's. null = at work in the kitchen (the caller's own choice).
+export const MUTFAK_MOLA_MS = 15 * 60000;
+export const MUTFAK_MOLA_KALIS_MS = 9 * 60000;
+function mutfakDisi(id, ms, plan, dolu, opts) {
+  const nodes = (plan && plan.dugumler) || {};
+  if (opts.uyku) {
+    if (opts.yatak && nodes[opts.yatak]) return { yer: opts.yatak, poz: 'yatiyor', metin: T('uyuyor'), gorevde: false, faz: 'uyku' };
+    if (opts.sandalye && nodes[opts.sandalye]) return { yer: opts.sandalye, poz: 'uyuyor', metin: T('kestiriyor'), gorevde: false, faz: 'uyku' };
+    return null;
+  }
+  const { dilim, gecen } = molaDilimi(`${id}:mutfak-mola`, ms, MUTFAK_MOLA_MS);
+  if (hash(`${id}:mutfak-mola:${dilim}`) % 5 >= 2 || gecen >= MUTFAK_MOLA_KALIS_MS) return null;
+  const tur = ['cay', 'salon', 'yuruyus'][hash(`${id}:mutfak-mola-tur:${dilim}`) % 3];
+  const yerler = { cay: [['cay-ocagi-personel-2', 'cay', N_('çay molasında')]],
+    salon: [0, 1].map((i) => [`ortak-alan-sohbet-${i}`, 'bekliyor', N_('sohbet ediyor')]) }[tur] || [];
+  const bos = yerler.filter(([y]) => nodes[y] && !dolu.has(y));
+  const s = bos.find(([y]) => y === opts.onceki) || bos[0];
+  if (s) {
+    dolu.add(s[0]);
+    return { yer: s[0], poz: s[1], metin: T(s[2]), gorevde: false, faz: 'mola', mola: true };
+  }
+  const cs = yakinKoridorlar(plan, opts.ev);
+  return cs.length ? { yer: cs[hash(`${id}:mutfak-yuruyus:${dilim}`) % cs.length], poz: 'yuruyor', metin: T('biraz dolaşıyor'),
+    gorevde: false, faz: 'mola', mola: true } : null;
 }
 const OGUN_HAZIRLIK = { kahvalti: N_('kahvaltıyı hazırlıyor'), ogle: N_('öğle yemeğini hazırlıyor'), aksam: N_('akşam yemeğini hazırlıyor') };
 // The aşçı on duty (ASCI_EKIBI, 2026-11-14), in the kitchen corner, never on a seat: from ASCI_HAZIRLIK_DK minutes
 // before a meal until its end it cooks — at the stove most of each YEMEKHANE_ADIM_MS slot, a moment at the fridge —;
-// otherwise it cleans the stove or tidies the fridge (seeded per slot). Returns {yer, poz, metin, gorevde, faz:
-// pisiriyor | temizlik}.
+// otherwise asleep at night or on a break by day (mutfakDisi; opts: {id, dolu, onceki, uyku, yatak, sandalye}), else it
+// cleans the stove or tidies the fridge (seeded per slot). Returns {yer, poz, metin, gorevde, faz: pisiriyor | temizlik |
+// uyku | mola}.
 export const ASCI_HAZIRLIK_DK = 45;
 export function asciPlani(now, plan, sahne, opts = {}) {
   const ms = nowMs(now);
@@ -3029,6 +3065,8 @@ export function asciPlani(now, plan, sahne, opts = {}) {
     return { yer: ocak, poz: 'yikiyor', metin: T({ kahvalti: N_('kahvaltıyı hazırlıyor'), ogle: N_('öğle yemeğini pişiriyor'), aksam: N_('akşam yemeğini pişiriyor') }[p.tur]),
       gorevde: true, faz: 'pisiriyor' };
   }
+  const bos = mutfakDisi(id, ms, plan, opts.dolu || new Set(), { ev: ocak, ...opts });
+  if (bos) return bos;
   const h = hash(`${id}:mutfak:${seg}`) % 3;
   if (h === 0) return { yer: dolap, poz: 'bekliyor', metin: T('dolabı düzenliyor'), gorevde: false, faz: 'temizlik' };
   return { yer: ocak, poz: h === 1 ? 'yikiyor' : 'bekliyor', metin: h === 1 ? T('ocağı temizliyor') : T('mutfakta'), gorevde: false, faz: 'temizlik' };
@@ -4371,6 +4409,20 @@ export function niyetler(state, now, prev = null, options = {}) {
   // (yemekhaneSorumlusu), the cook works at the stove and the fridge (asciPlani). Each eats breakfast and dinner in its
   // turn (NOBET_SOFRA_SIRASI) on a staff chair. The outgoing one walks to the Otel at a change (nobetCikisi).
   if (!hafif && plan.dugumler[YEMEKHANE_SERVIS]) {
+    // at night (owner decision 2026-11-18) the two on duty sleep in the Dinlenme odası between the meals: the agents
+    // (placed above) keep their beds; a kitchen sleeper keeps the bed it held, else takes the free bed with the highest
+    // number (the agents fill from bed 0 up, so they rarely meet)
+    const yataklar = new Set(result.filter((x) => /^dinlenme-yatak-\d+$/.test(x.yer || '')).map((x) => x.yer));
+    const yatakBul = (id) => {
+      if (!uyku) return null;
+      const o = prevYer.get(id);
+      if (o && /^dinlenme-yatak-\d+$/.test(o) && plan.dugumler[o] && !yataklar.has(o) && !dolu.has(o)) { yataklar.add(o); return o; }
+      for (let i = DINLENME_YATAK - 1; i >= 0; i--) {
+        const y = `dinlenme-yatak-${i}`;
+        if (plan.dugumler[y] && !yataklar.has(y) && !dolu.has(y)) { yataklar.add(y); return y; }
+      }
+      return null;
+    };
     for (const [ekip, sandalye] of [['yemekhane', 'yemekhane-personel-0'], ['asci', 'yemekhane-personel-1']]) {
       for (const u of nobetEkibi(ekip, ms, sahne)) {
         const a = { id: u.id, tur: 'sus', gorevli: ekip, unvan: '', rank: 0, model: '', proje: '', yer: YEMEKHANE_SERVIS,
@@ -4391,8 +4443,11 @@ export function niyetler(state, now, prev = null, options = {}) {
           result.push(a);
           continue;
         }
-        const y = ekip === 'asci' ? asciPlani(ms, plan, sahne, { id: u.id })
-          : yemekhaneSorumlusu(ms, plan, sahne, dolu, { id: u.id, onceki: prevYer.get(u.id), gece });
+        // a bed only when no meal is near (the plan functions check the meal windows first)
+        const ogunYakin = yemekPenceresi(ms, sahne) || yemekPenceresi(ms, sahne, ekip === 'asci' ? ASCI_HAZIRLIK_DK : OGLE_HAZIRLIK_DK);
+        const o2 = { id: u.id, dolu, onceki: prevYer.get(u.id), uyku: uyku && !ogunYakin, sandalye,
+          yatak: uyku && !ogunYakin ? yatakBul(u.id) : null };
+        const y = ekip === 'asci' ? asciPlani(ms, plan, sahne, o2) : yemekhaneSorumlusu(ms, plan, sahne, dolu, o2);
         a.yer = y.yer; a.poz = y.poz; a.durum_metni = y.metin;
         if (y.gorevde) a.gorevde = true;
         if (y.mola) a.mola = true;

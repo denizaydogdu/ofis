@@ -1797,9 +1797,14 @@ class NightSleepTest(unittest.TestCase):
                 self.assertRegex(x["yer"], r"^otel-oda-\d+$")
                 self.assertEqual((x["poz"], x["metin"]), ("otelde", "otelde · uyuyor"))
                 self.assertTrue(x["vardi"], x)
-        # awake: exactly the ones on shift (guard, Sekreter, IT, the kitchen's server and cook), at their posts
+        # in the office: exactly the ones on shift; the guard, the Sekreter and IT awake at their posts, the kitchen's
+        # server and cook (no night work, owner decision 2026-11-18) asleep in two beds of the Dinlenme odası
         self.assertEqual(sorted(x["g"] for x in out["sus"]), ["asci", "guvenlik", "sekreter", "sunucu", "yemekhane"])
-        self.assertTrue(all(x["nobetci"] and x["poz"] != "yatiyor" for x in out["sus"]), out["sus"])
+        self.assertTrue(all(x["nobetci"] for x in out["sus"]), out["sus"])
+        self.assertTrue(all((x["poz"] == "yatiyor") == (x["g"] in ("asci", "yemekhane")) for x in out["sus"]), out["sus"])
+        mutfak = [x["yer"] for x in out["sus"] if x["g"] in ("asci", "yemekhane")]
+        self.assertTrue(all(re.match(r"^dinlenme-yatak-\d+$", y) for y in mutfak) and len(set(mutfak)) == 2, mutfak)
+        self.assertFalse(set(mutfak) & set(yerler), (mutfak, yerler))  # never an agent's bed
         # who-is-where: every agent "uyuyor"; the security reviewer is not "çalışıyor" without a real review (bug fix)
         self.assertTrue(all(m == "uyuyor" for _, m in out["kim"]), out["kim"])
         self.assertIn(["Güvenlik denetçisi", "uyuyor"], out["kim"])
@@ -2059,6 +2064,51 @@ class KitchenTest(unittest.TestCase):
                 self.assertGreater(out[ad]["servis"], 0, out[ad])
                 self.assertEqual(out[ad]["pisir"], out[ad]["n"], out[ad])  # the cook works the whole meal
         self.assertEqual(out["gece"]["pisir"], 0, out["gece"])  # at 03:00 it cleans the kitchen instead
+
+    def test_kitchen_staff_sleep_at_night_break_between_meals_and_work_the_meals(self):
+        """The owner, 2026-11-18: "aşçı gece hep mutfakta duruyor … NPC'ler biraz daha akıllı olabilir" — the cook and the
+        yemekhane görevlisi on duty work around the meals, take short breaks between them and sleep at night."""
+        out = run_js("""(() => { const r = {}; const kesen = []; const mutfak = /^yemekhane-(ocak|dolap|servis|bulasik|masa-ucu-\\d+|personel-\\d)$/;
+          const ekle = (k, e, x) => { ((r[k] ||= {})[e] ||= []).push([x.yer, x.poz, x.durum_metni]); };
+          for (const [k, t0, t1] of [['gece3', at(2, 55), at(3, 5)], ['gece22', at(21, 55), at(22, 5)], ['cmt-gece', at(48 + 3), at(48 + 3, 5)],
+            ['asci-hazirlik', at(7, 25), at(7, 35)], ['ogle', at(12), at(12, 10)], ['aksam-hazirlik', at(18, 47), at(18, 57)], ['ara', at(13), at(18)]]) {
+            let prev = new Map(), plan0 = null;
+            gun('bos-ofis', t0, t1, 30, (ms, a, emu, st, ev, plan) => { plan0 = plan;
+              for (const e of ['asci', 'yemekhane']) {
+                const x = a.find((y) => y.gorevli === e && y.nobetci && !y.otel && !y.cikis); if (!x) continue;
+                ekle(k, e, x);
+                const p = prev.get(x.id); if (p && p !== x.yer) { const yol = d.yol(plan, p, x.yer) || [];
+                  yol.slice(1).forEach((id, i) => { if (d.kenarMobilyadan(plan, yol[i], id)) kesen.push([p, x.yer]); }); }
+                prev.set(x.id, x.yer); } }); }
+          const say = (k, e, f) => (r[k] && r[k][e] || []).filter(f).length;
+          const yatak = ([y, poz, m]) => /^dinlenme-yatak-\\d+$/.test(y) && poz === 'yatiyor' && m === 'uyuyor';
+          const out = { kesen: kesen.length };
+          for (const e of ['asci', 'yemekhane']) {
+            out[e] = { gece: ['gece3', 'gece22', 'cmt-gece'].map((k) => [say(k, e, yatak), (r[k] && r[k][e] || []).length]),
+              ogle: [say('ogle', e, ([y]) => mutfak.test(y)), (r.ogle[e] || []).length],
+              ara_disarida: say('ara', e, ([y]) => !mutfak.test(y)), ara: (r.ara[e] || []).length,
+              ara_degisim: (r.ara[e] || []).filter((x, i, l) => i && mutfak.test(x[0]) !== mutfak.test(l[i - 1][0])).length,
+              ara_metin: [...new Set((r.ara[e] || []).filter(([y]) => !mutfak.test(y)).map((x) => x[2]))],
+              uyuyan_ara: say('ara', e, ([, poz]) => poz === 'yatiyor') }; }
+          out.asci.hazirlik = [say('asci-hazirlik', 'asci', ([y, , m]) => y === 'yemekhane-ocak' && m === 'kahvaltıyı hazırlıyor'), r['asci-hazirlik'].asci.length];
+          out.yemekhane.hazirlik = [say('aksam-hazirlik', 'yemekhane', ([y]) => y === 'yemekhane-servis'), r['aksam-hazirlik'].yemekhane.length];
+          out.yataklar = ['gece3', 'gece22'].map((k) => r[k].asci.at(-1)[0] !== r[k].yemekhane.at(-1)[0]);
+          return out; })()""", timeout=900)
+        self.assertEqual(out["kesen"], 0)  # every walk on the plan's paths, never through furniture
+        self.assertEqual(out["yataklar"], [True, True])  # two different beds
+        for e in ("asci", "yemekhane"):
+            with self.subTest(ekip=e):
+                o = out[e]
+                for n, toplam in o["gece"]:  # asleep in a bed at 03:00, 22:00 and on a Saturday night
+                    self.assertGreater(toplam, 0, o)
+                    self.assertEqual(n, toplam, o)
+                self.assertEqual(o["ogle"][0], o["ogle"][1], o)  # at lunch it works in the kitchen
+                self.assertEqual(o["hazirlik"][0], o["hazirlik"][1], o)  # awake and at work before the meal
+                self.assertGreater(o["ara_disarida"], 0, o)  # between the meals it takes breaks …
+                self.assertLess(o["ara_disarida"], o["ara"] * 0.6, o)  # … but is in the kitchen most of the time
+                self.assertLess(o["ara_degisim"], 30, o)  # calm: a few trips out and back in five hours, no constant back and forth
+                self.assertEqual(o["uyuyan_ara"], 0, o)  # never asleep by day
+                self.assertTrue(set(o["ara_metin"]) <= {"çay molasında", "sohbet ediyor", "biraz dolaşıyor"}, o)
 
     def test_the_chart_who_is_where_the_card_and_the_otel(self):
         out = run_js("""(() => { const t = at(10); const st = F.durumOlustur(F.SENARYOLAR['bos-ofis'], t);

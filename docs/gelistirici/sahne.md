@@ -223,7 +223,8 @@
   meal it sets things out at the serving counter (`yemekhane-servis`); at a meal it serves until the first eaters
   finish (20 minutes of a 60-minute window), then in each 2-minute slot collects the trays at a table's end
   (`yemekhane-masa-ucu-<band>`, poz `tepsi`) and carries them to the sink to wash (`yemekhane-bulasik`, poz `yikiyor`);
-  outside the meals the counter, the Bulaşıkhane or its personality's roaming (not at night). Its card ("yemekhane",
+  outside the meals the counter or the Bulaşıkhane, a seeded break or, at night, a bed (`mutfakDisi`, see "Meals and the
+  kitchen" below). Its card ("yemekhane",
   `yemekhaneKarti`): the team's shift rows, how many eat in the canteen now, today's meal windows and how far off lunch
   is (how many ate today is not known: no line). A staff label shows the name only — never "atanmış iş yok" or a similar idle
   text, not even on hover; a staff member on a real duty (`gorevde` or a symbol: the Sekreter's question or trip, the
@@ -440,7 +441,8 @@
     own bed in the Dinlenme odası and sleeps ("uyuyor", lying; `molaPlani` with the break forced to `uyku`: the bed it
     held stays its own, else the first free one; 20 beds, one sleeper each; with more sleepers the rest rest at their
     seat / the tea stools). In hafif too (places only). The people on shift stay awake at their duties (the guard, the
-    Sekreter with her trips to the CEO's door, the IT person on a server warning); the day staff are at the Otel. A real job,
+    Sekreter with her trips to the CEO's door, the IT person on a server warning) — except the kitchen pair on duty, who
+    have no night work and sleep here too (beds from 19 down, see "Meals and the kitchen"); the day staff are at the Otel. A real job,
     review, hakem or security call takes the body from the bed to the desk (`devral`) and it walks back to bed after;
     an asleep Genel Müdür takes no file in the hand-over chain. The hakem and the security reviewer are drawn only
     while they run; `kimNerede` no longer counts the undrawn security reviewer as "çalışıyor" (bug: the guard's card
@@ -555,13 +557,24 @@
     off-shift ones at the Otel; a change walks the outgoing one to the Otel, `nobetCikisi`). The server serves every
     meal (`yemekhaneSorumlusu`); the cook (`asciPlani`) cooks from 45 minutes before a meal to its end at the stove
     (poz `yikiyor`, "öğle yemeğini pişiriyor", "kahvaltıyı hazırlıyor") with a moment at the fridge ("malzeme alıyor")
-    in each 2-minute slot, and otherwise cleans the stove or tidies the fridge. So food is always cooked and served; no
+    in each 2-minute slot, and otherwise cleans the stove or tidies the fridge. **Between meals** (owner decision
+    2026-11-18: "aşçı gece hep mutfakta duruyor … NPC'ler biraz daha akıllı olabilir"; `mutfakDisi`, shared by the cook
+    and the yemekhane görevlisi): at night (`uykuVaktiMi`, from 20:00 until the office hours' start, unless their meal's
+    prep — 45 / 15 minutes — or the meal has begun) both sleep in the Dinlenme odası ("uyuyor"; the bed held in the
+    previous tick, else the free bed with the highest number, so the agents filling from bed 0 rarely meet them; no
+    free bed: dozing on the staff chair, "kestiriyor"), and the prep wakes them before breakfast; by day, per own
+    15-minute slot (`MUTFAK_MOLA_MS`, seeded per member) two slots in five start with a 9-minute break
+    (`MUTFAK_MOLA_KALIS_MS`): tea at `cay-ocagi-personel-2` ("çay molasında"), a chat at `ortak-alan-sohbet-<i>`
+    ("sohbet ediyor") or a corridor walk near the canteen ("biraz dolaşıyor"), on the plan's paths, then back to the
+    kitchen / counter. So food is always cooked and served; no
     "hazır yemek" fallback is needed (both posts can never be empty). Page: the Şema lists "Aşçılar (3) · nöbette: 2.
     aşçı" and "Yemekhane (3)" under İK ve İdari İşler Müdürü → Ofis hizmetleri; the guard's card groups them like the
     other shift teams ("Nöbette: … Aşçı (2.) …", "Aşçı (2 kişi) · sonraki vardiya …"); their cards ("yemekhane" /
     "asci") start with the team's shift rows, then the canteen, today's meal windows ("Öğünler") and lunch. The Otel:
     `OTEL_ODA` 72 (18 × 4) for 41 + T guests: ≥ 8 spare rooms up to 23 projects. Tests: `MealTest`, `KitchenTest` in
-    `test/test_npc.py`; the canteen tests in `test/test_ofis_plani.py`.
+    `test/test_npc.py` (`test_kitchen_staff_sleep_at_night_break_between_meals_and_work_the_meals`: 03:00, 22:00 and a
+    Saturday night in bed, breakfast / dinner prep and lunch at work, 13:00–18:00 mostly in the kitchen with a few
+    breaks, never through furniture); the canteen tests in `test/test_ofis_plani.py`.
   - **The announcement gathering** lasts `DUYURU_MS` + `DUYURU_TOPLANMA_MS` (60 + 45 s), so the listeners who walked
     over still sit for most of a minute.
   - **Cues of real events** (B4, owner decision 2026-11-12; each short, from /api/state only, carried by the folder or the badge
