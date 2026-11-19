@@ -413,7 +413,7 @@ The main keys of `ofis.json`, as in [`ofis.example.json`](ofis.example.json):
 |---|---|
 | `ofis_adi` | the office's name on the page |
 | `sahip_adi` | your display name in every text the office writes |
-| `dil` | the page's and the CEO's language: `tr` (default) or `en` — English for the page's main views, server texts it shows and the CEO's replies (Ayarlar › Genel › Dil / Language) |
+| `dil` | the page's and the CEO's language: `tr` (default) or `en` — English for the page's main views, server texts it shows, the job lifecycle's CEO notices (finished / stuck / stopped / escalated, workflows, managers) and the CEO's replies (Ayarlar › Genel › Dil / Language) |
 | `ceo_session` | the CEO session's name (`ofis-ceo`) |
 | `ceo_yenileme` | when to start a fresh CEO session: context size, cold cache, a new day |
 | `vault_ofis` | the `OFIS` folder in your Obsidian vault |

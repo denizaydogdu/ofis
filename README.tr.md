@@ -417,7 +417,7 @@ yalnız `ucretsiz_denetci_projeler` listesindeki projelerde çalışır.
 |---|---|
 | `ofis_adi` | sayfadaki ofis adı |
 | `sahip_adi` | ofisin yazdığı her metinde senin adın |
-| `dil` | sayfanın ve CEO'nun dili: `tr` (varsayılan) ya da `en` — İngilizcede sayfanın ana görünümleri, gösterdiği sunucu metinleri ve CEO'nun cevapları (Ayarlar › Genel › Dil / Language) |
+| `dil` | sayfanın ve CEO'nun dili: `tr` (varsayılan) ya da `en` — İngilizcede sayfanın ana görünümleri, gösterdiği sunucu metinleri, iş bildirimleri (bitti / takıldı / durduruldu / yükseltildi, akışlar, müdürler) ve CEO'nun cevapları (Ayarlar › Genel › Dil / Language) |
 | `ceo_session` | CEO oturumunun adı (`ofis-ceo`) |
 | `ceo_yenileme` | yeni bir CEO oturumu ne zaman açılır: bağlam büyüklüğü, soğuk önbellek, yeni gün |
 | `vault_ofis` | Obsidian kasandaki `OFIS` klasörü |

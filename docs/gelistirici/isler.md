@@ -317,7 +317,11 @@ Projects never message the CEO directly and the CEO never messages them; the ser
 - A project session reports with `ofis.py bildir` (done / stuck / question; the text through a quoted heredoc on
   stdin). The server accepts a report only from the job's own session **and** working folder; anything else goes to
   `durum/gelen/reddedilen/`. It then updates the job note itself (Sonuç, `durum`, `bitis`; the project's text is
-  quoted with `> `) and sends you one `[Ofis · sistem]` notice. You do not edit the job note for this; read it if
+  quoted with `> `) and sends you one `[Ofis · sistem]` notice. The job lifecycle's notices follow ofis.json `dil`
+  (the owner, 2026-11-19: "işi bitti"/"job finished", "işi takıldı"/"job stuck", "işi durduruldu", "bir üst katmana
+  taşındı", the workflow and dispatcher notices, a manager's answer — bin/postoffice.py, kontrol.py, akis.py, mudur.py,
+  dispatcher.py, each at the place it is enqueued, with the owner's name through bin/sahip.py `e`/`in_`; under `en`
+  the frame is English while the quoted project text stays as written — data). You do not edit the job note for this; read it if
   you need detail, tell the owner in two plain sentences, and add the log entry (Vault rules). A `kod` job's report
   contract (`bin/launch.py`, start and every resume) also requires a short "Verdiğim kararlar ve varsayımlar" section
   in its bitti report: the defaults it chose, what it treated as out of scope, how it read conflicting requirements. The same contract (a `kod`-tier job and a workflow's kod step, start and
