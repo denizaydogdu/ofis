@@ -15,16 +15,19 @@ export function noticeParts(text) {
   const title = (lines[0] || '').trim();
   const body = lines.slice(1).map((l) => l.replace(/^> ?/, '')).join('\n').replace(/^\s*\n|\n\s*$/g, '');
   let tone = 'info';
-  if (/ işi bitti:/.test(title) || / akış adımı bitti /.test(title) || / grubu bitti:/.test(title)) tone = 'done';
-  else if (/ akışı onay bekliyor:/.test(title)) tone = 'ask';
+  // Turkish and English shapes (the CEO notices of the job lifecycle follow ofis.json `dil` since 2026-11-19)
+  if (/ işi bitti:/.test(title) || / job finished:/.test(title) || / akış adımı bitti /.test(title) ||
+    / workflow step finished /.test(title) || / grubu bitti:/.test(title) || / group finished:/.test(title)) tone = 'done';
+  else if (/ akışı onay bekliyor:/.test(title) || / workflow is waiting for approval:/.test(title)) tone = 'ask';
   // "kadro …" since 2026-11-11 (office vocabulary); the older "model …" notices still read the same
   else if (/ (model|kadro) önerisi:/.test(title) || / (model pilotu|kadro denemesi) bitti:/.test(title)) tone = 'ask';
-  else if (/ akışı durdu:/.test(title)) tone = 'blocked';
-  else if (/ işi bir üst katmana taşındı:/.test(title)) tone = 'info';
-  else if (/ işi takıldı:/.test(title) || / işi durduruldu:/.test(title)) tone = 'blocked';
-  else if (/ zamanlanmış işi (duraklatıldı|eklenemedi):/.test(title)) tone = 'blocked';
-  else if (/ soruyor \(karar:/.test(title)) tone = 'ask';
-  else if (/ sorusunu .+ Müdürü cevapladı:/.test(title)) tone = 'info'; // step 4: a manager answered (bin/mudur.py)
+  else if (/ akışı durdu:/.test(title) || / workflow stopped:/.test(title)) tone = 'blocked';
+  else if (/ işi bir üst katmana taşındı:/.test(title) || / job moved up a tier:/.test(title)) tone = 'info';
+  else if (/ işi takıldı:/.test(title) || / işi durduruldu:/.test(title) || / job stuck:/.test(title) ||
+    / job stopped:/.test(title) || / job is stopped:/.test(title)) tone = 'blocked';
+  else if (/ zamanlanmış işi (duraklatıldı|eklenemedi):/.test(title) || / schedule was paused:/.test(title)) tone = 'blocked';
+  else if (/ soruyor \(karar:/.test(title) || / is asking \(decision:/.test(title)) tone = 'ask';
+  else if (/ sorusunu .+ Müdürü cevapladı:/.test(title) || /'s question was answered by .+:/.test(title)) tone = 'info'; // step 4: a manager answered (bin/mudur.py)
   return { title, body: body.trim() ? body : '', tone };
 }
 

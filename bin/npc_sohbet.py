@@ -392,10 +392,11 @@ def _pozitif(value):
 
 def kullanimlar(durum_dir):
     """Every recorded question's usage, oldest first: [{zaman, usd, token}]. A missing folder is no records; a line
-    that is not a valid record is skipped (a crash mid-write); a symlink is never opened."""
+    that is not a valid record is skipped (a crash mid-write); a symlinked folder or file is never opened;
+    infinity is not a number here either."""
     path = kullanim_yolu(durum_dir)
     try:
-        if os.path.islink(path):
+        if os.path.islink(path) or os.path.islink(os.path.dirname(path)):
             return []
         st = os.stat(path)
         with open(path, "rb") as f:
@@ -412,7 +413,7 @@ def kullanimlar(durum_dir):
         except ValueError:
             continue
         if not isinstance(r, dict) or not _pozitif(r.get("zaman")) or r["zaman"] <= 0 \
-                or not _pozitif(r.get("usd")):
+                or not _pozitif(r.get("usd")) or r["usd"] == float("inf") or r["zaman"] == float("inf"):
             continue
         token = r.get("token")
         if not isinstance(token, int) or isinstance(token, bool) or token < 0:

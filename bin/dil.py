@@ -1,11 +1,18 @@
 """The office's display language (ofis.json `dil`: "tr" | "en", default "tr"; the Ayarlar tab's Genel).
 
 Only the texts the page shows are translated, at the place they are put into an API answer (bin/state.py, the stop
-reasons of the progress line; bin/kullanim.py; bin/limitler.py `sayfa`; bin/sistem.py; the Ayarlar errors). Codes stay
-codes; vault notes, CEO notices, session contracts and `ofis.py` output stay Turkish. Strings are keyed by their
-Turkish source: t(text, cfg) returns it as is in Turkish and the English entry of EN in English (the Turkish text when
-an entry is missing). `{name}` placeholders are filled from keyword arguments in both languages; an English entry may
-be a tuple (one, other), chosen by n (1 = one). test/test_dil.py checks the entries against the t("…") literals.
+reasons of the progress line; bin/kullanim.py; bin/limitler.py `sayfa`; bin/sistem.py; the Ayarlar errors). Since
+2026-11-19 the CEO notices of the job lifecycle follow `dil` too (bin/postoffice.py, bin/kontrol.py, bin/akis.py,
+bin/mudur.py, bin/dispatcher.py — every notice of a job finishing, sticking, being stopped or escalated, of a
+workflow stopping or waiting for approval, of a manager answering, of the dispatcher holding work back), each at
+the place it is enqueued, with the owner's name through bin/sahip.py `e`/`in_` (English: the bare name / "Name's");
+web/ofis-text.js `noticeParts` knows their English shapes for the cards' tones. Codes stay codes; vault notes,
+session contracts, the notes' own Turkish blocks and `ofis.py` output stay Turkish. The rest of the CEO notices
+(morning summary, end-of-day, model cards, Ar-Ge, Yakala, domains, memory health, schedules, announcements) stay
+Turkish for now. Strings are keyed by their Turkish source: t(text, cfg) returns it as is in Turkish and the
+English entry of EN in English (the Turkish text when an entry is missing). `{name}` placeholders are filled from
+keyword arguments in both languages; an English entry may be a tuple (one, other), chosen by n (1 = one).
+test/test_dil.py checks the entries against the t("…") literals.
 
 kod(cfg): cfg's valid `dil` when cfg is a dict, else this repository's ofis.json (cached by the file's identity), else
 "tr". Standard library only.
@@ -92,6 +99,12 @@ def N_(text):
     return text
 
 
+def isim_ekleri(cfg=None):
+    """{adi, e, in, den, i, de}: the owner's name with its Turkish case suffixes, in the display language (in
+    English the bare name, the genitive "Name's") — for the CEO notices that follow ofis.json `dil`."""
+    return sahip.ekler(cfg if isinstance(cfg, dict) else None)
+
+
 class Metin(str):
     """A Turkish display text built from a template (`sablon`) and its values, so it can be translated later: it is
     the filled Turkish string itself (comparisons and tests see that), plus `alan` (the form field it belongs to,
@@ -116,6 +129,163 @@ def cevir(text, cfg=None):
 EN = {
     # bin/dil.py
     "Dil şunlardan biri olmalı: {diller}.": "Language must be one of: {diller}.",
+
+    # bin/postoffice.py — the CEO notices of the job lifecycle (the display language, default Turkish)
+    "{proje} akış adımı bitti ({adim}/{toplam} · {turu})":
+        "{proje} workflow step finished ({adim}/{toplam} · {turu})",
+    "{step_head}: {what}. Akış kendiliğinden ilerler (sonraki adım, inceleme kararı ya da en sonda {sahip_in} onay "
+    "kartı); {sahip_e} ayrıca bildirmen gerekmez. Rapor:":
+        "{step_head}: {what}. The workflow goes on by itself (the next step, the review verdict, or at the very end "
+        "{sahip_in}'s approval card); {sahip_e} does not have to be told separately. Report:",
+    "{proje} işi takıldı: {what}. {nok} {sahip_e} bildir. Projenin raporu:":
+        "{proje} job stuck: {what}. {nok} Tell {sahip_e} in a sentence. The project's report:",
+    "{proje} işi bitti: {what}. Kontrol yok (yalnız projenin kendi raporu). Özet:":
+        "{proje} job finished: {what}. No Kontrol (only the project's own report). Summary:",
+    "{proje} işi takıldı: {what}. Neden:": "{proje} job stuck: {what}. Why:",
+    "Güvenilir kontrol kaydı bulunamadı; iş kanıtsız kapatılmadı.":
+        "No trusted Kontrol record was found; the job was not closed without proof.",
+    "Kullanım sınırı aşıldı: API karşılığı ~${harcanan} / ~${sinir}; {token}":
+        "Budget limit exceeded: API-equivalent ~${harcanan} / ~${sinir}; {token}",
+    "Kullanım sınırı aşıldı: API karşılığı ~${harcanan} / ~${sinir}":
+        "Budget limit exceeded: API-equivalent ~${harcanan} / ~${sinir}",
+    "Çağrı sınırı aşıldı: {kullanilan} / {sinir} model çağrısı ({harcama})":
+        "Call limit exceeded: {kullanilan} / {sinir} model calls ({harcama})",
+    "Çağrı sınırı aşıldı: {kullanilan} / {sinir} model çağrısı":
+        "Call limit exceeded: {kullanilan} / {sinir} model calls",
+    "{proje} işi durduruldu: {what}. {reason}. {stop} İş takıldı olarak işaretlendi. {sahip_e} sor: daha yüksek "
+    "kullanım sınırıyla devam edilsin mi? Evet derse önce {raise_it}, sonra `ofis.py devam {stem}`.":
+        "{proje} job stopped: {what}. {reason}. {stop} The job was marked stuck. Ask {sahip_e}: should it go on with a "
+        "higher budget? If yes, first {raise_it}, then `ofis.py devam {stem}`.",
+    "Oturum durduruldu.": "The session was stopped.",
+    "Oturum durdurulamadı, tekrar denenecek (claude stop hata verdi; oturum boşta görünüyor).":
+        "The session could not be stopped; it will be tried again (claude stop failed; the session looks idle).",
+    "Oturum çalışmıyordu (claude agents listesinde yok); durdurulacak bir şey yoktu.":
+        "The session was not running (not in claude agents); there was nothing to stop.",
+    "{proje} işi: {stem} üçüncü kez kotaya takıldı; devam etsin mi? {what}: kota döndükten sonra iki kez "
+    "kendiliğinden devam ettirildi, yine kotada durdu. {sahip_e} sor; yalnız onun sözüyle `ofis.py devam {stem}`.":
+        "{proje} job: {stem} hit its quota a third time; should it go on? {what}: it was resumed twice on its own "
+        "after the quota returned and stopped on the quota again. Ask {sahip_e}; only with their word "
+        "`ofis.py devam {stem}`.",
+    "{proje} işi: {stem} kota döndüğü için kaldığı yerden devam ediyor ({what}). {sahip_e} tek satırla söyle.":
+        "{proje} job: {stem} is resuming where it left off because the quota returned ({what}). "
+        "Tell {sahip_e} in one line.",
+    "{proje} işi izin onayı bekliyor: {baslik} ({stem}). Oturum {dk} dakikadır bir izin sorusunda duruyor; arka "
+    "planda onu onaylayacak kimse yok, iş kendiliğinden ilerlemez. Ofis onu durdurmaz: {sahip_e} sade bir dille "
+    "söyle ve ne yapılacağını sor (oturuma kendisi bakabilir ya da iş iptal edilip yeniden açılabilir); iptal ancak "
+    "onun kararıyla.":
+        "{proje} job is waiting for a permission approval: {baslik} ({stem}). The session has been sitting on a "
+        "permission prompt for {dk} minutes; nobody in the background will approve it and the job cannot move on by "
+        "itself. The office does not stop it: tell {sahip_e} in plain words and ask what to do (they can look at the "
+        "session themselves, or the job can be cancelled and reopened); cancelling is only their decision.",
+    "{proje} işi ilerlemiyor: {baslik} ({stem}). Oturum {dk} dakika önce başladı ama henüz hiçbir araç kullanmadı "
+    "ve bir şey yazmadı. Ofis onu durdurmaz: oturuma bak (`claude agents`), {sahip_e} sor; iptal ancak onun "
+    "kararıyla.":
+        "{proje} job is not making progress: {baslik} ({stem}). The session started {dk} minutes ago but has used "
+        "no tool and written nothing yet. The office does not stop it: look at the session (`claude agents`) and "
+        "ask {sahip_e}; cancelling is only their decision.",
+    "{proje} işi takıldı: {what}. {nok} {sahip_e} bildir.":
+        "{proje} job stuck: {what}. {nok} Tell {sahip_e} in a sentence.",
+
+    # bin/kontrol.py — the Kontrol worker's CEO notices
+    "{proje} işi takıldı: {what}. Kontrol çalıştırılmadı: {neden}. {sahip_e} bildir.":
+        "{proje} job stuck: {what}. The Kontrol was not run: {neden}. Tell {sahip_e} in a sentence.",
+    "{proje} işi bitti: {what}. Kontrol yok. Özet:\n{rapor}":
+        "{proje} job finished: {what}. No Kontrol. Summary:\n{rapor}",
+    "{proje} işi bitti: {what}. Kontrol geçti (deneme {n}; kanıt iş notunda). Özet:\n{rapor}":
+        "{proje} job finished: {what}. The Kontrol passed (attempt {n}; the evidence is on the job's note). "
+        "Summary:\n{rapor}",
+    "{proje} işi bir üst katmana taşındı: {what}. Kontrol {n}. denemede de geçmedi (çıkış kodu: {cikis}); iş {eski} "
+    "yerine {yeni_katman} katmanında, temiz bir oturumda yeniden açıldı: {yeni}. Sırası gelince kendiliğinden "
+    "başlar; {sahip_e} kısaca bildir. Çıktının sonu:\n{son}":
+        "{proje} job moved up a tier: {what}. The Kontrol did not pass on attempt {n} either (exit code: {cikis}); "
+        "the job was reopened in the {yeni_katman} tier instead of {eski}, in a clean session: {yeni}. It starts by "
+        "itself when its turn comes; tell {sahip_e} briefly. End of the output:\n{son}",
+    "{proje} işi takıldı: {what}. Kontrol {n}. denemede de geçmedi (çıkış kodu: {cikis}); iş durduruldu{why}. "
+    "{sahip_e} sor: nasıl devam edilsin? Çıktının sonu:\n{son}":
+        "{proje} job stuck: {what}. The Kontrol did not pass on attempt {n} either (exit code: {cikis}); the job was "
+        "stopped{why}. Ask {sahip_e}: how should it go on? End of the output:\n{son}",
+    "iş en üst katmanda ({katman}); yükseltilecek katman yok":
+        "the job is on the top tier ({katman}); there is no tier to escalate to",
+    "iş yükseltme sınırına ulaştı ({done}/{cap})": "the job reached the escalation cap ({done}/{cap})",
+    "proje çözülemedi ({hata})": "the project could not be resolved ({hata})",
+    "iş ayrı bir çalışma kopyasında çalıştı; değişiklikler orada duruyor: {dizin}. Ana klasörde açılacak yeni bir "
+    "iş onları görmez, yükseltme yapılmadı":
+        "the job ran in a separate working copy; its changes are there: {dizin}. A new job opened in the main "
+        "folder would not see them; it was not escalated",
+    "işin güvenilir brif kaydı bulunamadı; yükseltme yapılmadı":
+        "the job's trusted brief record was not found; it was not escalated",
+    "yükseltme kullanım sınırını aşar: merdiven şimdiye kadar API karşılığı ~${harcanan} kullandı, yeni iş ~${sinir} "
+    "kullanım sınırıyla açılınca toplam asıl sınırın (~${sinir}) {katsayi} katını geçer; yükseltme yapılmadı":
+        "the escalation would exceed the budget: the ladder has used API-equivalent ~${harcanan} so far; a new job "
+        "with a ~${sinir} budget would take the total past {katsayi}× the original (~${sinir}); it was not escalated",
+    "bir üst katmanda yeni iş açılamadı ({hata})": "a job could not be opened one tier up ({hata})",
+
+    # bin/akis.py — the workflow engine's CEO notices
+    "{proje} akışı durdu: {baslik} ({grup}), adım {adim} ({turu}). {neden}. Kalan adımlar kendiliğinden başlamaz. "
+    "{sahip_e} sor: devam mı (`ofis.py akis-karar {grup} devam` — bu adım geçmiş sayılır), iptal mi "
+    "(`ofis.py akis-karar {grup} iptal`)? Son inceleme:\n{son}":
+        "{proje} workflow stopped: {baslik} ({grup}), step {adim} ({turu}). {neden}. The remaining steps do not "
+        "start by themselves. Ask {sahip_e}: go on (`ofis.py akis-karar {grup} devam` — this step counts as passed) "
+        "or cancel (`ofis.py akis-karar {grup} iptal`)? Last review:\n{son}",
+    "{proje} akışı onay bekliyor: {baslik} ({grup}). Kararlar notu yazıldı: {kart}. Kartta kanıt var (plan özeti, "
+    "Kontrol, değişiklik özeti, inceleme, kullanım). Hiçbir şey commit edilmedi. {sahip_e} sor; cevabını kelimesi "
+    "kelimesine `ofis.py cevapla {kart}` ile ilet (\"Onaylıyorum\" akışı kapatır; başka bir cevabı sen ele alırsın).":
+        "{proje} workflow is waiting for approval: {baslik} ({grup}). The decision note was written: {kart}. The "
+        "card carries the evidence (plan summary, Kontrol, change summary, review, usage). Nothing was committed. "
+        "Ask {sahip_e}; pass the answer word for word with `ofis.py cevapla {kart}` (\"Onaylıyorum\" closes the "
+        "workflow; any other answer is yours to handle).",
+
+    # bin/mudur.py — the manager notices (step 4)
+    "{proje} soruyor (karar: {karar}): {what}. Kararlar notu yazıldı{middle}; {sahip_e} sor, cevabı "
+    "`ofis.py cevapla` ile ilet. Soru:\n{quote_metin}":
+        "{proje} is asking (decision: {karar}): {what}. The decision note was written{middle}; ask {sahip_e} and pass "
+        "the answer with `ofis.py cevapla`. Question:\n{quote_metin}",
+    "{proje} sorusunu {unvan} cevapladı: {what}. Karar notu: [[{stem}]]. Cevap oturuma iletildi, iş sürüyor. "
+    "{sahip_e} tek satırla kimin neyi cevapladığını söyle; isterse karttan kendi cevabını yazar, o geçerli "
+    "olur.\nSoru:\n{soru}\nMüdürün cevabı:\n{cevap_metni}":
+        "{proje}'s question was answered by {unvan}: {what}. Decision note: [[{stem}]]. The answer was delivered to "
+        "the session and the job goes on. Tell {sahip_e} in one line who answered what; they can write their own "
+        "answer from the card, and that one counts.\nQuestion:\n{soru}\nThe manager's answer:\n{cevap_metni}",
+    "{unvan} baktı ve bu soruyu {sahip_e} bıraktı": "{unvan} looked at it and left this question to {sahip_e}",
+    "{unvan} cevap veremedi ({neden}), soru {sahip_in}":
+        "{unvan} could not answer ({neden}); the question goes to {sahip_in}",
+
+    # bin/dispatcher.py — the dispatcher's CEO notices
+    "{proje} işi bekliyor: {what}. Bağımlı olduğu {dep} işi {durum}; bu iş kendiliğinden başlamaz. {sahip_e} sor: "
+    "bağımlılık kaldırılsın mı (`ofis.py bagimli {stem} --kaldir {dep}`), yoksa iş iptal mi edilsin "
+    "(`ofis.py iptal {stem}`)?":
+        "{proje} job is waiting: {what}. The job it depends on, {dep}, {durum}; this job does not start by itself. "
+        "Ask {sahip_e}: drop the dependency (`ofis.py bagimli {stem} --kaldir {dep}`) or cancel the job "
+        "(`ofis.py iptal {stem}`)?",
+    "takıldı": "is stuck",
+    "iptal edildi": "was cancelled",
+    "başlatılamadı": "could not start",
+    "bulunamadı": "was not found",
+    "Onay bekleyen {n} kart var (sınır {sinir}, ofis.json max_bekleyen_onay): dağıtıcı yeni kod işlerini ve yeni "
+    "akışları başlatmıyor; okuma ve araştırma işleri sürüyor. {sahip_e} tek satırla söyle: kartlara cevap verince "
+    "kod işleri kendiliğinden başlar.":
+        "{n} approval cards are waiting (limit {sinir}, ofis.json max_bekleyen_onay): the dispatcher is not "
+        "starting new code jobs or new workflows; reading and research jobs go on. Tell {sahip_e} in one line: once "
+        "the cards are answered, code jobs start by themselves.",
+    "{unvan} kotada; yeni işler {yedek} ile başlıyor, {saat} dönüyor. {sahip_e} tek satırla söyle. Çalışan işler "
+    "başka modele geçmez; kotaya takılan bir iş kota bitince kendiliğinden sürmez (sayfada sessiz görünür).":
+        "{unvan} is on quota; new jobs start with {yedek}, returning {saat}. Tell {sahip_e} in one line. Running jobs "
+        "do not move to another model; a job stopped on its quota does not resume by itself when the quota ends "
+        "(it shows as silent on the page).",
+    "{proje} işinin başlatılması doğrulanamadı: {what}. claude zamanında yanıt vermedi; oturum çalışıyor olabilir "
+    "(`claude agents`). İşi yeniden başlatma; {sahip_e} bildir.":
+        "{proje} job's start could not be confirmed: {what}. claude did not answer in time; the session may be "
+        "running (`claude agents`). Do not start the job again; tell {sahip_e}.",
+    "{proje} işi sırada bekliyor: {what}. Claude bu projenin klasörüne henüz güvenmiyor ({neden}); iş başarısız "
+    "sayılmadı. {sahip_e} bir `sor` kartıyla söyle: o klasörde bir kez `claude` çalıştırıp güven sorusuna evet "
+    "desin; iş ondan sonra kendiliğinden başlar.":
+        "{proje} job is waiting in the queue: {what}. Claude does not trust this project's folder yet ({neden}); "
+        "the job was not counted as failed. Tell {sahip_e} with a `sor` card: run `claude` once in that folder and "
+        "answer the trust prompt yes; the job then starts by itself.",
+    "{proje} işi başlatılamadı: {what}. Dağıtıcı işi kendiliğinden başlatmayı denedi; neden: {neden}. "
+    "{sahip_e} bildir.":
+        "{proje} job could not start: {what}. The dispatcher tried to start it by itself; why: {neden}. "
+        "Tell {sahip_e}.",
 
     # bin/ayarlar.py (the Ayarlar tab's errors)
     "'{ad}' adı ayrılmış; başka bir ad seçin.": "The name '{ad}' is reserved; pick another one.",

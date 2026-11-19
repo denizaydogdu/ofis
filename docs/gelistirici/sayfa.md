@@ -17,8 +17,7 @@
 - **Language** (English option, phase 1, 2026-11-18): ofis.json `dil` (`tr` default | `en`; `/api/state.ofis.dil`,
   bin/dil.py `kod`), set on Ayarlar › Genel › "Dil / Language" (a select saved at once, `{islem: "genel", dil}`,
   `dilGovdesi` in web/ayarlar.js). `?dil=en|tr` opens the page in that language at once (screenshots, sharing a
-  link; app.js sets it before the first paint and it becomes the remembered language). The page keys its strings by their Turkish source text: `web/i18n.js` `t(tr, vars)`
-  (imported as `T`; returns the input in Turkish, the `web/i18n-en.js` entry in English, `{name}` placeholders filled,
+  link; app.js sets it before the first paint and it becomes the remembered language). The page keys its strings by their Turkish source text: `web/i18n.js` `t(tr, vars)`  (imported as `T`; returns the input in Turkish, the `web/i18n-en.js` entry in English, `{name}` placeholders filled,
   an entry may be `{one, other}` chosen by `vars.n`), `N_('…')` marks a module constant translated where it is drawn
   (never `T()` at module top level), `yerel()` = `tr-TR` / `en-GB` for dates and numbers (Turkish casing helpers keep
   `tr`). Static HTML carries `data-t="<Turkish>"` (and `data-t-title` / `-placeholder` / `-aria-label`), translated by
@@ -29,7 +28,12 @@
   usage popup (bin/kullanim.py), the limit pill (bin/limitler.py `sayfa`), the Sunucu odası, the Ayarlar errors
   (bin/dil.py `Metin`: the Turkish text with its template and form field — the answer carries `alanlar`, one field per
   error, so web/ayarlar.js `sunucuHatalari` no longer matches the text) and the NPC chat's answers. Codes, protocol
-  prefixes, notice titles the page matches, vault notes, CEO notices and `ofis.py` output stay Turkish. A language
+  prefixes, notice titles the page matches, vault notes and `ofis.py` output stay Turkish — the CEO notices of the
+  job lifecycle (a job finished / stuck / stopped / escalated, a workflow stopped / waiting for approval, a manager
+  answered, the dispatcher holding work back; bin/postoffice, kontrol, akis, mudur, dispatcher; the owner,
+  2026-11-19) follow `dil`, each at the place it is enqueued, and web/ofis-text.js `noticeParts` knows their
+  English shapes for the cards' tones; the other CEO notices (morning summary, end-of-day, model cards, Ar-Ge,
+  Yakala, domains, memory health, schedules, announcements) stay Turkish for now. A language
   change asks for a fresh CEO session (the `ofis.py ceo-yenile` flag; bin/ceo.py `yenile_iste`): its system text
   (`ceo_system_prompt(name, dil)`) and the reminder line (`(Reply to <Name> in plain English.)`, bin/sahip.py
   `hatirlatma`; `hatirlatmayi_sil` strips both forms) follow `dil`. **Phase 2** (2026-11-18): the scene and its cards

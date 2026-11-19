@@ -79,6 +79,7 @@ import yasaklar
 import rapor
 import records
 import sahip
+import dil  # noqa: E402 — the CEO notices follow ofis.json `dil` (default Turkish)
 
 FOLDER = "kontroller"
 REPORTS = "raporlar"
@@ -632,8 +633,11 @@ class KontrolWorker:
                                  append_result=f"> {NO_TRUSTED_KONTROL}")
             if stuck:
                 self.log(f"{job.name}: no trusted kontrol record for a kod job; marked tikandi")
-                self._notify(stuck, attempt, f"{stuck.meta.get('proje', '')} işi takıldı: {self._what(stuck)}. "
-                                             f"{NO_TRUSTED_KONTROL} {sahip.e()} bildir.", refused=True)
+                self._notify(stuck, attempt, dil.t(
+                    "{proje} işi takıldı: {what}. {nok} {sahip_e} bildir.",
+                    self.cfg, proje=stuck.meta.get("proje", ""), what=self._what(stuck),
+                    nok=dil.t("Güvenilir kontrol kaydı bulunamadı; iş kanıtsız kapatılmadı."),
+                    sahip_e=sahip.e(self.cfg)), refused=True)
                 self._finished()
             return
         done = self._update(job.name, attempt, status="bitti",
@@ -641,8 +645,10 @@ class KontrolWorker:
                             append_result="Kontrol yok: sunucuda bu işin güvenilir kontrol kaydı bulunmadı.")
         if done:
             report = load_report(self.durum_dir, job.name)
-            self._done_notice(done, attempt, f"{done.meta.get('proje', '')} işi bitti: {self._what(done)}. Kontrol "
-                                             f"yok. Özet:\n{_quote(report, MAX_NOTICE_TEXT)}")
+            self._done_notice(done, attempt, dil.t(
+                "{proje} işi bitti: {what}. Kontrol yok. Özet:\n{rapor}",
+                self.cfg, proje=done.meta.get("proje", ""), what=self._what(done),
+                rapor=_quote(report, MAX_NOTICE_TEXT)))
             self._finished()
 
     def _refuse(self, job, attempt, reason):
@@ -651,8 +657,10 @@ class KontrolWorker:
                              append_result=f"Kontrol çalıştırılmadı: {reason}.")
         if stuck:
             self.log(f"kontrol of {job.name} refused: {reason}")
-            self._notify(stuck, attempt, f"{stuck.meta.get('proje', '')} işi takıldı: {self._what(stuck)}. Kontrol "
-                                         f"çalıştırılmadı: {reason}. {sahip.e()} bildir.", refused=True)
+            self._notify(stuck, attempt, dil.t(
+                "{proje} işi takıldı: {what}. Kontrol çalıştırılmadı: {neden}. {sahip_e} bildir.",
+                self.cfg, proje=stuck.meta.get("proje", ""), what=self._what(stuck), neden=reason,
+                sahip_e=sahip.e(self.cfg)), refused=True)
             self._finished()
 
     def _apply(self, name, attempt, command, result):
@@ -666,9 +674,10 @@ class KontrolWorker:
                 except OSError as e:  # only a workflow's approval card would miss this evidence
                     self.log(f"cannot keep the passing result of {name}: {e}")
                 report = load_report(self.durum_dir, name)
-                self._done_notice(done, attempt, f"{done.meta.get('proje', '')} işi bitti: {self._what(done)}. "
-                                                 f"Kontrol geçti (deneme {attempt}; kanıt iş notunda). Özet:\n"
-                                                 f"{_quote(report, MAX_NOTICE_TEXT)}")
+                self._done_notice(done, attempt, dil.t(
+                    "{proje} işi bitti: {what}. Kontrol geçti (deneme {n}; kanıt iş notunda). Özet:\n{rapor}",
+                    self.cfg, proje=done.meta.get("proje", ""), what=self._what(done), n=attempt,
+                    rapor=_quote(report, MAX_NOTICE_TEXT)))
                 self._finished()
             return
         if attempt < MAX_ATTEMPTS:
@@ -687,16 +696,21 @@ class KontrolWorker:
         if new is not None:
             rounds = _int(stuck.meta.get("devam_sayisi"))  # a later escalation after `devam` is never a duplicate
             self.ceo.enqueue(
-                f"{SYSTEM_PREFIX}{stuck.meta.get('proje', '')} işi bir üst katmana taşındı: {self._what(stuck)}. "
-                f"Kontrol {attempt}. denemede de geçmedi (çıkış kodu: {exit_text(result)}); iş "
-                f"{why} yerine {new.meta.get('katman', '')} katmanında, temiz bir oturumda yeniden açıldı: "
-                f"{jobs.stem(new.name)}. Sırası gelince kendiliğinden başlar; {sahip.e()} kısaca bildir. Çıktının sonu:\n"
-                f"{tail}", f"yukseltme-{jobs.stem(name)}" + (f"-d{rounds}" if rounds else ""))
+                SYSTEM_PREFIX + dil.t(
+                    "{proje} işi bir üst katmana taşındı: {what}. Kontrol {n}. denemede de geçmedi (çıkış kodu: "
+                    "{cikis}); iş {eski} yerine {yeni_katman} katmanında, temiz bir oturumda yeniden açıldı: "
+                    "{yeni}. Sırası gelince kendiliğinden başlar; {sahip_e} kısaca bildir. Çıktının sonu:\n{son}",
+                    self.cfg, proje=stuck.meta.get("proje", ""), what=self._what(stuck), n=attempt,
+                    cikis=exit_text(result), eski=why, yeni_katman=new.meta.get("katman", ""),
+                    yeni=jobs.stem(new.name), sahip_e=sahip.e(), son=tail),
+                f"yukseltme-{jobs.stem(name)}" + (f"-d{rounds}" if rounds else ""))
         else:
-            self._notify(stuck, attempt,
-                         f"{stuck.meta.get('proje', '')} işi takıldı: {self._what(stuck)}. Kontrol {attempt}. denemede "
-                         f"de geçmedi (çıkış kodu: {exit_text(result)}); iş durduruldu"
-                         f"{'; ' + why if why else ''}. {sahip.e()} sor: nasıl devam edilsin? Çıktının sonu:\n{tail}")
+            why_clause = f"; {why}" if why else ""
+            self._notify(stuck, attempt, dil.t(
+                "{proje} işi takıldı: {what}. Kontrol {n}. denemede de geçmedi (çıkış kodu: {cikis}); iş durduruldu"
+                "{why}. {sahip_e} sor: nasıl devam edilsin? Çıktının sonu:\n{son}",
+                self.cfg, proje=stuck.meta.get("proje", ""), what=self._what(stuck), n=attempt,
+                cikis=exit_text(result), why=why_clause, sahip_e=sahip.e(), son=tail))
         self._finished()
 
     # --- the escalation ladder (ADR §8) ---
@@ -709,11 +723,11 @@ class KontrolWorker:
             return None, ""
         at = steps.index(tier)
         if at == len(steps) - 1:
-            return None, f"iş en üst katmanda ({tier}); yükseltilecek katman yok"
+            return None, dil.t("iş en üst katmanda ({katman}); yükseltilecek katman yok", self.cfg, katman=tier)
         done = _int(records.server_value(self.durum_dir, job.name, "yukseltme_sayisi"))
         cap = max_escalations(self.cfg)
         if done >= cap:
-            return None, f"iş yükseltme sınırına ulaştı ({done}/{cap})"
+            return None, dil.t("iş yükseltme sınırına ulaştı ({done}/{cap})", self.cfg, done=done, cap=cap)
         return steps[at + 1], None
 
     def _existing_escalation(self, name):
@@ -763,18 +777,21 @@ class KontrolWorker:
         try:
             root = launch.resolve_project(self.cfg, job.meta.get("proje"))
         except launch.Refused as e:
-            return None, f"proje çözülemedi ({e})"
+            return None, dil.t("proje çözülemedi ({hata})", self.cfg, hata=e)
         if cwd and os.path.realpath(cwd) != os.path.realpath(root):
-            return None, (f"iş ayrı bir çalışma kopyasında çalıştı; değişiklikler orada duruyor: {cwd}. Ana klasörde "
-                          "açılacak yeni bir iş onları görmez, yükseltme yapılmadı")
+            return None, dil.t(
+                "iş ayrı bir çalışma kopyasında çalıştı; değişiklikler orada duruyor: {dizin}. Ana klasörde "
+                "açılacak yeni bir iş onları görmez, yükseltme yapılmadı", self.cfg, dizin=cwd)
         trusted = load_brief(self.durum_dir, job.name)
         if trusted is None:
-            return None, "işin güvenilir brif kaydı bulunamadı; yükseltme yapılmadı"
+            return None, dil.t("işin güvenilir brif kaydı bulunamadı; yükseltme yapılmadı")
         approved, spent = self._ladder_budget(job)
         if approved is not None and spent + approved > LADDER_BUDGET_FACTOR * approved + 1e-9:
-            return None, (f"yükseltme kullanım sınırını aşar: merdiven şimdiye kadar API karşılığı ~${budget.usd(spent)} kullandı, yeni iş "
-                          f"~${budget.usd(approved)} kullanım sınırıyla açılınca toplam asıl sınırın "
-                          f"(~${budget.usd(approved)}) {LADDER_BUDGET_FACTOR} katını geçer; yükseltme yapılmadı")
+            return None, dil.t(
+                "yükseltme kullanım sınırını aşar: merdiven şimdiye kadar API karşılığı ~${harcanan} kullandı, yeni "
+                "iş ~${sinir} kullanım sınırıyla açılınca toplam asıl sınırın (~${sinir}) {katsayi} katını geçer; "
+                "yükseltme yapılmadı", self.cfg, harcanan=budget.usd(spent), sinir=budget.usd(approved),
+                katsayi=LADDER_BUDGET_FACTOR)
         return trusted, None
 
     def _previous(self, job, tier, attempt, result, per):
@@ -886,7 +903,7 @@ class KontrolWorker:
                             new = self._open_escalation(job, trusted, tier, step, command, attempt, result)
                         except (launch.Refused, OSError, jobs.JobError) as e:
                             self.log(f"cannot escalate {name}: {e}")
-                            why = f"bir üst katmanda yeni iş açılamadı ({e})"
+                            why = dil.t("bir üst katmanda yeni iş açılamadı ({hata})", self.cfg, hata=e)
             text = block + (f"\n\n> {ESCALATED}: [[{jobs.stem(new.name)}]]" if new else "")
             fields = {"bitis": self._stamp(), "kontrol_deneme": attempt, "kontrol_sonuc": "kaldi"}
             if new:

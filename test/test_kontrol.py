@@ -211,6 +211,27 @@ class WorkerTest(unittest.TestCase):
         self.assertIn("> Giriş düzeldi; 12 test geçti.", notice)
         self.assertEqual(self.outbox(), [])
 
+    def test_the_kontrol_notices_follow_the_offices_language(self):
+        # ofis.json dil "en" (the owner, 2026-11-19): the Kontrol's CEO notice is English; the job note and the
+        # evidence block keep their Turkish shape (the vault stays Turkish)
+        self.cfg["dil"] = "en"
+        self.cfg["sahip_adi"] = "Selin"
+        name = self.job("false")
+        self.assertTrue(self.worker.submit(name))
+        self.worker.run_pending()
+        job = self.load(name)
+        self.assertEqual(job.meta["durum"], "calisiyor")  # the first failure went back to the session
+        # the session reports bitti again: attempt 2 sticks
+        jobs.update(self.vault, name, status="kontrolde", expect=("calisiyor",))
+        self.worker.submit(name)
+        self.worker.run_pending()
+        job = self.load(name)
+        self.assertEqual(job.meta["durum"], "tikandi")
+        [(notice, key)] = self.ceo.items
+        self.assertTrue(notice.startswith("[Ofis · sistem]\nblog job stuck: Giriş hatası"), notice)
+        self.assertIn("The Kontrol did not pass on attempt 2 either", notice)
+        self.assertIn("Ask Selin", notice)
+
     def test_a_pass_is_kept_as_trusted_evidence(self):
         # phase 4: the approval card of a workflow shows the last passing run from durum/, not from the note
         name = self.job("echo '7 passed'")

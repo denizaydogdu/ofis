@@ -50,6 +50,7 @@ import launch
 import model_durum
 import records
 import sahip
+import dil  # noqa: E402 — the CEO notices follow ofis.json `dil` (default Turkish)
 
 RUNNING = ("baslatiliyor", "calisiyor", "kontrolde")
 OCCUPYING = RUNNING + ("karar-bekliyor", "incelemede")
@@ -57,7 +58,17 @@ BLOCKING = ("tikandi", "iptal", "basarisiz")
 DEFAULTS = {"max_running": 3, "max_running_per_project": 1, "max_queued_per_project": 5}
 DEFAULT_ONAY_SINIRI = 2  # ofis.json max_bekleyen_onay
 ONAY_FILE = "onay-birikti.json"  # durum/: the key of the last approval-backlog notice
-STATUS_TR = {"tikandi": "takıldı", "iptal": "iptal edildi", "basarisiz": "başlatılamadı", "yok": "bulunamadı"}
+def durum_adi(status, cfg=None):
+    """A dependency's status as a word, in the display language (the blocked-dependency notice)."""
+    if status == "tikandi":
+        return dil.t("takıldı", cfg)
+    if status == "iptal":
+        return dil.t("iptal edildi", cfg)
+    if status == "basarisiz":
+        return dil.t("başlatılamadı", cfg)
+    if status == "yok":
+        return dil.t("bulunamadı", cfg)
+    return status
 SYSTEM_PREFIX = "[Ofis · sistem]\n"
 MAX_CHAIN = 10  # escalations followed for a dependency (the ladder is shorter; a loop is never followed)
 BOOKKEEPING = ("baslatma_hatasi", "baslatma_izi", "bildirilen", "guncellendi")  # not part of a start's fingerprint
@@ -355,10 +366,12 @@ class Dispatcher:
         for dep, status, other in blocked:
             rounds = (other.meta.get("devam_sayisi") or "0") if other is not None else "0"
             key = f"engel-{stem}-{jobs.stem(dep)}-{status}-{rounds}"
-            self._notify_once(job, f"{job.meta.get('proje', '')} işi bekliyor: {self._what(job)}. Bağımlı olduğu "
-                                   f"{jobs.stem(dep)} işi {STATUS_TR.get(status, status)}; bu iş kendiliğinden "
-                                   f"başlamaz. {sahip.e()} sor: bağımlılık kaldırılsın mı (`ofis.py bagimli {stem} --kaldir "
-                                   f"{jobs.stem(dep)}`), yoksa iş iptal mi edilsin (`ofis.py iptal {stem}`)?", key)
+            self._notify_once(job, dil.t(
+                "{proje} işi bekliyor: {what}. Bağımlı olduğu {dep} işi {durum}; bu iş kendiliğinden başlamaz. "
+                "{sahip_e} sor: bağımlılık kaldırılsın mı (`ofis.py bagimli {stem} --kaldir {dep}`), yoksa iş "
+                "iptal mi edilsin (`ofis.py iptal {stem}`)?",
+                self.cfg, proje=job.meta.get("proje", ""), what=self._what(job), dep=jobs.stem(dep),
+                durum=durum_adi(status, self.cfg), sahip_e=sahip.e(), stem=stem), key)
 
     def _settle_engel(self, job):
         """Under the job lock: reads the job and its dependencies again (a dependency dropped or escalated since the
@@ -422,17 +435,20 @@ class Dispatcher:
         except jobs.JobError:
             current = None
         if str(error).startswith("launch unconfirmed"):
-            text = (f"{job.meta.get('proje', '')} işinin başlatılması doğrulanamadı: {self._what(job)}. claude "
-                    "zamanında yanıt vermedi; oturum çalışıyor olabilir (`claude agents`). İşi yeniden başlatma; "
-                    f"{sahip.e()} bildir.")
+            text = dil.t("{proje} işinin başlatılması doğrulanamadı: {what}. claude zamanında yanıt vermedi; oturum "
+                         "çalışıyor olabilir (`claude agents`). İşi yeniden başlatma; {sahip_e} bildir.",
+                         self.cfg, proje=job.meta.get("proje", ""), what=self._what(job), sahip_e=sahip.e(self.cfg))
         elif str(error).startswith(launch.TRUST_REFUSAL):
-            text = (f"{job.meta.get('proje', '')} işi sırada bekliyor: {self._what(job)}. Claude bu projenin "
-                    f"klasörüne henüz güvenmiyor ({error.split('(', 1)[-1].split(')', 1)[0]}); iş başarısız sayılmadı. "
-                    f"{sahip.e()} bir `sor` kartıyla söyle: o klasörde bir kez `claude` çalıştırıp güven sorusuna evet "
-                    "desin; iş ondan sonra kendiliğinden başlar.")
+            text = dil.t("{proje} işi sırada bekliyor: {what}. Claude bu projenin klasörüne henüz güvenmiyor "
+                         "({neden}); iş başarısız sayılmadı. {sahip_e} bir `sor` kartıyla söyle: o klasörde bir kez "
+                         "`claude` çalıştırıp güven sorusuna evet desin; iş ondan sonra kendiliğinden başlar.",
+                         self.cfg, proje=job.meta.get("proje", ""), what=self._what(job),
+                         neden=error.split("(", 1)[-1].split(")", 1)[0], sahip_e=sahip.e(self.cfg))
         else:
-            text = (f"{job.meta.get('proje', '')} işi başlatılamadı: {self._what(job)}. Dağıtıcı işi kendiliğinden "
-                    f"başlatmayı denedi; neden: {error}. {sahip.e()} bildir.")
+            text = dil.t("{proje} işi başlatılamadı: {what}. Dağıtıcı işi kendiliğinden başlatmayı denedi; neden: "
+                         "{neden}. {sahip_e} bildir.",
+                         self.cfg, proje=job.meta.get("proje", ""), what=self._what(job), neden=error,
+                         sahip_e=sahip.e(self.cfg))
         key = f"baslatma-{stem}"
         if current is not None and current.meta.get("durum") == "sirada":
             # still queued (missing folder, kod without its Kontrol, …): back off until the job changes; the same
@@ -452,10 +468,11 @@ class Dispatcher:
                     return
         except (OSError, ValueError, AttributeError):
             pass
-        self._notify(f"Onay bekleyen {backlog['bekleyen']} kart var (sınır {backlog['sinir']}, ofis.json "
-                     "max_bekleyen_onay): dağıtıcı yeni kod işlerini ve yeni akışları başlatmıyor; okuma ve araştırma "
-                     f"işleri sürüyor. {sahip.e()} tek satırla söyle: kartlara cevap verince kod işleri kendiliğinden "
-                     "başlar.", key)
+        self._notify(dil.t(
+            "Onay bekleyen {n} kart var (sınır {sinir}, ofis.json max_bekleyen_onay): dağıtıcı yeni kod işlerini "
+            "ve yeni akışları başlatmıyor; okuma ve araştırma işleri sürüyor. {sahip_e} tek satırla söyle: kartlara "
+            "cevap verince kod işleri kendiliğinden başlar.",
+            self.cfg, n=backlog["bekleyen"], sinir=backlog["sinir"], sahip_e=sahip.e(self.cfg)), key)
         try:
             os.makedirs(self.durum_dir, exist_ok=True)
             tmp = path + ".tmp"
@@ -516,10 +533,12 @@ class Dispatcher:
         if key in sent:
             return
         tz = model_durum.office_tz(model_durum.sahne(self.cfg)["saat_dilimi"])
-        self._notify(f"{model_durum.UNVAN[fam]} kotada; yeni işler {model_durum.UNVAN[backup]} ile başlıyor, "
-                     f"{saat_eki(back.astimezone(tz))} dönüyor. {sahip.e()} tek satırla söyle. Çalışan işler başka "
-                     "modele geçmez; kotaya takılan bir iş kota bitince kendiliğinden sürmez (sayfada sessiz "
-                     "görünür).", key)
+        self._notify(dil.t(
+            "{unvan} kotada; yeni işler {yedek} ile başlıyor, {saat} dönüyor. {sahip_e} tek satırla söyle. Çalışan "
+            "işler başka modele geçmez; kotaya takılan bir iş kota bitince kendiliğinden sürmez (sayfada sessiz "
+            "görünür).",
+            self.cfg, unvan=model_durum.UNVAN[fam], yedek=model_durum.UNVAN[backup],
+            saat=saat_eki(back.astimezone(tz)), sahip_e=sahip.e(self.cfg)), key)
         try:
             os.makedirs(self.durum_dir, exist_ok=True)
             tmp = path + ".tmp"

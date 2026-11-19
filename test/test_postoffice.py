@@ -122,6 +122,22 @@ class PostOfficeTest(unittest.TestCase):
         self.assertIn(jobs.stem(name), notice)
         self.assertIn("> Giriş düzeldi. 12 test geçti.", notice)
 
+    def test_the_job_notices_follow_the_offices_language(self):
+        # ofis.json dil "en" (the owner, 2026-11-19): the CEO notices of the job lifecycle are English; the
+        # protocol prefix and the Turkish words the page matches stay as they are
+        self.cfg["dil"] = "en"
+        self.cfg["sahip_adi"] = "Selin"
+        name = self.running_job()
+        self.report("bitti", "Giriş düzeldi. 12 test geçti.")
+        self.po.process_inbox()
+        [notice] = self.ceo_queue()
+        self.assertTrue(notice.startswith("[Ofis · sistem]\nblog job finished: Giriş hatası"), notice)
+        self.assertIn("No Kontrol (only the project's own report). Summary:", notice)
+        self.other_job(SESSION, status="calisiyor")  # the stuck variant on the same English path
+        self.report("tikandi", "Simülatör açılmıyor.", session=SESSION)
+        self.po.process_inbox()
+        self.assertTrue(any("blog job stuck:" in n for n in self.ceo_queue()), self.ceo_queue())
+
     def test_the_notice_is_delivered_by_starting_the_ceo(self):
         self.running_job()
         self.report("bitti", "Tamam.")

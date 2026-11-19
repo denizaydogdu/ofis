@@ -19,10 +19,11 @@ KLASOR="$(cd "$(dirname "$0")" && pwd)"
 cd "$KLASOR"
 
 ac() { printf '%s' "$1" | sed "s|^~|$HOME|"; }   # ~/... -> $HOME/...
-sor() {  # sor '<soru (varsayılan)>' <varsayılan> -> cevap (boşsa varsayılan); soru stderr'de, cevap aynı satırda
+sor() {  # sor '<soru (varsayılan)>' <varsayılan> -> cevap; boş ya da yalnız boşluk = varsayılan (review finding 2)
   local cevap
   printf '%s' "$1" >&2
   read -r cevap || cevap=""
+  cevap="$(printf '%s' "$cevap" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
   printf '%s' "${cevap:-$2}"
 }
 
@@ -38,9 +39,7 @@ command -v claude >/dev/null 2>&1 || echo "UYARI: 'claude' komutu PATH'te değil
 command -v claude >/dev/null 2>&1 || echo "         Claude Code'u kurup 'claude' komutunu PATH'e ekle (README: Gereksinimler)."
 
 # --- ofis.json ---
-YENI=1
 if [ -f ofis.json ]; then
-  YENI=0
   echo
   echo "ofis.json zaten var — ayarların duruyor, üzerine yazılmaz."
 else
@@ -76,7 +75,8 @@ PY
 fi
 
 # --- klasörler ---
-if python3 - <<'PY' > /tmp/ofis-kurulum-yollar.txt
+YOLLAR="$(mktemp "${TMPDIR:-/tmp}/ofis-kurulum.XXXXXX")"
+if python3 - "$YOLLAR" <<'PY'
 import json, sys
 try:
     with open("ofis.json", encoding="utf-8") as f:
@@ -100,9 +100,9 @@ then
     else
       echo "UYARI: klasör oluşturulamadı: $yol (elle oluştur: mkdir -p \"$yol\")"
     fi
-  done < /tmp/ofis-kurulum-yollar.txt
+  done < "$YOLLAR"
 fi
-rm -f /tmp/ofis-kurulum-yollar.txt
+rm -f "$YOLLAR"
 
 # --- Claude Code güveni ---
 echo
@@ -128,9 +128,13 @@ SECIM="$(sor 'Seçim (1): ' '1')"
 case "$SECIM" in
   2)
     echo
-    python3 bin/autostart.py install && python3 bin/autostart.py status
-    echo
-    echo "Sunucu oturum açılışında başlar; sayfa: http://127.0.0.1:8800"
+    if python3 bin/autostart.py install; then
+      python3 bin/autostart.py status
+      echo
+      echo "Sunucu oturum açılışında başlar; sayfa: http://127.0.0.1:8800"
+    else
+      echo "UYARI: otomatik başlatma kurulamadı; sunucuyu kendin başlat: python3 bin/server.py"
+    fi
     ;;
   3)
     echo

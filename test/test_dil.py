@@ -33,9 +33,11 @@ NODE = shutil.which("node")
 JS_DOSYALARI = ("app.js", "ofis-text.js", "komuta.js", "ayarlar.js", "is-akisi.js", "limitler.js", "ofis-sahne.js",
                 "ofis-davranis.js", "scene.js", "demo.js")
 HTML = "index.html"
-# The server's display texts: bin/dil.py t("…") / Metin("…") / N_("…") (and ayarlar.py's M = dil.Metin).
+# The server's display texts: bin/dil.py t("…") / Metin("…") / N_("…") (and ayarlar.py's M = dil.Metin). The CEO
+# notices of the job lifecycle (postoffice, kontrol, akis, mudur, dispatcher) follow ofis.json `dil` too since
+# 2026-11-19, so they are checked here as well.
 PY_DOSYALARI = ("dil.py", "ayarlar.py", "sahip.py", "npc_sohbet.py", "server.py", "state.py", "kullanim.py", "danisman.py",
-                "limitler.py", "sistem.py")
+                "limitler.py", "sistem.py", "postoffice.py", "kontrol.py", "akis.py", "mudur.py", "dispatcher.py")
 
 _JS_LIT = r"""('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\$]|\\.|\$(?!\{))*`)"""
 JS_CAGRI = re.compile(r"(?<![\w.$])(?:T|N_)\(\s*" + _JS_LIT)
@@ -109,12 +111,23 @@ def py_anahtarlari():
             a = node.args[0]
             if isinstance(a, ast.Constant) and isinstance(a.value, str):
                 keys.setdefault(a.value, []).append(name)
+            elif isinstance(a, ast.BinOp) and isinstance(a.op, ast.Add) and \
+                    all(isinstance(x, ast.Constant) and isinstance(x.value, str) for x in _flat_concat(a)):
+                # implicit/explicit concatenation of string literals: one key, the joined text
+                keys.setdefault("".join(x.value for x in _flat_concat(a)), []).append(name)
             elif isinstance(a, ast.IfExp) and all(isinstance(x, ast.Constant) for x in (a.body, a.orelse)):
                 for x in (a.body, a.orelse):
                     keys.setdefault(x.value, []).append(name)
             elif isinstance(a, ast.JoinedStr):
                 sorunlar.append(f"{name}:{node.lineno}: an f-string as a translation key: use {{placeholders}}")
     return keys, sorunlar
+
+
+def _flat_concat(node):
+    """The leaves of a `a + b + …` chain (only string constants; anything else breaks the caller's check)."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _flat_concat(node.left) + _flat_concat(node.right)
+    return [node]
 
 
 def en_sozluk():

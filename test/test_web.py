@@ -61,6 +61,22 @@ class NoticeCardTest(unittest.TestCase):
             with self.subTest(first=first):
                 self.assertEqual(run_js(f"t.noticeParts({json.dumps(first + chr(10) + '> x')}).tone"), tone)
 
+    def test_tone_follows_the_kind_of_notice_in_english_too(self):
+        # the CEO notices of the job lifecycle follow ofis.json dil (the owner, 2026-11-19): their English shapes
+        # get the same tones as the Turkish ones
+        for first, tone in (("yayin job finished: Fix (n). Summary:", "done"),
+                            ("yayin workflow step finished (2/5 · kod): Fix.", "done"),
+                            ("yayin job stuck: Fix. Why:", "blocked"),
+                            ("yayin job stopped: Fix. Budget limit exceeded:", "blocked"),
+                            ("yayin workflow stopped: Fix (g), step 3 (kod).", "blocked"),
+                            ("yayin workflow is waiting for approval: Fix (g).", "ask"),
+                            ("yayin is asking (decision: a.md): Fix.", "ask"),
+                            ("yayin job moved up a tier: Fix.", "info"),
+                            ("yayin's question was answered by the Software Manager: Fix.", "info"),
+                            ("something else entirely", "info")):
+            with self.subTest(first=first):
+                self.assertEqual(run_js(f"t.noticeParts({json.dumps(first + chr(10) + '> x')}).tone"), tone)
+
     def test_a_group_report_notice_is_a_done_card(self):
         text = "yayin grubu bitti: Giriş (giris). 2 iş: 2 bitti. Rapor: [[giris]] (Obsidian'da OFIS/Raporlar)."
         self.assertEqual(run_js(f"t.noticeParts({json.dumps(text)}).tone"), "done")

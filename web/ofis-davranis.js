@@ -4178,16 +4178,16 @@ export function niyetler(state, now, prev = null, options = {}) {
   const TOPLANTI_KOLTUKLARI = ['toplanti-sandalye-2', 'toplanti-sandalye-3', 'toplanti-sandalye-5'];
   const toplantida = (a, pa, rol, koltuk, doluToplanti) => {
     if (hafif || a.cikis || !plan.dugumler[koltuk]) return null;
-    // the once-per-job memory, carried on EVERY tick the participant is drawn: a meeting that ended is never
-    // restarted while its job is still inside the window
-    const gorusulen = new Set(pa && Array.isArray(pa.toplantilar) ? pa.toplantilar : []);
-    if (gorusulen.size) a.toplantilar = [...gorusulen].slice(-10);
+    // the once-per-job memory: the caller carries `toplantilar` on every tick this participant is drawn; here it
+    // is only read (a meeting that ended is never restarted while its job is still inside the window)
+    const gorusulen = new Set(pa && Array.isArray(pa.toplantilar) ? pa.toplantilar
+      : (Array.isArray(a.toplantilar) ? a.toplantilar : []));
     if (pa && pa.toplanti && Number.isFinite(pa.toplanti.bitis) && ms < pa.toplanti.bitis) {
       doluToplanti.add(pa.toplanti.koltuk); // its chair stays taken for this tick
       return pa.toplanti;
     }
     for (const t of tasks) {
-      if (!t || t.status !== 'tikandi' || !t.note || onayAdimi(t) || argeIsi(t)) continue;
+      if (!t || t.status !== 'tikandi' || !t.note || onayAdimi(t) || argeIsi(t) || panelIncelemesi(t)) continue;
       const f = zamanMs(t.finished, tz, ofset);
       if (f === null || ms < f || ms >= f + TOPLANTI_PENCERE_MS) continue;
       const anahtar = notAdi(t.note);
@@ -4395,6 +4395,9 @@ export function niyetler(state, now, prev = null, options = {}) {
       a.gorevde = true;
       gorevde = true;
     }
+    // the once-per-job memory of the stuck-job meeting, carried on EVERY tick the manager is drawn (a tick spent
+    // on another duty must not forget the jobs it already met about — review finding 1, 2026-11-19)
+    if (pa && Array.isArray(pa.toplantilar)) a.toplantilar = [...pa.toplantilar].slice(-10);
     // the stuck-job meeting in the Toplantı odası: once per job, the walk plus TOPLANTI_MS; it consumes this
     // manager's own desk look at that job (bakilan), so the same case is never walked to twice
     if (!gorevde && !a.cikis && m.key !== 'it') {
@@ -4609,6 +4612,8 @@ export function niyetler(state, now, prev = null, options = {}) {
       }
     }
     if (kutlanan.size) r.kutlanan = [...kutlanan].slice(-10);
+    // the once-per-job memory of the stuck-job meeting, carried on EVERY tick the sorumlu is drawn (finding 1)
+    if (op && Array.isArray(op.toplantilar)) r.toplantilar = [...op.toplantilar].slice(-10);
     if (t0) {
       if (t0.bekle) { r.durum_metni = t0.metin; if (t0.gorevde) r.gorevde = true; }
       else { r.yer = t0.yer; r.masa = null; r.poz = 'yuruyor'; r.dosya = true; r.durum_metni = t0.metin; r.gorevde = true; }

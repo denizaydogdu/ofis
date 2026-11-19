@@ -183,11 +183,13 @@ def ek(name, hal):
 
 
 def e(cfg=None):
-    return ek(ad(cfg), "e")
+    """The owner's name in the dative, in the display language of cfg (English: the bare name)."""
+    return ek_dilde(ad(cfg), "e", dil.kod(cfg if isinstance(cfg, dict) else None))
 
 
 def in_(cfg=None):
-    return ek(ad(cfg), "in")
+    """The owner's name in the genitive, in the display language of cfg (English: "Name's")."""
+    return ek_dilde(ad(cfg), "in", dil.kod(cfg if isinstance(cfg, dict) else None))
 
 
 def den(cfg=None):

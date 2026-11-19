@@ -1603,6 +1603,24 @@ class MantikliDavranisTest(unittest.TestCase):
         for kim in ("bakis", "visit"):
             self.assertEqual(out[kim], [], (kim, out))  # both desk looks were consumed by the meeting
 
+    def test_the_meetings_memory_survives_a_tick_spent_on_another_duty(self):
+        # review finding 1 (2026-11-19): the once-per-job memory is carried on EVERY tick the participant is
+        # drawn — a tick the manager spends on its own desk look (or a question visit) must not forget the job it
+        # already met about, and no second meeting may open while the job's window is still open
+        out = run_js("""(() => { let ikinci = 0, yerler = new Set();
+          gun('takildi-kirmizi', at(9, 59), at(10, 30), 1, (ms, a) => {
+            const m = bul(a, 'sus:mudur:yazilim');
+            if (!m) return;
+            if (/^toplantıda/.test(m.durum_metni || '')) { yerler.add('toplanti'); return; }
+            if (/işe bakıyor/.test(m.durum_metni || '')) yerler.add('bakis');
+          });
+          // the same job asked again through the whole window: the meeting never restarts
+          const tp = stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:mudur:yazilim',
+            (x) => x.yer === 'toplanti-sandalye-2');
+          return { tp, yerler: [...yerler] }; })()""")
+        self.assertEqual(len(out["tp"]), 1, out)  # exactly one meeting, also across other duties
+        self.assertEqual(out["yerler"], ["toplanti"], out)  # no desk look opened for the same case
+
     def test_the_far_seated_staff_get_up_for_tea_on_a_seeded_cadence(self):
         # the owner, 2026-11-19 ("İK ve iki müdür mesai boyunca hiç kalkmıyor. Öğle yemeğine ve arada çaya gitsinler."):
         # a staff member whose desk cannot reach the tea corner's staff spot within MOLA_UZAK — the İK cell, the

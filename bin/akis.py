@@ -105,6 +105,7 @@ import model_durum
 import records
 import risk
 import sahip
+import dil  # noqa: E402 — the CEO notices follow ofis.json `dil` (default Turkish)
 import uyarilar
 import uzmanlik
 
@@ -1867,10 +1868,13 @@ class Engine:
         state["durma_sayisi"] = _int(state.get("durma_sayisi")) + 1
         grup = state["grup"]
         self.ceo.enqueue(
-            f"{SYSTEM_PREFIX}{state['proje']} akışı durdu: {state['baslik']} ({grup}), adım {step['adim']} "
-            f"({step['tur']}). {reason}. Kalan adımlar kendiliğinden başlamaz. {sahip.e()} sor: devam mı (`ofis.py "
-            f"akis-karar {grup} devam` — bu adım geçmiş sayılır), iptal mi (`ofis.py akis-karar {grup} iptal`)? Son "
-            f"inceleme:\n{_quote(text, 1500)}", f"akis-{grup}-durdu-{state['durma_sayisi']}")
+            SYSTEM_PREFIX + dil.t(
+                "{proje} akışı durdu: {baslik} ({grup}), adım {adim} ({turu}). {neden}. Kalan adımlar "
+                "kendiliğinden başlamaz. {sahip_e} sor: devam mı (`ofis.py akis-karar {grup} devam` — bu adım geçmiş "
+                "sayılır), iptal mi (`ofis.py akis-karar {grup} iptal`)? Son inceleme:\n{son}",
+                self.cfg, proje=state["proje"], baslik=state["baslik"], grup=grup, adim=step["adim"],
+                turu=step["tur"], neden=reason, sahip_e=sahip.e(), son=_quote(text, 1500)),
+            f"akis-{grup}-durdu-{state['durma_sayisi']}")
         self.log(f"{grup} stopped at step {step['adim']}: {reason}")
         return True
 
@@ -2011,10 +2015,13 @@ class Engine:
                 return
             card = state["onay_karti"]
             self.ceo.enqueue(
-                f"{SYSTEM_PREFIX}{state['proje']} akışı onay bekliyor: {state['baslik']} ({grup}). Kararlar notu "
-                f"yazıldı: {card[:-3]}. Kartta kanıt var (plan özeti, Kontrol, değişiklik özeti, inceleme, kullanım). "
-                f"Hiçbir şey commit edilmedi. {sahip.e()} sor; cevabını kelimesi kelimesine `ofis.py cevapla "
-                f"{card[:-3]}` ile ilet (\"Onaylıyorum\" akışı kapatır; başka bir cevabı sen ele alırsın).",
+                SYSTEM_PREFIX + dil.t(
+                    "{proje} akışı onay bekliyor: {baslik} ({grup}). Kararlar notu yazıldı: {kart}. Kartta kanıt var "
+                    "(plan özeti, Kontrol, değişiklik özeti, inceleme, kullanım). Hiçbir şey commit edilmedi. "
+                    "{sahip_e} sor; cevabını kelimesi kelimesine `ofis.py cevapla {kart}` ile ilet "
+                    "(\"Onaylıyorum\" akışı kapatır; başka bir cevabı sen ele alırsın).",
+                    self.cfg, proje=state["proje"], baslik=state["baslik"], grup=grup, kart=card[:-3],
+                    sahip_e=sahip.e(self.cfg)),
                 f"akis-{grup}-onay")
             state["onay_bildirildi"] = True
             save_state(self.durum_dir, state)

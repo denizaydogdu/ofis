@@ -54,6 +54,7 @@ import threading
 from datetime import datetime
 
 import denetci
+import dil
 import jobs
 import kontrol
 import launch
@@ -423,19 +424,25 @@ def gerekce(answer):
 
 # --- notices ---
 
-def soru_bildirimi(project, decision, what, metin, ek=""):
+def soru_bildirimi(project, decision, what, metin, ek="", cfg=None):
     """The "soruyor" notice (also the post office's own, with ek=""): ek is one clause after "Kararlar notu yazıldı"."""
     middle = f"; {ek}" if ek else ""
-    return (f"{transcript.SYSTEM_PREFIX}{project} soruyor (karar: {decision}): {what}. Kararlar notu yazıldı{middle}; "
-            f"{sahip.e()} sor, cevabı `ofis.py cevapla` ile ilet. Soru:\n{quote(metin, MAX_NOTICE_TEXT)}")
+    return (transcript.SYSTEM_PREFIX + dil.t(
+        "{proje} soruyor (karar: {karar}): {what}. Kararlar notu yazıldı{middle}; {sahip_e} sor, cevabı "
+        "`ofis.py cevapla` ile ilet. Soru:\n{quote_metin}",
+        cfg, proje=project, karar=decision, what=what, middle=middle, sahip_e=sahip.e(cfg),
+        quote_metin=quote(metin, MAX_NOTICE_TEXT)))
 
 
-def cevap_bildirimi(project, title, decision, what, metin, cevap):
+def cevap_bildirimi(project, title, decision, what, metin, cevap, cfg=None):
     """The notice of a manager's answer: "<proje> sorusunu <Unvan> cevapladı: <what>. Karar notu: [[note]]. …"."""
     stem = decision[:-3] if decision.endswith(".md") else decision
-    return (f"{transcript.SYSTEM_PREFIX}{project} sorusunu {title} cevapladı: {what}. Karar notu: [[{stem}]]. Cevap "
-            f"oturuma iletildi, iş sürüyor. {sahip.e()} tek satırla kimin neyi cevapladığını söyle; isterse karttan kendi "
-            f"cevabını yazar, o geçerli olur.\nSoru:\n{quote(metin, 600)}\nMüdürün cevabı:\n{quote(cevap, 900)}")
+    return (transcript.SYSTEM_PREFIX + dil.t(
+        "{proje} sorusunu {unvan} cevapladı: {what}. Karar notu: [[{stem}]]. Cevap oturuma iletildi, iş sürüyor. "
+        "{sahip_e} tek satırla kimin neyi cevapladığını söyle; isterse karttan kendi cevabını yazar, o geçerli "
+        "olur.\nSoru:\n{soru}\nMüdürün cevabı:\n{cevap_metni}",
+        cfg, proje=project, unvan=title, what=what, stem=stem, sahip_e=sahip.e(cfg),
+        soru=quote(metin, 600), cevap_metni=quote(cevap, 900)))
 
 
 # --- records ---
@@ -801,9 +808,10 @@ class MudurWorker:
             jobs._set_line(lines, "mudur_sonuc", "deniz")
             jobs._write_atomic(path, jobs.render(lines, body))
             if result is not None and result.get("karar") == "deniz":
-                ek = f"{title} baktı ve bu soruyu {sahip.e()} bıraktı"
+                ek = dil.t("{unvan} baktı ve bu soruyu {sahip_e} bıraktı", self.cfg, unvan=title, sahip_e=sahip.e(self.cfg))
             else:
-                ek = f"{title} cevap veremedi ({why}), soru {sahip.in_()}"
+                ek = dil.t("{unvan} cevap veremedi ({neden}), soru {sahip_in}", self.cfg, unvan=title, neden=why,
+                           sahip_in=sahip.in_(self.cfg))
             notice = soru_bildirimi(rec.get("proje", ""), note, what, rec.get("metin", ""), ek=ek)
             self.ceo.enqueue(notice, f"gelen-{rec['mesaj']}")  # before the terminal record, as above
             rec.update(durum="deniz", neden_sonuc=why, bitis=_stamp(now))

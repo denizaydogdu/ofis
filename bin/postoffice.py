@@ -99,6 +99,7 @@ import rapor
 import records
 import sahip
 import sahipsiz
+import dil  # noqa: E402 — the CEO notices follow ofis.json `dil` (default Turkish)
 import transcript
 import zamanla
 
@@ -129,6 +130,15 @@ STOP_DONE, STOP_FAILED, STOP_NOT_RUNNING = "durduruldu", "durdurulamadi", "calis
 STOP_TEXT = {STOP_DONE: "Oturum durduruldu.",
              STOP_FAILED: "Oturum durdurulamadı, tekrar denenecek (claude stop hata verdi; oturum boşta görünüyor).",
              STOP_NOT_RUNNING: "Oturum çalışmıyordu (claude agents listesinde yok); durdurulacak bir şey yoktu."}
+
+
+def _stop_notice_text(outcome, cfg=None):
+    """STOP_TEXT in the display language (the CEO notice; the job note keeps the Turkish constant above)."""
+    if outcome == STOP_DONE:
+        return dil.t("Oturum durduruldu.", cfg)
+    if outcome == STOP_FAILED:
+        return dil.t("Oturum durdurulamadı, tekrar denenecek (claude stop hata verdi; oturum boşta görünüyor).", cfg)
+    return dil.t("Oturum çalışmıyordu (claude agents listesinde yok); durdurulacak bir şey yoktu.", cfg)
 
 
 class _Reject(Exception):
@@ -348,22 +358,26 @@ class PostOffice:
             return None
         kind = records.server_value(self.durum_dir, job.name, "adim_turu")
         step = records.server_value(self.durum_dir, job.name, "adim")
-        return f"{job.meta.get('proje', '')} akış adımı bitti ({step}/{len(state['adimlar'])} · {kind})"
+        return dil.t("{proje} akış adımı bitti ({adim}/{toplam} · {turu})", self.cfg,
+                     proje=job.meta.get("proje", ""), adim=step, toplam=len(state["adimlar"]), turu=kind)
 
     def _notice(self, job, msg, decision):
         project = job.meta.get("proje", "")
         title = job.meta.get("baslik") or jobs.stem(job.name)
         what = f"{title} ({jobs.stem(job.name)})"
+        v = dict(proje=project, what=what, sahip=sahip.ad(), sahip_e=sahip.e(), sahip_in=sahip.in_(),
+                 nok=dil.t("Güvenilir kontrol kaydı bulunamadı; iş kanıtsız kapatılmadı.", self.cfg))
         step_head = self._step_head(job) if msg["tur"] == "bitti" and job.meta.get("durum") == "bitti" else None
         if step_head:
-            head = (f"{step_head}: {what}. Akış kendiliğinden ilerler (sonraki adım, inceleme kararı ya da en sonda "
-                    f"{sahip.in_()} onay kartı); {sahip.e()} ayrıca bildirmen gerekmez. Rapor:")
+            head = dil.t("{step_head}: {what}. Akış kendiliğinden ilerler (sonraki adım, inceleme kararı ya da en "
+                         "sonda {sahip_in} onay kartı); {sahip_e} ayrıca bildirmen gerekmez. Rapor:",
+                         None, step_head=step_head, **v)
         elif msg["tur"] == "bitti" and job.meta.get("durum") == "tikandi":
-            head = (f"{project} işi takıldı: {what}. {NO_TRUSTED_KONTROL} {sahip.e()} bildir. Projenin raporu:")
+            head = dil.t("{proje} işi takıldı: {what}. {nok} {sahip_e} bildir. Projenin raporu:", self.cfg, **v)
         elif msg["tur"] == "bitti":
-            head = f"{project} işi bitti: {what}. Kontrol yok (yalnız projenin kendi raporu). Özet:"
+            head = dil.t("{proje} işi bitti: {what}. Kontrol yok (yalnız projenin kendi raporu). Özet:", self.cfg, **v)
         elif msg["tur"] == "tikandi":
-            head = f"{project} işi takıldı: {what}. Neden:"
+            head = dil.t("{proje} işi takıldı: {what}. Neden:", self.cfg, **v)
         else:
             return mudur.soru_bildirimi(project, decision, what, msg["metin"])
         return f"{SYSTEM_PREFIX}{head}\n{_quote(msg['metin'], MAX_NOTICE_TEXT)}"
@@ -859,10 +873,12 @@ class PostOffice:
         if int(kd.get("sayi") or 0) >= QUOTA_RESUME_MAX:
             kd["soruldu"] = key
             records.update(self.durum_dir, job.name, {records.QUOTA_RESUME: kd}, create=False)
-            self.ceo.enqueue(f"{SYSTEM_PREFIX}{job.meta.get('proje', '')} işi: {stem} üçüncü kez kotaya takıldı; devam "
-                             f"etsin mi? {what}: kota döndükten sonra iki kez kendiliğinden devam ettirildi, yine "
-                             f"kotada durdu. {sahip.e()} sor; yalnız onun sözüyle `ofis.py devam {stem}`.",
-                             f"kota-devam-sor-{stem}-{key[:40]}")
+            self.ceo.enqueue(SYSTEM_PREFIX + dil.t(
+                "{proje} işi: {stem} üçüncü kez kotaya takıldı; devam etsin mi? {what}: kota döndükten sonra iki kez "
+                "kendiliğinden devam ettirildi, yine kotada durdu. {sahip_e} sor; yalnız onun sözüyle "
+                "`ofis.py devam {stem}`.",
+                self.cfg, proje=job.meta.get("proje", ""), stem=stem, what=what, sahip_e=sahip.e(self.cfg)),
+                f"kota-devam-sor-{stem}-{key[:40]}")
             self.log(f"{job.name} stopped on a quota again; the CEO asks the owner")
             return
         stamp = f"{self.now():%Y-%m-%dT%H:%M:%S}"
@@ -874,8 +890,10 @@ class PostOffice:
         kd["sayi"] = int(kd.get("sayi") or 0) + 1
         kd["zamanlar"] = list(kd.get("zamanlar") or []) + [stamp]
         records.update(self.durum_dir, job.name, {records.QUOTA_RESUME: kd}, create=False)
-        self.ceo.enqueue(f"{SYSTEM_PREFIX}{job.meta.get('proje', '')} işi: {stem} kota döndüğü için kaldığı yerden "
-                         f"devam ediyor ({what}). {sahip.e()} tek satırla söyle.", f"kota-devam-{stem}-{key[:40]}")
+        self.ceo.enqueue(SYSTEM_PREFIX + dil.t(
+            "{proje} işi: {stem} kota döndüğü için kaldığı yerden devam ediyor ({what}). {sahip_e} tek satırla söyle.",
+            self.cfg, proje=job.meta.get("proje", ""), stem=stem, what=what, sahip_e=sahip.e(self.cfg)),
+            f"kota-devam-{stem}-{key[:40]}")
         self.log(f"{job.name}: the quota is back; resume queued ({kd['sayi']}/{QUOTA_RESUME_MAX})")
 
     def _episode(self, job, agent, now):
@@ -895,11 +913,13 @@ class PostOffice:
     def _tell_waiting(self, job, minutes):
         stem = jobs.stem(job.name)
         key = f"izin-{stem}-{self._waiting_since[job.name][1]}"
-        self.ceo.enqueue(f"{SYSTEM_PREFIX}{job.meta.get('proje', '')} işi izin onayı bekliyor: "
-                         f"{job.meta.get('baslik') or stem} ({stem}). Oturum {max(2, minutes)} dakikadır bir izin "
-                         "sorusunda duruyor; arka planda onu onaylayacak kimse yok, iş kendiliğinden ilerlemez. Ofis "
-                         f"onu durdurmaz: {sahip.e()} sade bir dille söyle ve ne yapılacağını sor (oturuma kendisi bakabilir "
-                         "ya da iş iptal edilip yeniden açılabilir); iptal ancak onun kararıyla.", key)
+        self.ceo.enqueue(SYSTEM_PREFIX + dil.t(
+            "{proje} işi izin onayı bekliyor: {baslik} ({stem}). Oturum {dk} dakikadır bir izin sorusunda duruyor; "
+            "arka planda onu onaylayacak kimse yok, iş kendiliğinden ilerlemez. Ofis onu durdurmaz: {sahip_e} sade "
+            "bir dille söyle ve ne yapılacağını sor (oturuma kendisi bakabilir ya da iş iptal edilip yeniden "
+            "açılabilir); iptal ancak onun kararıyla.",
+            self.cfg, proje=job.meta.get("proje", ""), baslik=job.meta.get("baslik") or stem, stem=stem,
+            dk=max(2, minutes), sahip_e=sahip.e(self.cfg)), key)
 
     def _maybe_check_silent(self):
         now = self.clock()
@@ -1009,10 +1029,12 @@ class PostOffice:
         stem = jobs.stem(job.name)
         minutes = int((self.now() - started).total_seconds() // 60)
         self.log(f"{job.name}: no progress {minutes} min after its start")
-        self.ceo.enqueue(f"{SYSTEM_PREFIX}{job.meta.get('proje', '')} işi ilerlemiyor: "
-                         f"{job.meta.get('baslik') or stem} ({stem}). Oturum {minutes} dakika önce başladı ama "
-                         "henüz hiçbir araç kullanmadı ve bir şey yazmadı. Ofis onu durdurmaz: oturuma bak (`claude "
-                         f"agents`), {sahip.e()} sor; iptal ancak onun kararıyla.", f"ilk-dakika-{stem}")
+        self.ceo.enqueue(SYSTEM_PREFIX + dil.t(
+            "{proje} işi ilerlemiyor: {baslik} ({stem}). Oturum {dk} dakika önce başladı ama henüz hiçbir araç "
+            "kullanmadı ve bir şey yazmadı. Ofis onu durdurmaz: oturuma bak (`claude agents`), {sahip_e} sor; iptal "
+            "ancak onun kararıyla.",
+            self.cfg, proje=job.meta.get("proje", ""), baslik=job.meta.get("baslik") or stem, stem=stem,
+            dk=minutes, sahip_e=sahip.e(self.cfg)), f"ilk-dakika-{stem}")
 
     def _discover_sessions(self, job):
         """Every transcript in the job's folder whose head names the job's session (written since the job started)
@@ -1057,19 +1079,26 @@ class PostOffice:
         spend, calls = budget.limits(self.cfg, job)
         stem = jobs.stem(job.name)
         what = f"{job.meta.get('baslik') or stem} ({stem})"
+        dil_kodu = dil.kod()
         if kind == "butce":
-            reason = f"Kullanım sınırı aşıldı: API karşılığı ~${budget.usd(usage.cost)} / ~${budget.usd(spend)}"
-            if budget.token_text(usage.tokens) and usage.tokens:
-                reason += f"; {budget.token_text(usage.tokens)}"
+            tok = (budget.token_text_en(usage.tokens) if dil_kodu == "en" else budget.token_text(usage.tokens)) \
+                if budget.token_text(usage.tokens) and usage.tokens else ""
+            reason = dil.t("Kullanım sınırı aşıldı: API karşılığı ~${harcanan} / ~${sinir}; {token}" if tok
+                           else "Kullanım sınırı aşıldı: API karşılığı ~${harcanan} / ~${sinir}",
+                           self.cfg, harcanan=budget.usd(usage.cost), sinir=budget.usd(spend), token=tok)
             raise_it = f"`ofis.py butce {stem} <usd>`"
         else:
-            reason = f"Çağrı sınırı aşıldı: {usage.calls} / {calls} model çağrısı"
-            if usage.tokens:
-                reason += f" ({budget.spend_text(usage.cost, usage.tokens)})"
+            reason = dil.t("Çağrı sınırı aşıldı: {kullanilan} / {sinir} model çağrısı ({harcama})" if usage.tokens
+                           else "Çağrı sınırı aşıldı: {kullanilan} / {sinir} model çağrısı",
+                           None, kullanilan=usage.calls, sinir=calls,
+                           harcama=budget.spend_text(usage.cost, usage.tokens, dil_kodu))
             raise_it = f"`ofis.py butce {stem} --cagri <N>`"
-        return (f"{SYSTEM_PREFIX}{job.meta.get('proje', '')} işi durduruldu: {what}. {reason}. {STOP_TEXT[outcome]} "
-                f"İş takıldı olarak işaretlendi. {sahip.e()} sor: daha yüksek kullanım sınırıyla devam edilsin mi? Evet derse önce "
-                f"{raise_it}, sonra `ofis.py devam {stem}`.")
+        return (SYSTEM_PREFIX + dil.t("{proje} işi durduruldu: {what}. {reason}. {stop} İş takıldı olarak işaretlendi. "
+                                      "{sahip_e} sor: daha yüksek kullanım sınırıyla devam edilsin mi? Evet derse önce "
+                                      "{raise_it}, sonra `ofis.py devam {stem}`.",
+                                      self.cfg, proje=job.meta.get("proje", ""), what=what, reason=reason,
+                                      stop=_stop_notice_text(outcome, self.cfg), sahip_e=sahip.e(), raise_it=raise_it,
+                                      stem=stem))
 
     def _stop_for_limit(self, job, usage):
         """Under the job lock: reads the job and its record again and re-checks the limit (a budget raised meanwhile
