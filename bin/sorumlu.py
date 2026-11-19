@@ -322,7 +322,8 @@ class ProjeNotlari:
         tz = model_durum.sahne(cfg)["saat_dilimi"]
         now = self.now() if self.now else None
         try:
-            ay = muhasebe.ozet(vault, tasks, now=now if (now and now.tzinfo) else None, tz=tz)["bu_ay"]
+            ay = muhasebe.ozet(vault, tasks, now=now if (now and now.tzinfo) else None, tz=tz,
+                               durum_dir=self.durum_dir)["bu_ay"]
         except Exception:  # noqa: BLE001 — the spending line only; the note is still written
             ay = {}
         return {"tasks": tasks, "decisions": state.pending_decisions(vault), "ay": ay,

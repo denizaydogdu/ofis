@@ -993,20 +993,27 @@ export function qualityCells(r) {
 }
 
 // The Kalite view's tiles over every row (GET /api/kalite `toplam`): [{etiket, deger, ipucu, ana}]; dollars with
-// their token twins, and how many jobs have no token count (never counted as 0). [] without rows.
-export function kaliteKutulari(t) {
-  if (!t || typeof t !== 'object') return [];
-  const missing = Number(t.token_bilinmeyen) || 0;
-  const eksik = missing > 0 && tokenMetni(t.toplam_token) ? ` · ${T('{n} işin token sayısı kayıtlı değil', { n: missing })}` : '';
-  return [
-    { etiket: T('Doğrulanmış iş başına kullanım'), deger: paraTokenMetni(t.dogrulanmis_is_basina_usd, t.dogrulanmis_is_basina_token),
-      ipucu: T('{n} iş kontrolü geçerek bitti', { n: Number(t.dogrulanan) || 0 }) + eksik, ana: true },
-    { etiket: T('İlk denemede geçti'), deger: ratioText(t.ilk_tur_gecen, t.ilk_tur_olculen), ipucu: T('kontrolü çalışan işler'), ana: false },
-    { etiket: T('Yeniden iş'), deger: ratioText(t.yeniden_is, t.is_sayisi), ipucu: T('en az bir düzeltme gereken'), ana: false },
-    { etiket: T('Bitti'), deger: ratioText(t.bitti, t.is_sayisi), ipucu: T('ortalama süre {sure}', { sure: minutesText(t.ort_sure_dk) }), ana: false },
-    { etiket: T('Toplam kullanım'), deger: paraTokenMetni(t.toplam_usd, t.toplam_token),
-      ipucu: T('iş başına ortalama {deger}', { deger: paraTokenMetni(t.ort_usd, t.ort_token) }), ana: false },
-  ];
+// their token twins, and how many jobs have no token count (never counted as 0). [] without rows. `npc` = the NPC
+// chat usage ({soru, usd, token}): one more tile when a question was recorded — its usage is part of the office's
+// totals, never of the quality metrics (a question is not a job).
+export function kaliteKutulari(t, npc) {
+  const tiles = [];
+  if (t && typeof t === 'object') {
+    const missing = Number(t.token_bilinmeyen) || 0;
+    const eksik = missing > 0 && tokenMetni(t.toplam_token) ? ` · ${T('{n} işin token sayısı kayıtlı değil', { n: missing })}` : '';
+    tiles.push(
+      { etiket: T('Doğrulanmış iş başına kullanım'), deger: paraTokenMetni(t.dogrulanmis_is_basina_usd, t.dogrulanmis_is_basina_token),
+        ipucu: T('{n} iş kontrolü geçerek bitti', { n: Number(t.dogrulanan) || 0 }) + eksik, ana: true },
+      { etiket: T('İlk denemede geçti'), deger: ratioText(t.ilk_tur_gecen, t.ilk_tur_olculen), ipucu: T('kontrolü çalışan işler'), ana: false },
+      { etiket: T('Yeniden iş'), deger: ratioText(t.yeniden_is, t.is_sayisi), ipucu: T('en az bir düzeltme gereken'), ana: false },
+      { etiket: T('Bitti'), deger: ratioText(t.bitti, t.is_sayisi), ipucu: T('ortalama süre {sure}', { sure: minutesText(t.ort_sure_dk) }), ana: false },
+      { etiket: T('Toplam kullanım'), deger: paraTokenMetni(t.toplam_usd, t.toplam_token),
+        ipucu: T('iş başına ortalama {deger}', { deger: paraTokenMetni(t.ort_usd, t.ort_token) }), ana: false });
+  }
+  if (npc && typeof npc === 'object' && Number(npc.soru) > 0)
+    tiles.push({ etiket: T('NPC sohbeti'), deger: paraTokenMetni(npc.usd, npc.token),
+      ipucu: T('{n} soru · kalite ölçütlerine katılmaz', { n: Number(npc.soru) }), ana: false });
+  return tiles;
 }
 
 // --- Phase 8: model selection in the Kalite view (GET /api/kalite `model_secimi`, bin/model_secimi.py) ---

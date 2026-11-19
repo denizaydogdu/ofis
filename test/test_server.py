@@ -475,6 +475,8 @@ class ServerTest(unittest.TestCase):
         body = json.loads(data)
         choice = body.pop("model_secimi")  # phase 8: the model selection rides along
         self.assertEqual(body.pop("denetciler"), [])  # the reviewer scorecard in short (İK card)
+        self.assertEqual(body.pop("npc_sohbet"), {"usd": 0.0, "token": None, "token_bilinen": 0, "soru": 0},
+                         "no NPC question recorded in the fresh state folder")
         self.assertEqual(body, {"satirlar": [], "modeller": [], "uzmanliklar": [], "toplam": None, "is_sayisi": 0,
                                 "deneme_sayisi": 0, "deneme_isler": []})
         self.assertEqual((choice["pilotlar"], choice["oneriler"]), ([], []))
@@ -506,6 +508,20 @@ class ServerTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.get(path, host="evil.example")[0].status, 403)
                 self.assertEqual(self.post(path, {})[0].status, 404)
+
+    def test_npc_chat_usage_joins_the_accounting_and_the_quality_view(self):
+        # a record line of one answered question (bin/npc_sohbet.py): its dollars and tokens join the office's day
+        # total; its question never counts as a job, and the Kalite view carries it on its own
+        folder = os.path.join(self.durum, "npc_sohbet")
+        os.makedirs(folder)
+        with open(os.path.join(folder, "kullanim.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"zaman": time.time(), "usd": 0.02, "token": 800}) + "\n")
+        _, data = self.get("/api/muhasebe")
+        day = json.loads(data)["bugun"]
+        self.assertEqual((day["usd"], day["is_sayisi"]), (0.02, 0))
+        self.assertEqual(day["npc_sohbet"], {"usd": 0.02, "token": 800, "soru": 1})
+        _, data = self.get("/api/kalite")
+        self.assertEqual(json.loads(data)["npc_sohbet"]["soru"], 1)
 
     def test_the_ArGe_endpoint_is_read_only_host_checked_and_shows_the_last_report(self):
         import arge

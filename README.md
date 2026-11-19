@@ -15,6 +15,7 @@ It is a local Python server (standard library only) plus a single web page with 
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
 - [Install and first run](#install-and-first-run)
@@ -26,6 +27,29 @@ It is a local Python server (standard library only) plus a single web page with 
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Screenshots
+
+All three show the demo office (`?demo=1`: fake data, no backend calls) in Turkish and in English (`?dil=en`).
+
+**The 3D office** — every project a team bay, every job a robot at a desk, the staff rooms and the common areas
+(the tea corner, the canteen, the game room) around them:
+
+| Türkçe | English |
+|---|---|
+| ![The office](docs/screenshots/office-tr.png) | ![The office](docs/screenshots/office-en.png) |
+
+**The command desk (Komuta masası)** — the CEO chat, who is working right now, and the decision cards you answer:
+
+| Türkçe | English |
+|---|---|
+| ![The command desk](docs/screenshots/command-desk-tr.png) | ![The command desk](docs/screenshots/command-desk-en.png) |
+
+**The job board (İşler)** — queued, running and finished jobs with their progress:
+
+| Türkçe | English |
+|---|---|
+| ![The job board](docs/screenshots/job-board-tr.png) | ![The job board](docs/screenshots/job-board-en.png) |
 
 ## How it works
 
@@ -189,6 +213,15 @@ robot at a desk. Around it:
   and **`agy`** (free extra reviewers), and **`node`** (only for the JavaScript tests).
 
 ## Install and first run
+
+One command does the steps below (it asks for the paths and the two names, creates the folders and offers to
+start the server; an existing `ofis.json` is personal and never overwritten):
+
+```sh
+bash kurulum.sh
+```
+
+Or by hand:
 
 1. Clone the repository and create your settings file:
 

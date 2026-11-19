@@ -1297,7 +1297,7 @@ class SceneHelpersTest(unittest.TestCase):
         self.assertTrue({"ajan", "alt-ajan", "ceo", "sus"} <= set(out["tur"]), out["tur"])
         self.assertTrue({"?", "!", "test", "✓"} <= set(out["simge"]), out["simge"])
         self.assertTrue({"lobi", "ceo", "uzmanlar", "denetci", "cay-ocagi", "yemekhane"} <= set(out["rooms"]), out["rooms"])
-        self.assertNotIn("toplanti", out["rooms"])  # the meeting room stays empty (no fake meetings)
+        self.assertIn("toplanti", out["rooms"])  # the demo's stuck job now gets its real meeting (the owner, 2026-11-19)
         # (+ the wing's office staff, the 13 of Sosyal medya, one resident per project; + the six people of the three
         # shift teams off shift, hidden at the Otel — 2026-11-14; + the kitchen's two shift teams of three, which replaced
         # the one Yemekhane sorumlusu: five more — 2026-11-14)
@@ -1904,6 +1904,16 @@ class TokenTextTest(unittest.TestCase):
         self.assertEqual((tiles[0]["deger"], tiles[0]["ipucu"], tiles[-1]["deger"], tiles[-1]["ipucu"]),
                          ("≈$0,27", "8 iş kontrolü geçerek bitti", "≈$2,16", "iş başına ortalama ≈$0,22"))
         self.assertEqual(run_js("t.kaliteKutulari(null)"), [])
+        # the NPC chat usage: one more tile — part of the office's totals, never of the quality metrics
+        tiles = run_js("t.kaliteKutulari(null, {soru: 2, usd: 0.0032, token: 19700})")
+        self.assertEqual(tiles, [{"etiket": "NPC sohbeti", "deger": "19,7 bin token · ≈$0,0032",
+                                  "ipucu": "2 soru · kalite ölçütlerine katılmaz", "ana": False}])
+        tiles = run_js(f"t.kaliteKutulari({json.dumps(t)}, {{soru: 1, usd: 0.01, token: null}})")
+        self.assertEqual((tiles[-1]["etiket"], tiles[-1]["deger"], tiles[-1]["ipucu"]),
+                         ("NPC sohbeti", "≈$0,01", "1 soru · kalite ölçütlerine katılmaz"))
+        self.assertEqual(len(tiles), 6)
+        for npc in ("{soru: 0}", "'x'"):
+            self.assertEqual(len(run_js(f"t.kaliteKutulari({json.dumps(t)}, {npc})")), 5, npc)
 
     def test_a_report_card_shows_the_verified_tokens_and_the_missing_counts(self):
         r = {"toplam_usd": 1.8423, "toplam_token": 642000, "token_eksik": 1, "dogrulanmis_is_basina_usd": 0.9212,
@@ -1919,6 +1929,20 @@ class TokenTextTest(unittest.TestCase):
             tokens: 182400 }), task('b.md', 'calisiyor', { spent: '0.2', budget: 3, tokens: '' })] }), NOW)
             .map((r) => r.harcama)""")
         self.assertEqual(sorted(out), ["182 bin token · ≈$0,41 / ≈$3,00", "≈$0,20 / ≈$3,00"])
+
+    def test_the_accountants_card_lists_the_npc_chat_on_its_own_line(self):
+        # the NPC usage is inside the period total above; its questions are never jobs (the owner, 2026-11-19)
+        donem = {"usd": 1.02, "token": 1800, "token_bilinen": 2, "is_sayisi": 1, "codex_fiyatsiz": 0,
+                 "proje": [{"proje": "blog", "usd": 1.0, "token": 1000, "token_bilinen": 1, "is_sayisi": 1}],
+                 "rol": [], "npc_sohbet": {"usd": 0.02, "token": 800, "soru": 1}}
+        m = {"bugun": donem, "bu_ay": donem, "kalite": {}, "en_pahali": [], "butce": {}}
+        out = run_scene(f"h.muhasebeKarti(st(), NOW, {json.dumps(m)})")
+        self.assertIn({"ad": "", "metin": "NPC sohbeti: 800 token · ≈$0,02 (1 soru)", "bolum": "Kullanım"},
+                      out["satirlar"])
+        bos = {**donem, "npc_sohbet": {"usd": 0.0, "token": None, "soru": 0}}
+        m = {"bugun": bos, "bu_ay": bos, "kalite": {}, "en_pahali": [], "butce": {}}
+        out = run_scene(f"h.muhasebeKarti(st(), NOW, {json.dumps(m)})")
+        self.assertNotIn("NPC sohbeti", json.dumps(out["satirlar"]))
 
 
 # --- the review panel in the office (dış denetçi heyeti, plan step 4): auditor desks, the hakem, rows ---
@@ -3656,7 +3680,7 @@ class CareStaffTest(unittest.TestCase):
 
     def test_the_doctor_visits_each_new_case_once_and_never_moves_the_patient(self):
         out = run_dav("""(() => { const stuck = () => st({ sessions: [ses('s', 'idle', { note: 'a.md', model: 'opus' })],
-            tasks: [task('a.md', 'tikandi', { session: 's', finished: iso(NOW - 60000) })] });
+            tasks: [task('a.md', 'tikandi', { session: 's', finished: iso(NOW - 5 * 60000) })] });
           let prev = run(st(), NOW);
           const seq = [], pat = [];
           for (let i = 1; i <= 240; i++) { prev = run(stuck(), NOW + i * 1000, prev); const dr = one(prev, 'sus:revir');
@@ -3666,7 +3690,9 @@ class CareStaffTest(unittest.TestCase):
           return { seq: seq.join(''), pat: [...new Set(pat)], first,
             sure: d.yurumeSuresi(P, 'revir-masa', 'ekip-yayin-masa-1-yan') + d.DOKTOR_KALIS_MS }; })()""")
         visit = out["seq"].split("M")[0]
-        # one visit right after the job got stuck, as long as the walk there plus a moment beside the desk
+        # the case is five minutes old — past the stuck-job meeting's window (a fresh one is met at the table
+        # instead, the owner 2026-11-19) — so the doctor still walks to its desk: one visit right after the job
+        # got stuck, as long as the walk there plus a moment beside the desk
         self.assertGreaterEqual(len(visit), 8)  # at least the stay beside the desk (the walk comes on top)
         self.assertNotIn("V", out["seq"][len(visit):])  # and only one
         self.assertEqual(len(out["pat"]), 1)  # the patient stays where it is

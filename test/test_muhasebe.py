@@ -1,5 +1,6 @@
 """Tests for bin/muhasebe.py: the Muhasebeci's numbers (GET /api/muhasebe) and the İdari işler data (GET /api/idari).
 Run: python3 -I test/test_muhasebe.py"""
+import json
 import os
 import sys
 import tempfile
@@ -133,6 +134,42 @@ class MuhasebeTest(unittest.TestCase):
         self.assertIsNone(out["kalite"]["dogrulanmis_is_basina_token"])
         self.assertIsNone(out["butce"]["harcanan_token"])
         self.assertEqual((out["en_pahali"], out["butce"]["butce_usd"]), ([], None))
+
+    def test_npc_chat_usage_joins_the_totals_but_never_counts_as_a_job(self):
+        # the owner, 2026-11-19: the questions' usage is part of the office's day/month totals; a question is not a
+        # job — is_sayisi, the breakdowns and the quality numbers stay job-only
+        self.write("2026-11", row("2026-11-12", "blog", "a", "opus", "1.0000", "1000", "1.0000"))
+        durum = os.path.join(self.tmp.name, "durum")
+        folder = os.path.join(durum, "npc_sohbet")
+        os.makedirs(folder)
+        tz = timezone.utc
+        with open(os.path.join(folder, "kullanim.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"zaman": datetime(2026, 11, 12, 9, 30, tzinfo=tz).timestamp(), "usd": 0.02,
+                                "token": 800}) + "\n")
+            f.write(json.dumps({"zaman": datetime(2026, 10, 30, 9, 30, tzinfo=tz).timestamp(), "usd": 0.03,
+                                "token": 900}) + "\n")
+        now = datetime(2026, 11, 12, 10, 0, tzinfo=tz)
+        out = muhasebe.ozet(self.vault, [], now=now, tz="UTC", durum_dir=durum)
+        day = out["bugun"]
+        self.assertEqual((day["usd"], day["is_sayisi"], day["token"], day["token_bilinen"]), (1.02, 1, 1800, 2))
+        self.assertEqual(day["npc_sohbet"], {"usd": 0.02, "token": 800, "soru": 1})
+        self.assertEqual([(p["proje"], p["usd"], p["is_sayisi"]) for p in day["proje"]], [("blog", 1.0, 1)])
+        self.assertEqual(day["rol"][0]["is_sayisi"], 1)
+        # the October record is another month: only today's question counts in the day, both months stay apart
+        self.assertEqual(out["bu_ay"]["npc_sohbet"], {"usd": 0.02, "token": 800, "soru": 1})
+        self.assertEqual((out["bu_ay"]["usd"], out["bu_ay"]["is_sayisi"]), (1.02, 1))
+        self.assertEqual(out["kalite"]["dogrulanan"], 1)  # the quality numbers are job-only
+        # without the records (no durum_dir) nothing changes and the period still carries the empty NPC total
+        out = muhasebe.ozet(self.vault, [], now=now, tz="UTC")
+        self.assertEqual((out["bugun"]["usd"], out["bugun"]["token"], out["bugun"]["is_sayisi"]), (1.0, 1000, 1))
+        self.assertEqual(out["bugun"]["npc_sohbet"], {"usd": 0.0, "token": None, "soru": 0})
+        # a record with no known tokens keeps the period's tokens as they were
+        with open(os.path.join(folder, "kullanim.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps({"zaman": datetime(2026, 11, 12, 9, 40, tzinfo=tz).timestamp(), "usd": 0.04,
+                                "token": 0}) + "\n")
+        day = muhasebe.ozet(self.vault, [], now=now, tz="UTC", durum_dir=durum)["bugun"]
+        self.assertEqual((day["usd"], day["token"], day["npc_sohbet"]), (1.06, 1800,
+                                                                        {"usd": 0.06, "token": 800, "soru": 2}))
 
     def test_rows_are_parsed_again_only_when_a_file_changes(self):
         self.write("2026-11", row("2026-11-12", "blog", "a", "opus", "1.0000"))

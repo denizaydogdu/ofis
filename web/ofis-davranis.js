@@ -2965,6 +2965,32 @@ export function personelRotasi(id, ms, plan, dolu = new Set(), opts = {}) {
   return { yer: spot[0], poz: spot[1], metin: T(spot[2]), secim, mola: true };
 }
 
+// The far-seated staff's tea cadence (the owner, 2026-11-19: "İK ve iki müdür mesai boyunca hiç kalkmıyor. Öğle
+// yemeğine ve arada çaya gitsinler."): a staff member whose desk cannot reach the tea corner's staff spot within
+// MOLA_UZAK — the İK cell, the managers' offices, a far facility or bay cell — gets no break spot of its own:
+// whatever its personality picks is silently dropped, so it never gets up (the İK and the QA / IT managers before
+// this). Instead, once in every CAY_ARALIGI_MS window (its own seeded phase) it walks to the tea corner for
+// CAY_KALIS_MS ("çay molasında"); a bounded rhythm like the kitchen teams' mutfakDisi, never the personality's dice.
+// The staff spot taken: a short walk on a corridor near its seat. Duties, visits and lunch always win (the callers
+// try personelRotasi first and this only as the fallback). Pure.
+export const CAY_ARALIGI_MS = 90 * 60000;
+export const CAY_KALIS_MS = 9 * 60000;
+export function cayMolasi(id, ms, plan, ev, dolu = new Set()) {
+  const nodes = (plan && plan.dugumler) || {};
+  const spot = 'cay-ocagi-personel-2';
+  if (!nodes[spot] || !ev || !nodes[ev]) return null;
+  if (yolUzunlugu(plan, ev, spot) <= MOLA_UZAK) return null; // its own options already reach the tea corner
+  const faz = (ms + hash(`${id}:cay`) % CAY_ARALIGI_MS) % CAY_ARALIGI_MS;
+  if (faz >= CAY_KALIS_MS) return null;
+  if (!dolu.has(spot)) {
+    dolu.add(spot);
+    return { yer: spot, poz: 'cay', metin: T('çay molasında'), mola: true };
+  }
+  const corridors = yakinKoridorlar(plan, ev);
+  return corridors.length ? { yer: corridors[hash(`${id}:cay:yuruyus:${Math.floor(ms / CAY_ARALIGI_MS)}`) % corridors.length],
+    poz: 'yuruyor', metin: T('biraz dolaşıyor'), mola: true } : null;
+}
+
 // The Yemekhane sorumlusu (owner decision 2026-11-12), seeded per YEMEKHANE_ADIM_MS slot, never on a seat:
 // - in the last OGLE_HAZIRLIK_DK minutes before lunch it sets things out at the serving counter;
 // - at lunch, until the first eaters finish (OGLE_YEMEK_DK[0] minutes), it serves at the counter; then it alternates —
@@ -4142,6 +4168,53 @@ export function niyetler(state, now, prev = null, options = {}) {
   const vakalar = result.filter((x) => x.tur !== 'sus' && (x.simge === 'kirmizi' || x.poz === 'basi-onde'))
     .map((x) => ({ id: x.id, yer: x.masa && plan.dugumler[`${x.masa}-yan`] ? `${x.masa}-yan` : null }));
   const uyariVar = sistemUyarisi(st);
+  // A short meeting in the Toplantı odası about a newly stuck job (the owner, 2026-11-19: "bir işe birden çok kişi
+  // bakıyorsa (müdür, doktor, sorumlu) kısa bir toplantı yapsınlar; toplantı odası şimdi yalnız görünüm amaçlı
+  // kişilerle dolu"): the job's department manager, its project sorumlusu and — while the stuck agent is on the floor
+  // — the doctor sit on the room's free chairs (the decorative people keep 0, 1 and 4) for the walk plus
+  // TOPLANTI_MS, once per job, within TOPLANTI_PENCERE_MS of the job getting stuck. The manager's own desk look and
+  // the doctor's desk visit for that case are consumed by it. Never in hafif (the managers are not drawn), never
+  // during another duty, never for a review the panel runs or an Ar-Ge job.
+  const TOPLANTI_KOLTUKLARI = ['toplanti-sandalye-2', 'toplanti-sandalye-3', 'toplanti-sandalye-5'];
+  const toplantida = (a, pa, rol, koltuk, doluToplanti) => {
+    if (hafif || a.cikis || !plan.dugumler[koltuk]) return null;
+    // the once-per-job memory, carried on EVERY tick the participant is drawn: a meeting that ended is never
+    // restarted while its job is still inside the window
+    const gorusulen = new Set(pa && Array.isArray(pa.toplantilar) ? pa.toplantilar : []);
+    if (gorusulen.size) a.toplantilar = [...gorusulen].slice(-10);
+    if (pa && pa.toplanti && Number.isFinite(pa.toplanti.bitis) && ms < pa.toplanti.bitis) {
+      doluToplanti.add(pa.toplanti.koltuk); // its chair stays taken for this tick
+      return pa.toplanti;
+    }
+    for (const t of tasks) {
+      if (!t || t.status !== 'tikandi' || !t.note || onayAdimi(t) || argeIsi(t)) continue;
+      const f = zamanMs(t.finished, tz, ofset);
+      if (f === null || ms < f || ms >= f + TOPLANTI_PENCERE_MS) continue;
+      const anahtar = notAdi(t.note);
+      if (gorusulen.has(anahtar)) continue;
+      const bolum = isDepartmani(t);
+      if (!mudurBurada(bolum)) continue; // the anchor: no department manager in the office, no meeting
+      if (rol.mudur && bolum !== rol.mudur) continue;
+      if (rol.proje && t.project !== rol.proje) continue;
+      let vaka = null;
+      if (rol.vaka) { // the doctor: only while the stuck agent is drawn on the floor (its own case list)
+        const hedef = visible.find((x) => x._task && notAdi(x._task.note) === anahtar &&
+          (x.simge === 'kirmizi' || x.poz === 'basi-onde'));
+        if (!hedef) continue;
+        vaka = hedef.id;
+      }
+      // its own chair first, else another free one of the room (a second meeting at once queues to a later tick)
+      const secim = [koltuk, ...TOPLANTI_KOLTUKLARI.filter((k) => k !== koltuk)]
+        .find((k) => plan.dugumler[k] && !doluToplanti.has(k) && !result.some((y) => y.yer === k));
+      if (!secim) return null;
+      doluToplanti.add(secim);
+      a.toplantilar = [...gorusulen, anahtar].slice(-10);
+      return { anahtar, note: t.note, koltuk: secim, vaka, bitis: ms + sure((pa && pa.yer) || a.yer, secim) + TOPLANTI_MS,
+        metin: `${T('toplantıda')} · ${kisa(t.title || anahtar, 30)}`,
+        toplantilar: a.toplantilar };
+    }
+    return null;
+  };
   // the Ar-Ge odası: the open job of the arge workspace (the newest one) — its Ar-Ge uzmanı works at its desk meanwhile
   const argeIs = tasks.filter(argeIsi)
     .sort((x, y) => (String(x.started || x.created || '') < String(y.started || y.created || '') ? 1 : -1))[0] || null;
@@ -4185,10 +4258,16 @@ export function niyetler(state, now, prev = null, options = {}) {
         ? { vakalar: [], yer: 'asansor' } : null);
       // past its own hours (or already walking out) it finishes the visit it is on and starts none
       const kapali = personelSaati(a.id, ms, sahne) !== 'iceride' || !!(pa && pa.cikis);
+      // the stuck-job meeting comes before its own desk visit — the case is consumed by it (visited at the table)
+      const tp = !kapali ? toplantida(a, pa, { vaka: true }, TOPLANTI_KOLTUKLARI[2], dolu) : null;
       const z = doktorZiyareti(pd, kapali ? [] : vakalar, ms, (f, t) => sure(f || masa, t));
       a.vakalar = kapali ? vakalar.map((c) => c.id) : z.vakalar;
       if (z.ziyaret) a.ziyaret = z.ziyaret;
-      if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('hastaya bakıyor'); ziyarette = true; a.gorevde = true; }
+      if (tp) {
+        a.toplanti = tp; a.vakalar = [...new Set([...a.vakalar, tp.vaka])];
+        a.yer = tp.koltuk; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = tp.metin; a.tiklama = { note: tp.note };
+        ziyarette = true; a.gorevde = true;
+      } else if (z.hedef && !hafif) { a.yer = z.hedef; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = T('hastaya bakıyor'); ziyarette = true; a.gorevde = true; }
     }
     if (!ziyarette && evdeMi(a)) {
       // home; one still drawn in the previous tick and not yet walking out (a visit ran past its leave time) walks to
@@ -4201,7 +4280,8 @@ export function niyetler(state, now, prev = null, options = {}) {
     }
     if (!hafif && !ziyarette && !a.cikis && !yemegeGit(a)) { // off duty: lunch, else wherever its personality takes it
       const m = personelRotasi(a.id, ms, plan, dolu, { ev: masa, onceki: prevYer.get(a.id), gece });
-      if (m) { a.yer = m.yer; a.masa = null; a.poz = m.poz; a.durum_metni = m.metin; a.mola = true; }
+      const c = m || cayMolasi(a.id, ms, plan, masa, dolu); // far from every break spot: the tea cadence
+      if (c) { a.yer = c.yer; a.masa = null; a.poz = c.poz; a.durum_metni = c.metin; a.mola = true; }
     }
     result.push(a);
   }
@@ -4315,6 +4395,17 @@ export function niyetler(state, now, prev = null, options = {}) {
       a.gorevde = true;
       gorevde = true;
     }
+    // the stuck-job meeting in the Toplantı odası: once per job, the walk plus TOPLANTI_MS; it consumes this
+    // manager's own desk look at that job (bakilan), so the same case is never walked to twice
+    if (!gorevde && !a.cikis && m.key !== 'it') {
+      const tp = toplantida(a, pa, { mudur: m.key }, TOPLANTI_KOLTUKLARI[0], dolu);
+      if (tp) {
+        a.toplanti = tp; bakilan.add(tp.anahtar); if (bakilan.size) a.bakilan = [...bakilan].slice(-10);
+        a.yer = tp.koltuk; a.masa = null; a.poz = 'bekliyor'; a.durum_metni = tp.metin; a.tiklama = { note: tp.note };
+        a.gorevde = true;
+        gorevde = true;
+      }
+    }
     // owner decision 2026-11-18 ("daha mantıklı"): a silent or stuck job of its department (bakilacakIsler) — the manager
     // walks to that worker's desk and stands by it ("sessiz işe bakıyor · <iş>"), the walk plus TOPLANTI_MS, once per job;
     // a side spot someone already holds (the doctor's visit to a stuck desk comes first) waits for a later tick
@@ -4341,7 +4432,8 @@ export function niyetler(state, now, prev = null, options = {}) {
     }
     if (!gorevde && !a.cikis && !yemegeGit(a)) { // no duty: lunch, else wherever its personality takes it
       const r = personelRotasi(a.id, ms, plan, dolu, { ev: masa, onceki: prevYer.get(a.id), gece });
-      if (r) { a.yer = r.yer; a.masa = null; a.poz = r.poz; a.durum_metni = r.metin; a.mola = true; }
+      const c = r || cayMolasi(a.id, ms, plan, masa, dolu); // far from every break spot: the tea cadence
+      if (c) { a.yer = c.yer; a.masa = null; a.poz = c.poz; a.durum_metni = c.metin; a.mola = true; }
     }
     result.push(a);
   }
@@ -4463,7 +4555,8 @@ export function niyetler(state, now, prev = null, options = {}) {
     if (evdeMi(a)) continue;
     if (!a.cikis && !yemegeGit(a)) { // no real work yet: lunch, else its personality decides (personelRotasi)
       const m = personelRotasi(a.id, ms, plan, dolu, { ev: masa, onceki: prevYer.get(a.id), gece });
-      if (m) { a.yer = m.yer; a.poz = m.poz; a.durum_metni = m.metin; a.mola = true; }
+      const c = m || cayMolasi(a.id, ms, plan, masa, dolu); // far from every break spot: the tea cadence
+      if (c) { a.yer = c.yer; a.poz = c.poz; a.durum_metni = c.metin; a.mola = true; }
     }
     result.push(a);
   }
@@ -4528,9 +4621,16 @@ export function niyetler(state, now, prev = null, options = {}) {
       r.poz = 'kutluyor'; r.durum_metni = kutlama.metin; r.gorevde = true;
     } else if (!acikIs) {
       if (evdeMi(r)) continue;
-      if (!r.cikis && !yemegeGit(r)) {
+      // the stuck-job meeting of its project (the Toplantı odası): once per job, the walk plus TOPLANTI_MS
+      const tp = toplantida(r, op, { proje: p }, TOPLANTI_KOLTUKLARI[1], dolu);
+      if (tp) {
+        r.toplanti = tp;
+        r.yer = tp.koltuk; r.masa = null; r.poz = 'bekliyor'; r.durum_metni = tp.metin; r.tiklama = { note: tp.note };
+        r.gorevde = true;
+      } else if (!r.cikis && !yemegeGit(r)) {
         const m = personelRotasi(r.id, ms, plan, dolu, { ev: mudur, onceki: prevYer.get(r.id), gece });
-        if (m) { r.yer = m.yer; r.masa = null; r.poz = m.poz; r.durum_metni = m.metin; r.mola = true; }
+        const c = m || cayMolasi(r.id, ms, plan, mudur, dolu); // far from every break spot: the tea cadence
+        if (c) { r.yer = c.yer; r.masa = null; r.poz = c.poz; r.durum_metni = c.metin; r.mola = true; }
       }
     }
     result.push(r);

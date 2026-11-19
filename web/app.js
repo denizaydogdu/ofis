@@ -36,6 +36,9 @@ import {
 const params = new URLSearchParams(location.search);
 const DEMO = params.get('demo') === '1';
 const LIGHT = params.get('hafif') === '1';
+// ?dil=en|tr opens the page in that language at once (screenshots, sharing a link); it becomes the remembered
+// language (the Ayarlar tab's select does the same). Must run before the first paint, hence here.
+{ const d = params.get('dil'); if (d === 'en' || d === 'tr') dilAyarla(d); }
 let pageNonce = document.querySelector('meta[name="ofis-token"]')?.getAttribute('content') || '';
 const CEO = '__ceo__';
 
@@ -1840,7 +1843,8 @@ async function loadQuality() {
   }
   const t = q.toplam;
   $('quality-empty').hidden = !!t;
-  stats.replaceChildren(...kaliteKutulari(t).map((k) => statTile(k.etiket, k.deger, k.ipucu, k.ana)));
+  // the NPC chat usage (GET /api/kalite `npc_sohbet`): a tile when a question was recorded, never a quality metric
+  stats.replaceChildren(...kaliteKutulari(t, q.npc_sohbet).map((k) => statTile(k.etiket, k.deger, k.ipucu, k.ana)));
   fillQualityTable($('quality-head'), $('quality-body'), QUALITY_HEAD.map((x) => T(x)), (q.satirlar || []).map(qualityCells), MAIN_COL);
   fillQualityTable($('quality-model-head'), $('quality-models'), QUALITY_HEAD.map((x) => T(x)).slice(2),
     (q.modeller || []).map((m) => qualityCells({ ...m, proje: '', katman: '' }).slice(2)), MAIN_COL - 2);

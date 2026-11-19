@@ -76,8 +76,13 @@
   bean bag; spots `oyun-pingpong-0/1` facing each other, `oyun-bilardo-0/1`, `oyun-dart`, `oyun-puf`); front row — the
   tea corner (a long counter: kettle, samovar, coffee machine, cups; two standing places `cay-ocagi-tezgah-yer-*`; three
   round tables with nine stools), the Ortak alan (four kadro armchairs, two café tables with four chairs
-  `ortak-alan-yer-*`, a sofa), the canteen, the **Revir** at its right end. The **Toplantı odası** stays an empty
-  meeting room (no actor is sent there; nothing honest maps to a meeting yet). **A compact floor** (the owner, 2026-11-12:
+  `ortak-alan-yer-*`, a sofa), the canteen, the **Revir** at its right end. The **Toplantı odası** hosts the
+  **stuck-job meeting** (the owner, 2026-11-19: "bir işe birden çok kişi bakıyorsa (müdür, doktor, sorumlu) kısa bir
+  toplantı yapsınlar"): within `TOPLANTI_PENCERE_MS` of a job getting stuck its department manager, its project
+  sorumlusu and — while the stuck agent is drawn — the doctor sit on the room's free chairs (`toplanti-sandalye-2/3/5`;
+  the decorative people keep 0, 1 and 4) for each one's walk plus `TOPLANTI_MS`, once per job, "toplantıda · <iş>"; the
+  manager's own desk look and the doctor's desk visit for that case are consumed by it; never in hafif (the managers
+  are not drawn), never for a panel-run review or an Ar-Ge job. **A compact floor** (the owner, 2026-11-12:
   about 1.3–1.8 : 1, no empty strips; `zeminIzgarasi` / `kanatIzgarasi(T, options)`): one grid of bay-sized cells,
   rows `SATIR_ARA` = 3 apart (row r at z = r × 12.5 base units, so a cell never moves when rows are added), in two
   regions. The **project wing** (`plan.kanat`) right of the common area behind a 4-unit spine corridor: columns filled
@@ -234,7 +239,13 @@
   (`personelKisiligi`: per-actor weights for the desk, tea, the game room, the gym, the terrace, a lounge chat, a walk;
   `personelRotasi` picks one per own 3-minute slot on staff-only spots no farther than `MOLA_UZAK` from its seat), so
   some stay put and others roam; duty always wins (visits,
-  a project resident stays at its bay while a job of its project is open). Informational staff (tur `sus`, never
+  a project resident stays at its bay while a job of its project is open). A staff member whose desk cannot reach
+  the tea corner's staff spot within `MOLA_UZAK` — the İK cell, the managers' offices, a far facility or bay cell —
+  had no break spot at all (the owner, 2026-11-19: "İK ve iki müdür mesai boyunca hiç kalkmıyor; öğle yemeğine ve
+  arada çaya gitsinler"), so after `personelRotasi` leaves it at its desk `cayMolasi` gives it one tea break per
+  `CAY_ARALIGI_MS` window (`CAY_KALIS_MS` at `cay-ocagi-personel-2`, "çay molasında"; a taken spot: a short walk), a
+  bounded rhythm like the kitchen teams' `mutfakDisi` (lunch keeps its own window; İK / QA / IT measured at ~5-6
+  teas a workday). Informational staff (tur `sus`, never
   workers): **Muhasebeci**, **İdari işler sorumlusu**,
   **İK ve İdari İşler Müdürü** (the İK staff NPC `sus:ik`, called "İK sorumlusu" before 2026-11-13; in the org chart it
   reports to the Genel Müdür and the support staff report to it) at their facility desks, and one **"<Proje> sorumlusu"** per team bay (at the manager's desk only while
@@ -246,7 +257,8 @@
   "giriş-çıkış ve güvenlik" (the guard team's shift, today's jobs in and out, who is in the office, open security
   findings / yüksek-risk cards, "İletişim uyarıları" = `postofficeWarnings`, then "Ofiste olanlar" / "Otelde olanlar" —
   see "Who is where"); Çaycı "molalar" (who is on a break, the longest worker, time to lunch,
-  today's top three spenders); Muhasebeci "harcamalar" (GET `/api/muhasebe`); İdari işler "ofis işleyişi" (`state.sunucu`
+  today's top three spenders); Muhasebeci "harcamalar" (GET `/api/muhasebe`; the day / month totals include the NPC
+  chat usage, each period shows it on its own line "NPC sohbeti: …" — a question never counts as a job); İdari işler "ofis işleyişi" (`state.sunucu`
   + GET `/api/idari`: autostart, Obsidian access as `{sorun, python}` — the fix step names the python binary, never the
   vault's home path —, log size, limits; schedules); İK "çalışanlar" (the roster, this month
   per role from `/api/muhasebe`, pilots, kadro cards, the reviewers in short from `/api/kalite` `denetciler`); "<Proje>
@@ -705,7 +717,10 @@
     department's manager (Yazılım / QA / Analist by `isDepartmani`; the IT has none) walks to that worker's desk side spot
     and stands by it — "sessiz işe bakıyor · <iş>" / "takılan işe bakıyor · <iş>", the walk plus `TOPLANTI_MS`, once per
     job (`bakilan`), only on no other duty; a side spot someone holds waits (the doctor's visit to a stuck desk comes
-    first, never both on one spot). A **job just finished** (bitti within `KUTLAMA_MS`) keeps its project sorumlusu at its
+    first, never both on one spot). A **freshly stuck job** instead gets the **stuck-job meeting** (the owner,
+    2026-11-19, see the Toplantı odası above): the department manager, the project sorumlusu and the doctor meet at the
+    room's free chairs, once per job (`toplantilar` carried per participant), and the manager's desk look and the
+    doctor's desk visit for that case never happen — the meeting consumes both. A **job just finished** (bitti within `KUTLAMA_MS`) keeps its project sorumlusu at its
     bay for the walk plus `KUTLAMA_MS` ("ekibini kutluyor · <iş>", once per job, only one already on the floor) — before,
     it walked off the very moment its project's last job was done. **Idle desk lines say real things** (`masaSozu`):
     the managers their department's open work ("masasında · 3 kod işi takipte · en yoğun: blog", "… inceleme …", the IT

@@ -675,7 +675,8 @@ class Kapi:
         state = state or {}
         tz = ((state.get("sahne") or {}).get("saat_dilimi")) or model_durum.yerel_saat_dilimi()
         try:
-            harcama = muhasebe.ozet(self.app.vault_ofis, state.get("board") or [], tz=tz)["bugun"]
+            harcama = muhasebe.ozet(self.app.vault_ofis, state.get("board") or [], tz=tz,
+                                    durum_dir=self.app.office.durum_dir)["bugun"]
         except Exception:  # noqa: BLE001 — the status still answers without today's job spending
             harcama = {}
         data = durum_verisi(state, harcama, self._kararlar_listesi(), projeler(self.app.current_config()))

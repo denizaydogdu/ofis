@@ -277,7 +277,7 @@ class SabahOzeti:
         tz = _tz(cfg)
         sonu = datetime.strptime(dun, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=tz)
         try:
-            harcama = muhasebe.ozet(vault, tasks, now=sonu, tz=str(tz.key))["bugun"]
+            harcama = muhasebe.ozet(vault, tasks, now=sonu, tz=str(tz.key), durum_dir=self.durum_dir)["bugun"]
         except Exception:  # noqa: BLE001 — the spending line only
             harcama = {}
         zamanli = []

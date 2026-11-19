@@ -630,13 +630,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, found) if found else self._error(404, "note not found")
         if path == "/api/kalite":  # phase 8: with the model selection (mapping, pilots, open model cards)
             return self._json(200, {**karne.quality(self.app.office.vault_ofis),
+                                    # the NPC chat usage (bin/npc_sohbet.py): counted in the office's totals, never
+                                    # in the quality metrics — a question is not a job
+                                    "npc_sohbet": npc_sohbet.kullanim_toplami(
+                                        npc_sohbet.kullanimlar(self.app.office.durum_dir)),
                                     "model_secimi": model_secimi.page(self.app.cfg, self.app.office.durum_dir),
                                     # the reviewer scorecard in short (the İK card): rounds, confirmed findings
                                     "denetciler": denetci.summary(denetci.list_rounds(self.app.office.durum_dir))})
-        if path == "/api/muhasebe":  # the Muhasebeci's card: day / month spending from the Karne rows + open jobs
+        if path == "/api/muhasebe":  # the Muhasebeci's card: day / month spending from the Karne rows + open jobs + NPC chat
             state, _ = self.app.hub.snapshot()
             tz = ((state or {}).get("sahne") or {}).get("saat_dilimi") or model_durum.yerel_saat_dilimi()
-            return self._json(200, muhasebe.ozet(self.app.office.vault_ofis, (state or {}).get("board") or [], tz=tz))
+            return self._json(200, muhasebe.ozet(self.app.office.vault_ofis, (state or {}).get("board") or [], tz=tz,
+                                                durum_dir=self.app.office.durum_dir))
         if path == "/api/idari":  # the İdari işler card: server start, limits, autostart, Obsidian access, log size
             return self._json(200, muhasebe.idari(self.app.cfg, self.app.office.sunucu, self.app.vault_problem))
         if path == "/api/arge":  # the Ar-Ge uzmanı's card: the last report's summary, suggestions, the free check

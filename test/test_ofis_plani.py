@@ -685,7 +685,11 @@ class DemoWingTest(unittest.TestCase):
         self.assertEqual([out["bos"], out["sutun"]], out["grid"])
         self.assertIn("hakem", out["seen"])
         self.assertIn("is:r", out["seen"])  # the Claude review of the demo
-        self.assertEqual(out["meeting"], [])
+        # the demo's stuck job (ornek-uygulama's) gets its real meeting in the Toplantı odası (the owner,
+        # 2026-11-19): its department manager sits at the room's free chairs. The sorumlu cannot join — the demo
+        # builds the plan from its four projects, ornek-uygulama has no bay in it, so nobody represents it — and
+        # the stuck agent itself is hidden (folded), so the doctor has no case to sit for
+        self.assertEqual(out["meeting"], ["sus:mudur:yazilim"])
         # plan "Sonraki iş (9)": the Claude review in the QA odası, the hakem in the Uzmanlar odası
         self.assertIn("QA odasında", out["captions"][0])
         self.assertIn("Uzmanlar odasında", out["captions"][1])

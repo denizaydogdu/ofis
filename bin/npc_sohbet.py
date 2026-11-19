@@ -22,7 +22,12 @@ data only.
 - Limits: one call at a time per server (a second one while busy = Mesgul, "biraz bekle"); at most `saatlik_sinir`
   calls per rolling hour (Sinir, 429 with the minutes until one frees up). The count is kept in memory: a server
   restart forgets it (honest scope: at most one extra hour's worth after a restart).
+- The usage record (the owner, 2026-11-19): every answered question appends {"zaman", "usd", "token"} to
+  durum/npc_sohbet/kullanim.jsonl (`kullanimlar` reads it back, `kullanim_toplami` aggregates). The office's day and
+  month usage count it (bin/muhasebe.py `ozet(durum_dir=...)` and the Kalite view's `npc_sohbet` field); a question
+  is never a job — is_sayisi and every quality number stay job-only. A failed write loses that one line only.
 """
+import json
 import os
 import re
 import threading
@@ -51,6 +56,8 @@ PENCERE_S = 3600
 KATMAN = "kolay"  # the Stajyer: its model from ofis.json tiers.kolay (launch.tier_entry)
 VARSAYILAN_MODEL = "haiku"
 KLASOR = "npc_sohbet"
+KULLANIM_DOSYA = "kullanim.jsonl"  # one answered question per line: {"zaman", "usd", "token"}
+KAYIT_MAX = 4 * 1024 * 1024  # a record file larger than this is read from its tail (the half first line dropped)
 ACIK_DURUMLAR = ("sirada", "baslatiliyor", "calisiyor", "karar-bekliyor", "incelemede", "kontrolde")
 DURUM_ADI = {"sirada": "sırada", "baslatiliyor": "başlıyor", "calisiyor": "çalışıyor", "karar-bekliyor": "karar bekliyor",
              "incelemede": "incelemede", "kontrolde": "Kontrol'de", "bitti": "bitti", "tikandi": "takıldı",
@@ -200,8 +207,15 @@ def _departman(t):
     return "yazilim"
 
 
-def _is_satiri(t):
-    parts = [t.get("project") or "—", _str(t.get("title") or t.get("note"), 90), DURUM_ADI.get(t.get("status"), ""),
+def _gun_saati(t):
+    """The HH:MM of a task's finish stamp ("" without a usable stamp) — the day's own memory: an NPC can say
+    "sabahki blog işi bitti" only when it knows when the job finished."""
+    stamp = str(t.get("finished") or "")
+    return stamp[11:16] if len(stamp) >= 16 and stamp[11:13].isdigit() else ""
+
+
+def _is_satiri(t, saat=None):
+    parts = [saat or "", t.get("project") or "—", _str(t.get("title") or t.get("note"), 90), DURUM_ADI.get(t.get("status"), ""),
              KATMAN_ADI.get(str(t.get("tier") or ""), "")]
     return "- " + " · ".join(p for p in parts if p)
 
@@ -267,7 +281,9 @@ def ozet(state, rol, cfg, now=None):
     bolum("Bekleyen sorular", ["- " + " · ".join(x for x in (
         d.get("project") or "ofis", _str(d.get("title"), 90),
         _str(d.get("question"), 160) if soru_da else "") if x) for d in decisions], 5)
-    bolum("Bugün bitenler", [_is_satiri(t) for t in bugun], 8)
+    # the day's events carry their time (the owner, 2026-11-19: "gün içinde olanları konuşmalarında hatırlasınlar,
+    # örneğin 'sabahki blog işi bitti'" — the answer can place the morning's job only with its time)
+    bolum("Bugün bitenler", [_is_satiri(t, _gun_saati(t)) for t in bugun], 8)
     if kapsam != "genel" or deger in ("revir", "psikolog", "sekreter"):
         bolum("Daha önce takılan işler", [_is_satiri(t) for t in takilan], 4)
     if kapsam == "genel" and deger == "muhasebe":
@@ -362,6 +378,65 @@ def temiz_cevap(text):
     return text if len(text) <= CEVAP_SINIRI else text[:CEVAP_SINIRI - 1].rstrip() + "…"
 
 
+# --- the usage record (the office's totals count it; a question is never a job) ---
+
+def kullanim_yolu(durum_dir):
+    """The usage record's path: <durum_dir>/npc_sohbet/kullanim.jsonl (an empty durum_dir gives a path never read)."""
+    return os.path.join(durum_dir or "", KLASOR, KULLANIM_DOSYA)
+
+
+def _pozitif(value):
+    """A usable non-negative number (never a bool)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def kullanimlar(durum_dir):
+    """Every recorded question's usage, oldest first: [{zaman, usd, token}]. A missing folder is no records; a line
+    that is not a valid record is skipped (a crash mid-write); a symlink is never opened."""
+    path = kullanim_yolu(durum_dir)
+    try:
+        if os.path.islink(path):
+            return []
+        st = os.stat(path)
+        with open(path, "rb") as f:
+            if st.st_size > KAYIT_MAX:
+                f.seek(-KAYIT_MAX, os.SEEK_END)
+                f.readline()  # the half line the seek landed in: dropped
+            data = f.read()
+    except OSError:
+        return []
+    out = []
+    for line in data.decode("utf-8", "replace").splitlines():
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(r, dict) or not _pozitif(r.get("zaman")) or r["zaman"] <= 0 \
+                or not _pozitif(r.get("usd")):
+            continue
+        token = r.get("token")
+        if not isinstance(token, int) or isinstance(token, bool) or token < 0:
+            continue
+        out.append({"zaman": float(r["zaman"]), "usd": float(r["usd"]), "token": token})
+    return out
+
+
+def kullanim_toplami(records):
+    """{usd, token, token_bilinen, soru} of a set of records: dollars summed, tokens only where a count is known (None
+    when none is), every record one question."""
+    out = {"usd": 0.0, "token": None, "token_bilinen": 0, "soru": 0}
+    for r in records or []:
+        if not isinstance(r, dict) or not _pozitif(r.get("usd")):
+            continue
+        out["usd"] = round(out["usd"] + float(r["usd"]), 6)
+        out["soru"] += 1
+        token = r.get("token")
+        if isinstance(token, int) and not isinstance(token, bool) and token > 0:
+            out["token"] = (out["token"] or 0) + token
+            out["token_bilinen"] += 1
+    return out
+
+
 class Sohbet:
     """One per server: the lock (one call at a time), the rolling-hour count and the call."""
 
@@ -404,6 +479,23 @@ class Sohbet:
             model = VARSAYILAN_MODEL
         return model
 
+    def _kayit(self, usd, adet):
+        """Appends this question's usage to the record file (see the module doc). A failed write loses that one line
+        only — an answer is never lost over it."""
+        try:
+            folder = os.path.join(self.durum_dir, KLASOR)
+            if os.path.islink(folder):
+                return
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, KULLANIM_DOSYA)
+            if os.path.islink(path):
+                return
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"zaman": self.clock(), "usd": round(float(usd or 0.0), 6),
+                                    "token": int(adet or 0)}) + "\n")
+        except (OSError, TypeError, ValueError):
+            pass  # the record is a nicety: the answer itself still goes out
+
     def cagir(self, model, sistem, prompt):
         """(text, cost, token count) of the one model call; raises CagriHatasi."""
         if not isinstance(prompt, str) or prompt.lstrip().startswith("-") or sistem.lstrip().startswith("-"):
@@ -444,6 +536,7 @@ class Sohbet:
                         if self._zamanlar:
                             self._zamanlar.pop()
                 raise
+            self._kayit(cost, adet)  # the office's totals count it (see the module doc)
         finally:
             self._lock.release()
         cevap = temiz_cevap(text)

@@ -153,6 +153,16 @@ class SummaryTest(unittest.TestCase):
         for word in ("harcama", "maliyet"):
             self.assertNotIn(word, text.lower())
 
+    def test_the_days_finished_jobs_carry_their_time(self):
+        # the owner, 2026-11-19 ("gün içinde olanları konuşmalarında hatırlasınlar, örneğin 'sabahki blog işi
+        # bitti'"): an NPC can place the morning's job only when the day's list says when it finished; a stamp
+        # without a usable time keeps its line whole
+        text = npc_sohbet.ozet(state(), "sekreter", ACIK, now=NOW)
+        self.assertIn("- 09:00 · blog · eski iş · takıldı", text)
+        self.assertNotIn("- · ", text)  # no empty time cell, whatever the stamp
+        eski = state(tasks=[task("blog", "eski iş", "tikandi", finished="2026-11-18")])
+        self.assertIn("- blog · eski iş · takıldı", npc_sohbet.ozet(eski, "sekreter", ACIK, now=NOW))
+
     def test_the_accountant_lists_usage_per_project(self):
         text = npc_sohbet.ozet(state(), "muhasebe", ACIK, now=NOW)
         self.assertIn("- blog: 182 bin token · API karşılığı ~$0.41", text)
@@ -255,6 +265,28 @@ class CallTest(unittest.TestCase):
         self.assertEqual(npc_sohbet.Sohbet.model({}), "haiku")
         self.assertEqual(npc_sohbet.Sohbet.model({"tiers": {"kolay": {"model": "-x; rm"}}}), "haiku")
 
+    def test_each_answer_records_its_usage_for_the_office_totals(self):
+        self.sohbet.sor("sekreter", "ne oldu?")
+        path = os.path.join(self.durum, "npc_sohbet", "kullanim.jsonl")
+        with open(path, encoding="utf-8") as f:
+            [line] = f.read().splitlines()
+        kayit = json.loads(line)
+        self.assertEqual((kayit["usd"], kayit["token"]), (0.002, 1280))
+        self.assertGreater(kayit["zaman"], 0)
+        self.assertEqual(npc_sohbet.kullanimlar(self.durum),
+                         [{"zaman": kayit["zaman"], "usd": 0.002, "token": 1280}])
+        self.assertEqual(npc_sohbet.kullanim_toplami(npc_sohbet.kullanimlar(self.durum)),
+                         {"usd": 0.002, "token": 1280, "token_bilinen": 1, "soru": 1})
+
+    def test_a_failed_call_records_no_usage(self):
+        self.reply({"result": "ok"}, 1)
+        with self.assertRaises(npc_sohbet.CagriHatasi):
+            self.sohbet.sor("sekreter", "ne oldu?")
+        self.sohbet.cli.claude_bin = os.path.join(self.out, "yok")
+        with self.assertRaises(npc_sohbet.CagriHatasi):
+            self.sohbet.sor("sekreter", "ne oldu?")
+        self.assertFalse(os.path.exists(os.path.join(self.durum, "npc_sohbet", "kullanim.jsonl")))
+
     def test_failures_become_one_turkish_error(self):
         cases = [({"result": "x", "is_error": True}, 0), ({"result": "ok"}, 1), ("not json", 0),
                  ({"result": "   "}, 0)]
@@ -320,6 +352,44 @@ class LimitTest(unittest.TestCase):
         release.set()
         t.join(5)
         self.assertEqual(self.sohbet.sor("muhasebe", "ne kadar?")["kullanim"], "kayıt yok")
+
+    def test_a_record_folder_that_cannot_be_written_is_no_problem(self):
+        # durum_dir "/nonexistent": the record write fails silently — an answer is never lost over it
+        self.sohbet.sor("sekreter", "ne oldu?")
+        self.assertEqual(len(self.calls), 1)
+
+
+class KayitTest(unittest.TestCase):
+    """The usage record's reader and aggregator (the office's totals read these)."""
+
+    def test_bad_lines_links_and_missing_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(npc_sohbet.kullanimlar(tmp), [])
+            folder = os.path.join(tmp, "npc_sohbet")
+            os.makedirs(folder)
+            path = os.path.join(folder, "kullanim.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"zaman": 100.5, "usd": 0.1, "token": 10}) + "\n"
+                        "not json\n"
+                        + json.dumps({"zaman": True, "usd": 0.1, "token": 10}) + "\n"
+                        + json.dumps({"zaman": 200, "usd": -1, "token": 10}) + "\n"
+                        + json.dumps({"zaman": 300, "usd": 0.2}) + "\n"
+                        + json.dumps({"zatan": 400, "usd": 0.2, "token": 5}) + "\n"
+                        + json.dumps({"zaman": 500.0, "usd": 0.3, "token": 30}) + "\n")
+            self.assertEqual(npc_sohbet.kullanimlar(tmp),
+                             [{"zaman": 100.5, "usd": 0.1, "token": 10}, {"zaman": 500.0, "usd": 0.3, "token": 30}])
+            os.remove(path)
+            os.symlink(tmp, path)  # a link is never opened
+            self.assertEqual(npc_sohbet.kullanimlar(tmp), [])
+        self.assertEqual(npc_sohbet.kullanimlar("/nonexistent"), [])
+
+    def test_the_aggregate_counts_questions_and_known_tokens_only(self):
+        kayitlar = [{"zaman": 100, "usd": 0.1, "token": 10}, {"zaman": 200, "usd": 0.2, "token": 0},
+                    {"zaman": 300, "usd": 0.0, "token": 5}, "bozuk", None]
+        self.assertEqual(npc_sohbet.kullanim_toplami(kayitlar),
+                         {"usd": 0.3, "token": 15, "token_bilinen": 2, "soru": 3})
+        self.assertEqual(npc_sohbet.kullanim_toplami(None),
+                         {"usd": 0.0, "token": None, "token_bilinen": 0, "soru": 0})
 
 
 class PostTest(unittest.TestCase):

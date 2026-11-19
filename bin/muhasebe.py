@@ -7,7 +7,13 @@ recorded spending `harcanan_usd` / `harcanan_token`). A job is counted once: an 
 zone (ofis.json ofis_sahnesi.saat_dilimi). Unknown tokens stay None (shown as "—"), never 0. Codex and the free
 reviewers are not priced: `codex_fiyatsiz` counts the Codex review rows/jobs of the period so the card can say so.
 
-The Karne rows are parsed again only when a Kayitlar file changes (cache keyed by their mtimes and sizes)."""
+The Karne rows are parsed again only when a Kayitlar file changes (cache keyed by their mtimes and sizes).
+
+The NPC chat usage (bin/npc_sohbet.py's records, `durum_dir`) joins the day and month totals: its dollars and known
+tokens are part of the office's usage, its questions never count as jobs — is_sayisi, the per-project / per-role
+breakdowns, the budget view and every quality number stay job-only; each period carries its own `npc_sohbet` total
+({usd, token, soru}; zero questions = nothing added).
+"""
 import os
 import re
 import threading
@@ -109,9 +115,33 @@ def _uzmanliklar(items):
                                                                                     x[0]))]
 
 
-def ozet(vault, board, now=None, tz=None):
+def _npc_gunler(record, zone):
+    """(day, month) of one NPC chat record in the office zone, ("", "") for a stamp that cannot be read."""
+    try:
+        t = datetime.fromtimestamp(record["zaman"], zone)
+    except (KeyError, OSError, OverflowError, TypeError, ValueError):
+        return "", ""
+    return t.strftime("%Y-%m-%d"), t.strftime("%Y-%m")
+
+
+def _npc_ekle(totals, npc):
+    """One period's totals with the NPC chat usage (see the module doc): the dollars and the known tokens join the
+    total, the questions stay their own count — is_sayisi and the breakdowns are jobs only."""
+    out = dict(totals)
+    out["npc_sohbet"] = {"usd": npc["usd"], "token": npc["token"], "soru": npc["soru"]}
+    if npc["soru"]:
+        out["usd"] = round(totals["usd"] + npc["usd"], 6)
+        if totals["token"] is not None or npc["token"] is not None:
+            out["token"] = (totals["token"] or 0) + (npc["token"] or 0)
+        out["token_bilinen"] = totals["token_bilinen"] + npc["token_bilinen"]
+    return out
+
+
+def ozet(vault, board, now=None, tz=None, durum_dir=None):
     """The accounting summary for the page (see the module doc). `board` = the state's board jobs (or tasks); `tz` =
-    the office zone's name (default: the system's local zone)."""
+    the office zone's name (default: the system's local zone); `durum_dir` = the server's state folder, for the NPC
+    chat usage that joins the day and month totals."""
+    import npc_sohbet  # lazy: it imports launch and the state modules' friends
     tz = tz or model_durum.yerel_saat_dilimi()
     zone = ZoneInfo(tz)
     now = now or datetime.now(zone)
@@ -162,6 +192,10 @@ def ozet(vault, board, now=None, tz=None):
                         "token": item["token"], "butce": budget})
     day = [i for i in items if i["tarih"] == today]
     mon = [i for i in items if i["tarih"].startswith(month)]
+    # the NPC chat usage of the two periods (a question is never a job: only the dollars and tokens join)
+    kayit = [(*_npc_gunler(r, zone), r) for r in (npc_sohbet.kullanimlar(durum_dir) if durum_dir else [])]
+    npc_gun = npc_sohbet.kullanim_toplami([r for gun, _, r in kayit if gun == today])
+    npc_mon = npc_sohbet.kullanim_toplami([r for _, ay, r in kayit if ay == month])
     measured = karne._rounded(karne._measure([i["row"] for i in mon if "row" in i], events))
     top = sorted((i for i in mon if i["usd"]), key=lambda i: (-i["usd"], i["not"]))[:3]
     spent = sum(r["usd"] or 0.0 for r in running)
@@ -171,7 +205,7 @@ def ozet(vault, board, now=None, tz=None):
                if (r["usd"] or 0) >= NEAR * r["butce"]]
     return {
         "gun": today, "ay": month, "saat_dilimi": tz,
-        "bugun": _totals(day), "bu_ay": _totals(mon),
+        "bugun": _npc_ekle(_totals(day), npc_gun), "bu_ay": _npc_ekle(_totals(mon), npc_mon),
         "kalite": {k: measured[k] for k in ("dogrulanmis_is_basina_usd", "dogrulanmis_is_basina_token", "toplam_token",
                                              "token_bilinmeyen", "ilk_tur_gecen", "ilk_tur_olculen", "dogrulanan")},
         # this month's performance per role (the İK card): the same measure as Ozet.md / Kalite, over the month's rows

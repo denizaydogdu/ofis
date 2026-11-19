@@ -15,6 +15,7 @@ Teknik olarak: yerel bir Python sunucusu (yalnız standart kütüphane) ve ofisi
 
 ## İçindekiler
 
+- [Ekran görüntüleri](#ekran-görüntüleri)
 - [Nasıl çalışır](#nasıl-çalışır)
 - [Gereksinimler](#gereksinimler)
 - [Kurulum ve ilk çalıştırma](#kurulum-ve-ilk-çalıştırma)
@@ -26,6 +27,29 @@ Teknik olarak: yerel bir Python sunucusu (yalnız standart kütüphane) ve ofisi
 - [Sorun giderme](#sorun-giderme)
 - [Katkı](#katkı)
 - [Lisans](#lisans)
+
+## Ekran görüntüleri
+
+Üçü de demo ofisini gösteriyor (`?demo=1`: sahte veriler, sunucuya çağrı yok), Türkçe ve İngilizce (`?dil=en`).
+
+**3B ofis** — her projenin bir ekip alanı, her işin masada çalışan bir robotu, çevresinde çalışan odaları ve ortak
+alanları (çay köşesi, yemekhane, oyun odası):
+
+| Türkçe | English |
+|---|---|
+| ![3B ofis](docs/screenshots/office-tr.png) | ![3B ofis](docs/screenshots/office-en.png) |
+
+**Komuta masası** — CEO sohbeti, şu an kimin neyi çalıştırdığı ve cevapladığın karar kartları:
+
+| Türkçe | English |
+|---|---|
+| ![Komuta masası](docs/screenshots/command-desk-tr.png) | ![Komuta masası](docs/screenshots/command-desk-en.png) |
+
+**İşler sekmesi** — sıradaki, çalışan ve biten işler, ilerlemeleriyle:
+
+| Türkçe | English |
+|---|---|
+| ![İşler sekmesi](docs/screenshots/job-board-tr.png) | ![İşler sekmesi](docs/screenshots/job-board-en.png) |
 
 ## Nasıl çalışır
 
@@ -191,6 +215,15 @@ masada çalışan bir robottur. Çevresinde:
   (ücretsiz ek denetçiler), **`node`** (yalnız JavaScript testleri için).
 
 ## Kurulum ve ilk çalıştırma
+
+Tek komut aşağıdaki adımları yapar (yolları ve iki adı sorar, klasörleri oluşturur ve sunucuyu başlatmayı önerir;
+var olan `ofis.json` kişiseldir, üzerine yazılmaz):
+
+```sh
+bash kurulum.sh
+```
+
+Ya da elle:
 
 1. Depoyu indir ve ayar dosyanı oluştur:
 

@@ -1336,6 +1336,10 @@ export function muhasebeKarti(st, ms, m) {
     const rll = (x.rol || []).filter((r) => r && r.is_sayisi);
     const rl = rll.map((r) => parcaTok(r.rol, r.usd, r.token));
     if (rl.length) satirlar.push(satir('', T('unvana göre: {liste}', { liste: rl.join(' · ') }), tablo(`${anahtarOf(ad)}-rol`, T('{donem} · unvana göre', { donem: ad }), T('Unvan'), rll, (r) => T(r.rol))));
+    // NPC chat (bin/npc_sohbet.py): its usage is already in the period total above; its questions are never jobs
+    const npc = x.npc_sohbet;
+    if (npc && Number(npc.soru) > 0)
+      satirlar.push(satir('', T('NPC sohbeti: {kullanim} ({n} soru)', { kullanim: paraTok(npc.usd, npc.token), n: Number(npc.soru) }), HR));
     if (x.codex_fiyatsiz > 0) satirlar.push(satir('', T('Codex incelemeleri ({sayi}) fiyatsız: toplamda yok', { sayi: x.codex_fiyatsiz }), HR));
   };
   // the table keys stay the Turkish period names (kartDuzeni joins rows by key; the title is translated)

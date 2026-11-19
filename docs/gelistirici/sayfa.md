@@ -16,7 +16,8 @@
   `web/favicon.svg`. Internal names (`ofis.py`, `ofis-ceo`, `OFIS/`) stay. The greeting card stays "İyi günler.".
 - **Language** (English option, phase 1, 2026-11-18): ofis.json `dil` (`tr` default | `en`; `/api/state.ofis.dil`,
   bin/dil.py `kod`), set on Ayarlar › Genel › "Dil / Language" (a select saved at once, `{islem: "genel", dil}`,
-  `dilGovdesi` in web/ayarlar.js). The page keys its strings by their Turkish source text: `web/i18n.js` `t(tr, vars)`
+  `dilGovdesi` in web/ayarlar.js). `?dil=en|tr` opens the page in that language at once (screenshots, sharing a
+  link; app.js sets it before the first paint and it becomes the remembered language). The page keys its strings by their Turkish source text: `web/i18n.js` `t(tr, vars)`
   (imported as `T`; returns the input in Turkish, the `web/i18n-en.js` entry in English, `{name}` placeholders filled,
   an entry may be `{one, other}` chosen by `vars.n`), `N_('…')` marks a module constant translated where it is drawn
   (never `T()` at module top level), `yerel()` = `tr-TR` / `en-GB` for dates and numbers (Turkish casing helpers keep
@@ -251,7 +252,9 @@
   (`GET /api/kalite` → `{satirlar: [per proje × katman × model], modeller: [per model], toplam, is_sayisi}`, computed
   by `karne.quality()` from the Kayitlar rows and correction logs, the same code as `Ozet.md`; the tiles and table
   cells show every dollar metric with its tokens — `kaliteKutulari`, `qualityCells`, `paraTokenMetni`,
-  `tokenToplamMetni` in `web/ofis-text.js`; phase 8 adds
+  `tokenToplamMetni` in `web/ofis-text.js`; `kaliteKutulari(toplam, npc)` also draws the NPC chat tile when the
+  response's `npc_sohbet` ({soru, usd, token}) has a recorded question — its usage is part of the office's totals,
+  never of the quality metrics; the owner, 2026-11-19; phase 8 adds
   `model_secimi: {eslesme: [{proje, katman, model, effort, kaynak}], pilotlar: [{…, eklenen, biten, toplam}],
   oneriler: [open model cards]}` from `model_secimi.page()`, shown under "Kadro ve görev dağılımı"; the per-model table
   is "Unvana göre", the column "Çalışan"). The vault notes the server writes use the same words: Karne `Kayitlar` /

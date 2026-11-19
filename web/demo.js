@@ -102,6 +102,8 @@ const QUALITY = {
     quality('', '', 'sonnet', 3, 2, 1, 3, 1, 1, 1.104, 18)],
   toplam: quality('', '', '', 16, 12, 9, 12, 5, 10, 6.9225, 18, 1914200, 11),
   is_sayisi: 16,
+  // the NPC chat usage (bin/npc_sohbet.py): part of the office's totals, never of the quality metrics above
+  npc_sohbet: { usd: 0.0136, token: 96000, token_bilinen: 11, soru: 11 },
   // phase 8 (bin/model_secimi.py page()): an open proposal, a running pilot and the effective mapping
   model_secimi: {
     oneriler: [{ proje: 'blog', katman: 'kolay', kimlik: 'blog-kolay-20261111093000-1', tur: 'model-onerisi', yon: 'asagi',
@@ -118,18 +120,20 @@ const QUALITY = {
 QUALITY.denetciler = [{ ad: 'codex', tur: 9, karar: 9, ciddi: 6, gecerli: 4 }, { ad: 'glm', tur: 7, karar: 6, ciddi: 5, gecerli: 2 },
   { ad: 'deepseek', tur: 4, karar: 3, ciddi: 2, gecerli: 1 }];
 
-// GET /api/muhasebe (bin/muhasebe.py ozet): fake but internally consistent numbers for the Muhasebeci's card
+// GET /api/muhasebe (bin/muhasebe.py ozet): fake but internally consistent numbers for the Muhasebeci's card; the
+// NPC chat usage (npc_sohbet) is inside the period totals and never in the job counts
 const tot = (usd, token, n, proje, rol, codex = 0) => ({ usd, token, token_bilinen: token === null ? 0 : n, is_sayisi: n,
   codex_fiyatsiz: codex, proje: proje.map(([p, u, t, k]) => ({ proje: p, usd: u, token: t, token_bilinen: t === null ? 0 : k, is_sayisi: k })),
   rol: rol.map(([r, u, t, k]) => ({ rol: r, usd: u, token: t, token_bilinen: t === null ? 0 : k, is_sayisi: k })) });
+const NPC = (usd, token, soru) => ({ usd, token, soru });
 const MUHASEBE = {
   saat_dilimi: 'Europe/Istanbul',
-  bugun: tot(4.8336, 1690000, 5, [['atolye', 2.85, 1240000, 1], ['ornek-uygulama', 1.12, 412000, 1], ['kasa', 0.8523, 18300, 2],
+  bugun: { ...tot(4.8336, 1690000, 5, [['atolye', 2.85, 1240000, 1], ['ornek-uygulama', 1.12, 412000, 1], ['kasa', 0.8523, 18300, 2],
     ['blog', 0.0081, null, 1]], [['Stajyer', 0.0081, null, 1], ['Uzman', 0.0423, 18300, 1], ['Kıdemli', 1.93, 412000, 2],
-    ['Genel Müdür', 2.85, 1240000, 1]], 1),
-  bu_ay: tot(38.412, 14200000, 41, [['ornek-uygulama', 17.204, 6100000, 16], ['atolye', 11.85, 5200000, 9], ['kasa', 8.31, 2700000, 11],
+    ['Genel Müdür', 2.85, 1240000, 1]], 1), npc_sohbet: NPC(0.0032, 19700, 2) },
+  bu_ay: { ...tot(38.4256, 14296000, 41, [['ornek-uygulama', 17.204, 6100000, 16], ['atolye', 11.85, 5200000, 9], ['kasa', 8.31, 2700000, 11],
     ['blog', 1.048, 200000, 5]], [['Stajyer', 0.75, 380000, 12], ['Uzman', 6.2, 2900000, 14], ['Kıdemli', 22.9, 8100000, 12],
-    ['Genel Müdür', 8.562, 2820000, 3]], 4),
+    ['Genel Müdür', 8.562, 2820000, 3]], 4), npc_sohbet: NPC(0.0136, 96000, 11) },
   kalite: { dogrulanmis_is_basina_usd: 1.2391, dogrulanmis_is_basina_token: 458000, toplam_token: 14200000, token_bilinmeyen: 0,
     ilk_tur_gecen: 24, ilk_tur_olculen: 31, dogrulanan: 31 },
   bu_ay_rol_kalite: [{ rol: 'Stajyer', is_sayisi: 12, ilk_tur_gecen: 10, ilk_tur_olculen: 11, dogrulanan: 10, dogrulanmis_is_basina_usd: 0.075, dogrulanmis_is_basina_token: 38000 },

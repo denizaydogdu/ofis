@@ -81,7 +81,9 @@
 - **NPC chat** (owner decision 2026-11-18, `bin/npc_sohbet.py`): `POST /api/npc-sohbet` `{npc, soru ≤ 500}` with the
   same checks as every page POST. The role key is one of a fixed set (`sekreter`, `muhasebe`, `idari`, `ik`,
   `psikolog`, `revir`, `sunucu`, `arge`, `guvenlik`, `mudur:<yazilim|qa|analist|it>`, `proje:<registered, not
-  forbidden>`). The server builds a compact, role-scoped summary (`ozet`, ≤ 4000 characters) from the page's own
+  forbidden>`). The server builds a compact, role-scoped summary (`ozet`, ≤ 4000 characters; the day's finished list
+  carries each job's time — "- 09:00 · blog · Giriş · bitti" — so an NPC can say "sabahki blog işi bitti", the owner,
+  2026-11-19) from the page's own
   `/api/state` snapshot (`Hub.snapshot`, already free of forbidden projects; every line also passes
   `adimlar.forbidden` and `olaylar.maskele`) and makes ONE `claude -p` call through `ClaudeCLI._run` (test env
   stripped, `OFIS_OTURUMU=1`): the `kolay` tier's model (`launch.tier_entry`, default haiku), `--effort low`,
@@ -93,8 +95,12 @@
   question; 409 off (ofis.json `npc_sohbet.acik` not true — the shipped default) or busy (one call at a time per
   server); 429 over `npc_sohbet.saatlik_sinir` (default 20) per rolling hour, with `Retry-After` and the minutes;
   502 the call failed. The hourly count lives in memory (a restart forgets it); a slot is counted only after the
-  summary is built and given back when claude could not be run at all. Known gap: these calls are not added to the
-  office's usage totals (Muhasebe card, Karne); each answer shows its own usage line only. The summary drops a field
+  summary is built and given back when claude could not be run at all. Every answered question appends its usage
+  ({"zaman", "usd", "token"}) to `durum/npc_sohbet/kullanim.jsonl` (`kullanimlar` reads it back, `kullanim_toplami`
+  aggregates; the owner, 2026-11-19): the office's day and month usage count it — `muhasebe.ozet(durum_dir=…)` (the
+  Muhasebe card, the morning summary, Jarvis `durum`, the project sorumlusu note's month) and the Kalite view's
+  `npc_sohbet` field (GET `/api/kalite`, its own tile) — while a question never counts as a job (is_sayisi and every
+  quality number stay job-only; a failed write loses that one line only). The summary drops a field
   that names a forbidden project before it is cut and masks it before the cut too. `/api/state.npc_sohbet` =
   `{acik, saatlik_sinir}` for the cards; the Ayarlar tab writes the key through `bin/ayarlar.py` (`genel`).
   The page's endpoints refuse any request with an `Authorization` header (403): the Jarvis key opens `/a2a` only.

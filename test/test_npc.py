@@ -171,8 +171,11 @@ class DutyTripTest(unittest.TestCase):
         for s in out:
             self.assertTrue(s["ulasti"], s)
 
-    def test_the_doctor_and_the_psychologist_reach_the_desk_they_visit(self):
-        dr = run_js("stintler('takildi-kirmizi', at(9, 59), at(10, 4), 'sus:revir', (x) => x.durum_metni === 'hastaya bakıyor')")
+    def test_the_doctor_reaches_the_meeting_room_and_the_psychologist_the_desk(self):
+        # the owner, 2026-11-19: a freshly stuck job gets one short meeting in the Toplantı odası (the doctor's trip
+        # is the walk there, not the desk it used to visit — the meeting consumes that case); the psychologist's
+        # visit to a second-Kontrol desk is unchanged
+        dr = run_js("stintler('takildi-kirmizi', at(9, 59), at(10, 6), 'sus:revir', (x) => x.yer === 'toplanti-sandalye-5')")
         ps = run_js("stintler('kontrol', at(10, 29), at(10, 33), 'sus:psikolog', (x) => x.durum_metni === 'moral veriyor')")
         for out in (dr, ps):
             self.assertEqual(len(out), 1)
@@ -1577,17 +1580,70 @@ class MantikliDavranisTest(unittest.TestCase):
         self.assertIn(["Bakılması gereken", "vitrin · Sepet hesabı · sessiz"], rows)
         self.assertIn({"tur": "is", "note": "2026-11-12-093000-vitrin.md", "metin": "İşi aç: Sepet hesabı"}, out["kart"]["eylemler"])
 
-    def test_a_stuck_job_gets_the_doctor_first_then_its_manager_never_on_the_same_spot(self):
+    def test_a_freshly_stuck_job_gets_one_short_meeting_not_three_desk_visits(self):
+        # the owner, 2026-11-19 ("bir işe birden çok kişi bakıyorsa (müdür, doktor, sorumlu) kısa bir toplantı yapsınlar;
+        # toplantı odası şimdi yalnız görünüm amaçlı kişilerle dolu"): within TOPLANTI_PENCERE_MS of the job getting
+        # stuck its department manager, its project sorumlusu and the doctor (the case is its own list's) meet on the
+        # room's free chairs — once per job, the walk plus TOPLANTI_MS; the manager's own desk look and the doctor's
+        # desk visit for that case never happen (both consumed by the meeting)
         out = run_js("""(() => { let ayni = 0;
           gun('takildi-kirmizi', at(9, 59), at(10, 30), 1, (ms, a) => { const m = bul(a, 'sus:mudur:yazilim'), dr = bul(a, 'sus:revir');
             if (m && dr && m.yer === dr.yer && /-yan$/.test(m.yer || '')) ayni++; });
-          return { ayni, yaz: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:mudur:yazilim', (x) => /^takılan işe bakıyor/.test(x.durum_metni || '')),
-            dr: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:revir', (x) => x.durum_metni === 'hastaya bakıyor') }; })()""")
-        self.assertEqual(len(out["dr"]), 1, out)
-        self.assertEqual(len(out["yaz"]), 1, out)
-        self.assertTrue(out["yaz"][0]["ulasti"], out)
-        self.assertGreater(out["yaz"][0]["bas"], out["dr"][0]["son"])  # the doctor's visit comes first
-        self.assertEqual(out["ayni"], 0)
+          const tp = (id, koltuk) => stintler('takildi-kirmizi', at(9, 59), at(10, 30), id,
+            (x) => x.yer === koltuk && x.durum_metni === 'toplantıda · Ödeme ekranı');
+          return { ayni, mudur: tp('sus:mudur:yazilim', 'toplanti-sandalye-2'), sorumlu: tp('sus:proje:vitrin', 'toplanti-sandalye-3'),
+            doktor: tp('sus:revir', 'toplanti-sandalye-5'),
+            bakis: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:mudur:yazilim', (x) => /işe bakıyor/.test(x.durum_metni || '')),
+            visit: stintler('takildi-kirmizi', at(9, 59), at(10, 30), 'sus:revir', (x) => x.durum_metni === 'hastaya bakıyor') }; })()""")
+        self.assertEqual(out["ayni"], 0)  # never the same desk side spot at once
+        for kim in ("mudur", "sorumlu", "doktor"):
+            self.assertEqual(len(out[kim]), 1, (kim, out))  # one meeting, reached, once per job
+            self.assertTrue(out[kim][0]["ulasti"], out[kim][0])
+            self.assertLess(out[kim][0]["son"] - out[kim][0]["bas"], 300000)  # the walk there plus TOPLANTI_MS, not a stay
+        for kim in ("bakis", "visit"):
+            self.assertEqual(out[kim], [], (kim, out))  # both desk looks were consumed by the meeting
+
+    def test_the_far_seated_staff_get_up_for_tea_on_a_seeded_cadence(self):
+        # the owner, 2026-11-19 ("İK ve iki müdür mesai boyunca hiç kalkmıyor. Öğle yemeğine ve arada çaya gitsinler."):
+        # a staff member whose desk cannot reach the tea corner's staff spot within MOLA_UZAK — the İK cell, the
+        # managers' offices — gets one tea break in every CAY_ARALIGI_MS window; a taken spot becomes a short walk;
+        # a desk that reaches the spot keeps its personality's own options (no cadence)
+        out = run_js("""(() => {
+          const P = d.ofisPlani([{ name: 'vitrin' }], { max_running_per_project: 1, denetciler: [] });
+          const hedef = 'cay-ocagi-personel-2';
+          let tik = 0, ilk = null, kotu = null;
+          for (let ms = 0; ms < d.CAY_ARALIGI_MS; ms += 1000) {
+            const m = d.cayMolasi('sus:ik', ms, P, 'ik-masa', new Set());
+            if (!m) continue;
+            if (ilk === null) ilk = ms;
+            tik++;
+            if (m.yer !== hedef || m.poz !== 'cay' || m.metin !== 'çay molasında') kotu = m;
+          }
+          const dolu = new Set([hedef]);
+          const yuruyus = d.cayMolasi('sus:ik', ilk, P, 'ik-masa', dolu);
+          const yakin = d.cayMolasi('sus:idari', ilk, P, 'idari-masa', new Set());
+          return { tik, kotu, ilk, molaUzak: d.MOLA_UZAK,
+            uzaklik: { ik: Math.round(d.yolUzunlugu(P, 'ik-masa', hedef)), idari: Math.round(d.yolUzunlugu(P, 'idari-masa', hedef)) },
+            yuruyus: yuruyus && [yuruyus.poz, yuruyus.yer, yuruyus.metin], yakin: yakin && yakin.yer }; })()""")
+        self.assertEqual(out["kotu"], None, out)
+        self.assertEqual(out["tik"], 540, out)  # the CAY_KALIS_MS seconds of one CAY_ARALIGI_MS window, once
+        self.assertGreater(out["uzaklik"]["ik"], out["molaUzak"])  # the İK truly cannot reach (why the cadence exists)
+        self.assertLessEqual(out["uzaklik"]["idari"], out["molaUzak"])
+        self.assertEqual(out["yakin"], None)  # the İdari's own options reach: no cadence for it
+        self.assertEqual(out["yuruyus"][0], "yuruyor")  # the spot taken: a short walk instead
+        self.assertEqual(out["yuruyus"][2], "biraz dolaşıyor")
+
+        # over a workday they really get up: the İK and the QA / IT managers (the owner's three), without turning
+        # into wanderers; a desk that reaches the spot (the İdari) keeps its personality's dice only (measured over
+        # 09:00-17:00: 6, 7 and 5 teas = 54, 63 and 45 minutes at the corner)
+        gun_ = run_js("""(() => { const say = { ik: 0, qa: 0, it: 0, idari: 0 };
+          gun('tek-proje-ceo-bosta', at(9), at(17), 10, (ms, a) => {
+            for (const [ad, id] of [['ik', 'sus:ik'], ['qa', 'sus:mudur:qa'], ['it', 'sus:mudur:it'], ['idari', 'sus:idari']]) {
+              const x = bul(a, id); if (x && x.yer === 'cay-ocagi-personel-2') say[ad]++; } });
+          return say; })()""")
+        for kim in ("ik", "qa", "it"):
+            self.assertTrue(90 <= gun_[kim] <= 420, (kim, gun_))  # 10-s ticks at the corner: several teas, bounded
+        self.assertLessEqual(gun_["idari"], 420)  # no cadence for it: its personality only
 
     def test_no_look_without_a_silent_or_stuck_job_and_none_in_hafif(self):
         out = run_js("""(() => { const seen = new Set();

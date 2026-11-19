@@ -174,9 +174,11 @@ class TextTest(Base):
         self.assertIsNone(limitler.kisa({}))
 
     def test_satir_and_sayfa(self):
-        self.write(self.sample(saved=time.time()))
+        # the clock is frozen at NOW, like the sample's fixed reset times: a live clock would flip both windows to
+        # "sıfırlandı" the day after 18 November and fail the line (the flaky failure this test once had)
+        self.write(self.sample())
         self.assertIsNone(limitler.satir({}))
-        self.assertTrue(limitler.satir(self.cfg).startswith("Claude kullanım sınırı: Haftalık sınır %54"))
+        self.assertTrue(limitler.satir(self.cfg, NOW).startswith("Claude kullanım sınırı: Haftalık sınır %54"))
         s = limitler.sayfa(self.cfg, NOW)
         self.assertEqual(s["kisa"], "Haftalık %54 · 5 saat %62")
         self.assertIn("çarşamba 22:00'de sıfırlanır", s["metin"])
